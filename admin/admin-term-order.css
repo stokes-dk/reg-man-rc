@@ -1,0 +1,18 @@
+/**
+ * This is the style sheet for term ordering function on the admin interface
+ */
+
+ .reg-man-rc-term-order-item-list {
+ 	padding: 1em;
+ 	margin: 0;
+ }
+ .reg-man-rc-term-order-item-list li {
+    border: 1px solid #ccc;
+    background: #eee;
+    cursor: pointer;
+    padding: 0.5em;
+    margin: 1em 0;
+}
+ .reg-man-rc-default-order-option {
+	margin-left: 0.75em;
+ }

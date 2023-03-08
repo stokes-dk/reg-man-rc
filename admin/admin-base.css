@@ -1,0 +1,239 @@
+/**
+ * This is the main style sheet for the admin interface
+ */
+ 
+ @media print {
+ 	body.wp-admin {
+ 		background: transparent;
+ 	}
+	#adminmenuwrap, #adminmenuback, #wpadminbar {
+		display: none;
+	}
+	#wpcontent {
+		margin: 0;
+	}
+	#wpbody-content .page-title-action, #wpbody-content .tablenav .bulkactions,
+	#wpbody-content #screen-meta-links,
+	#wpbody-content .search-box {
+		display: none;
+	}
+}
+.reg-man-rc-admin-fieldset {
+	border: 1px solid #ccc;
+	padding: 0.25em 0.5em;
+}
+
+.item-type-checkbox-container {
+	display: block;
+	margin: 0 0.5em;
+}
+
+.wp-admin #titlediv + .meta-box-sortables {
+	margin-top: 1em;
+}
+
+.tablenav .actions .combobox-container {
+	float: left;
+	margin-right: 6px;
+	max-width: 12.5rem;
+}
+
+.tablenav .actions .select2 {
+	font-size: 14px;
+}
+
+.reg-man-rc-colour-display {
+	width: 20px;
+	height: 20px;
+	border: 1px solid #ccc;
+	margin-right: 0.25em;
+	display: inline-block;
+	box-sizing: border-box;
+}
+
+.media-library-select-container .button {
+	margin: 0.1em;
+}
+
+.media-library-select-container .media-library-img-container:NOT(:EMPTY) ~ .media-library-select,
+.media-library-select-container .media-library-img-container:EMPTY ~ .media-library-change,
+.media-library-select-container .media-library-img-container:EMPTY ~ .media-library-remove {
+	display: none;
+}
+
+.media-library-select-container.reg-form-logo .media-library-img-container img {
+	max-height: 80px;
+	width: auto;
+} 
+.media-library-select-container.fixer-station-icon .media-library-img-container img,
+.reg-man-rc-fixer-station-term-list-icon img {
+	max-height: 50px;
+	width: auto;
+} 
+/* These containers will be shown on the client side as needed */
+.visitor-details-container, .add-volunteer-input-list {
+	display: none;
+}
+
+.reg-man-rc-admin-radio-group-label {
+	display: block;
+		margin: 0.25em 0;
+		padding: 0;
+}
+.true-false-radio-container {
+	margin-bottom: 0.25em;
+}
+
+.column-taxonomy-reg-man-rc-fixer-station,
+.column-taxonomy-reg-man-rc-volunteer-role,
+.column-taxonomy-reg-man-rc-event-category {
+	white-space: break-spaces;
+}
+
+.tablenav .actions .reg-man-rc-filter.filter-active,
+.tablenav .actions #filter-by-date.filter-active,
+.tablenav .actions .reg-man-rc-filter.filter-active + span.select2 {
+	font-weight: bold;
+}
+.tablenav .actions .reg-man-rc-filter.filter-active option,
+.tablenav .actions #filter-by-date.filter-active option {
+	font-weight: normal;
+}
+
+.datatable.volunteer-my-reg-table .name { display: none; }
+
+.reg-man-rc-input-group-table {
+	width: 100%;
+	border: 1px solid #ccc;
+	border-collapse: collapse;
+	table-layout: fixed;
+}
+.reg-man-rc-input-group-table th, .reg-man-rc-input-group-table td {
+	padding: 0.5em;
+	border: 1px solid #ccc;
+}
+.reg-man-rc-input-group-table .reg-man-rc-input-cell {
+	text-align: center;
+}
+.reg-man-rc-input-group-table.reg-man-rc-sup-item-table .num-col {
+	width: 10%;
+}
+.reg-man-rc-input-group-table.reg-man-rc-sup-item-table .reg-man-rc-sup-item-data-template {
+	display: none;
+}
+
+.reg-man-rc-vol-reg-is-apprentice {
+	margin-top: 1em;
+}
+
+.reg-man-rc-admin-notice-form {
+	padding-bottom: 1em;
+}
+.reg-man-rc-admin-notice-form .reg-man-rc-button-container {
+	text-align: right;
+}
+.reg-man-rc-admin-notice-form .reg-man-rc-button-container .reg-man-rc-button {
+	margin: 0 0.5em
+}
+
+.reg-man-rc-admin-create-defaults-table {
+	border: 1px solid #ccc;
+	border-collapse: collapse;
+}
+.reg-man-rc-admin-create-defaults-table th, .reg-man-rc-admin-create-defaults-table td {
+	padding: 0.25em 0.5em;
+	border: 1px solid #ccc;
+}
+.reg-man-rc-admin-create-defaults-table .colour-input {
+	text-align: center;
+}
+.reg-man-rc-admin-create-defaults-table .yes-no-input .radio-label {
+	margin: 0 0.5em;
+	white-space: nowrap;
+}
+
+.reg-man-rc-admin-create-item-sugg-table .reg-man-rc-admin-create-defaults-button-container .button {
+	margin: 0.5em;
+}
+
+.reg-man-rc-settings-google-map-container .reg-man-rc-google-map-container {
+	margin-top: 1em;
+}
+
+.reg-man-rc-metabox .form-input-list {
+	margin: 0
+}
+
+.reg-man-rc-metabox .form-input-list .input-item {
+	padding: 0;
+}
+
+.reg-man-rc-event-fixer-station-metabox .reg-man-rc-non-repair-event-input {
+	margin-top: 1em;
+}
+.reg-man-rc-event-fixer-station-metabox .reg-man-rc-non-repair-event-input .input-container {
+	font-weight: bold;
+}
+.reg-man-rc-admin-metabox-google-map-container, .reg-man-rc-admin-settings-map-container {
+	height: 25em;
+}
+.reg-man-rc-admin-create-defaults-form legend {
+	font-size: 1.5em;
+}
+.reg-man-rc-metabox-radio-label {
+	display: block;
+	margin: 0.5em 0;
+}
+.reg-man-rc-tab-list-item .dashicons {
+	color: #999;
+	margin: 0 0.125em;
+}
+.reg-man-rc-tab-list-item span {
+	vertical-align: middle;
+}
+.reg-man-rc-tabs-container { visibility: hidden; }
+.reg-man-rc-tabs-container.tabs-init-complete { visibility: visible; }
+
+.column-fixer_stations .custom-post-type-admin-fixer-station-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.column-fixer_stations .custom-post-type-admin-fixer-station-list .fixer-station-item.fixer-station-icon {
+	margin: 0.1em;
+	padding: 0;
+	display: inline-block;
+} 
+.column-fixer_stations .custom-post-type-admin-fixer-station-list .fixer-station-item.fixer-station-icon img {
+	width: 2em;
+}
+.column-fixer_stations .custom-post-type-admin-fixer-station-list .fixer-station-item.fixer-station-text {
+	display: block;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	margin: 0.1em 0;
+}
+.reg-man-rc-admin-excerpt-title {
+	margin: 1em 0 0.5em 0;
+	padding: 0;
+	font-size: 1.1em;
+	font-weight: 600;
+}
+
+.reg-man-rc-dashboard-calendar-container,
+.reg-man-rc-dashboard-calendar-container .reg-man-rc-calendar-container {
+	height: 100%;
+}
+.reg-man-rc-dashboard-calendar-container .reg-man-rc-calendar-view {
+	height: 80vh;
+}
+
+.reg-man-rc-info-window-container.admin-events-calendar .object-view-details-fixer-station-list img,
+.reg-man-rc-info-window-container.admin-cal-map .object-view-details-fixer-station-list img {
+	max-width: 3em;
+}
+.reg-man-rc-info-window-container.admin-events-calendar .object-view-details-fixer-station-list figcaption,
+.reg-man-rc-info-window-container.admin-cal-map .object-view-details-fixer-station-list figcaption {
+	display: none;
+}
