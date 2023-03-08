@@ -1,0 +1,326 @@
+/**
+ * This is the style sheet for forms used on both the public and admin sides
+ */
+*, ::BEFORE, ::AFTER {
+	box-sizing: border-box;
+}
+
+/* Some elements may be intentionally hidden when the page is displayed to avoid a flash of unformatted content */ 
+body .initially-hidden { visibility: hidden; }
+body .dialog-container { display: none; }
+
+/* A special user message dialog may be on the page but should be hidden until it's needed */ 
+.form-user-message-dialog { display: none; }
+
+.reg-man-rc-application-busy {
+	z-index: 20000;
+	background-image: url('../../../../wp-includes/images/spinner-2x.gif');
+	background-repeat: no-repeat; 
+	background-position: center;
+	background-color: #fff;
+	opacity: 0.5;
+	position: fixed;
+	top: 0; left: 0;
+	width: 100%;
+	height: 100%;
+	cursor: wait;
+	visibility: hidden;
+}
+.reg-man-rc-application-busy.is-active {
+	visibility: visible;
+}
+.event-date-time-part {
+	display: inline-block;
+}
+
+.reg-man-rc-button {
+	font-size: inherit; font-family: inherit;
+	border-radius: 0.25em; border: 1px solid #aaa; 
+	padding: 0.33em 0.5em; background-color: #eee; color: #668;
+}
+.reg-man-rc-button:NOT(:DISABLED):HOVER {
+	cursor: pointer; background: linear-gradient(#fff, #ddd); border-color: #999; color: #333;
+}
+.reg-man-rc-button:NOT(:DISABLED):ACTIVE { background: linear-gradient(#ddd, #fff); }
+.reg-man-rc-button:DISABLED, .ui-dialog .ui-dialog-buttonpane button:DISABLED { opacity: 0.65; cursor: not-allowed; }
+
+
+.form-input-list .full-width input { 
+	width: 100%;
+}
+
+.form-input-list.registration-helper-urls { margin-top: 4em; border-top: 1px solid #ccc; }
+.form-input-buttons {	}
+.form-input-buttons .form-button { margin-right: 1em; }
+.form-input-list {
+	list-style: none;
+	padding: 0;
+	margin: 0 1em;
+	xxxmargin-top: 0;
+}
+.form-input-list .input-item { padding: 0.5em 0; box-sizing: border-box; }
+.form-input-list .input-item.hidden-input { display: none !important; } 
+.form-input-list .label-container { margin-bottom: 0.1em; position: relative; }
+.form-input-list .input-container fieldset legend { padding: 0; margin: 0; }
+.form-input-list .input-container fieldset, .form-input-list .input-container details { border: 1px solid #ccc; padding: 0; }
+.form-input-list .input-container fieldset .form-input-list,
+.form-input-list .input-container details .form-input-list { padding: 0 1em; }
+.form-input-list .input-container details summary { padding: 0.25em 0.5em; background: #eee; }
+.form-input-list .error-container:EMPTY { display: none; }
+.form-input-list .error-container { margin-top: 0.25em; color: blue; }
+xxx.form-input-list .input-hint { opacity: 0.75; font-size: inherit; vertical-align: middle; }
+.form-input-list .hint-container { margin-top: 0.1em; color: #777; font-style: italic; }
+
+.form-input-list.flag-required .input-item.required > .label-container > label:before,
+.form-input-list.flag-required .input-item.required > .input-container > fieldset > legend:before,
+.form-input-list.flag-required .input-item.required > .input-container > details > summary:before,
+.form-input-list.flag-required .input-item.required.checkbox > .input-container > label:before,
+.form-input-list.flag-required .required-note:before {
+	content: '*'; position: absolute; right: 100%;
+	padding-right: 0.125em; font-size: larger; color: #777;
+}
+.form-input-list .input-item.checkbox > .label-container { display: none; }
+.form-input-list .input-item.fieldset > .label-container { display: none; }
+.form-input-list .input-item.details > .label-container { display: none; }
+
+.form-input-list .input-item.checkbox.required > .input-container { position: relative; }
+.form-input-list .input-item.fieldset.required > .input-container { position: relative; }
+.form-input-list .input-item.details.required > .input-container { position: relative; }
+
+.form-input-list > .input-item.required-note,
+.form-input-list.compact > .input-item.required-note {
+	display: none;
+}
+.form-input-list.compact > .input-item > .hint-container {
+	max-width: 20em;
+}
+.form-input-list.flag-required .input-item.required ~ .required-note:LAST-CHILD { display: block; width: 100%; position: relative; }
+.form-input-list.first-time-visitor .input-item.required ~ .required-note { display: none; }
+
+.form-input-list.vertical .input-item.group-two { display: inline-block; width: 49%; }
+.form-input-list.vertical .input-item.group-two + .input-item.group-two { margin-left: 2%; }
+
+.form-input-list.horizontal { display: table; border-collapse: separate; border-spacing: 0 0.5em; }
+.form-input-list.horizontal .input-item { display: table-row; }
+.form-input-list.horizontal .input-item .label-container { display: table-cell; padding: 0.25em 0.5em; }
+.form-input-list.horizontal .input-item .input-container { display: table-cell; padding: 0.25em 0.5em; }
+.form-input-list.horizontal .input-item .error-container { display: table-cell; padding: 0.25em 0.5em; }
+.form-input-list.horizontal .input-item .error-container:EMPTY { display: none; }
+
+.form-input-list.compact .input-item { display: inline-block; padding: 0.25em; vertical-align: top; margin: 0 0.25em; }
+.form-input-list.compact .input-container { width: initial; }
+.form-input-list.compact .input-container select { margin: 0; }
+
+.form-input-list.radio-input-list > .input-item > .label-container, 
+.form-input-list.checkbox-input-list > .input-item > .label-container { margin: 0; }
+.form-input-list.radio-input-list > .input-item,
+.form-input-list.checkbox-input-list > .input-item { padding: 0.1em 0; }
+.form-input-list.radio-input-list > .input-item > .input-container > label,
+.form-input-list.checkbox-input-list > .input-item > .input-container > label { 
+	display: block; padding: 0.25em; border: 1px solid transparent; border-radius: 0.25em;
+}
+.form-input-list.radio-input-list > .input-item > .input-container > label:HOVER,
+.form-input-list.checkbox-input-list > .input-item > .input-container > label:HOVER,
+.form-input-list > .input-item > .input-container > details > summary:HOVER {
+	cursor: pointer; border-color: #ccc;
+}
+.form-input-list.radio-input-list > .input-item > .input-container { padding: 0; vertical-align: middle; }
+.form-input-list.checkbox-input-list > .input-item > .input-container { padding: 0.125em; }
+.form-input-list.radio-input-list > .input-item.custom > .input-container input.radio-custom-input[type="text"] { 
+	padding: 0.25em; width: initial; margin-left: 0.25em;
+}
+.form-input-list input[type=checkbox], .form-input-list input[type=radio] {
+	float: none; margin: 0 0.25em 0 0; vertical-align: middle;
+}
+.form-input-list input[type=checkbox] + span, .form-input-list input[type=radio] + span { vertical-align: middle; }
+.form-input-list input[type=checkbox]:DISABLED + span { opacity: 0.67; }
+
+.minimal-template .form-button {
+	font-size: inherit; font-family: inherit;
+	border-radius: 0.25em; border: 1px solid #aaa; 
+	padding: 0.5em; background-color: #eee; color: #668;
+}
+.minimal-template .form-button:NOT(:DISABLED):HOVER {
+	cursor: pointer; background: linear-gradient(#fff, #ddd); border-color: #999; color: #333;
+}
+.minimal-template .form-button:NOT(:DISABLED):ACTIVE { background: linear-gradient(#ddd, #fff); }
+.minimal-template .form-button:DISABLED, .ui-dialog .ui-dialog-buttonpane button:DISABLED { opacity: 0.65; cursor: not-allowed; }
+
+.minimal-template .form-event-display {
+	margin: 0.5em 0; font-weight: 100; font-size: 1.25em; color: #446;
+}
+
+.minimal-template .form-event-display .change-event-link { font-size: 80%; }
+
+form label.error { background: #ffc; }
+div.form_error_list h2, div.form_message_list h2 { color: inherit; margin: 0.5em; }
+div.form_message_list { margin: 1em 0; border-radius: 0.25em; border: 1px solid #9f9; background: #cfc; }
+div.form_error_list { margin: 1em 0; border-radius: 0.25em; border: 1px solid #ff0; background: #ffc; }
+div.message-container ul{ color: inherit; margin: inherit; padding: 0; margin: 0; }
+div.message-container ul > li:ONLY-CHILD { margin: 1em; list-style: none; }
+div.message-container ul > li { padding: 0; margin: 1em 0 1em 2em;; }
+
+.ajax-form-message-container { border: 1px solid #ccc; }
+.ajax-form-message-container .message-header { 
+	width: 100%; overflow: auto; background: #ddd; border-bottom: 1px solid #ccc;
+}
+.ajax-form-message-container .message-header .message-title { 
+	padding: 0.25em 0.25em; margin: 0.25em; display: inline-block; font-weight: bold;
+}
+.ajax-form-message-container .message-header .message-close {
+	float: right;
+	margin: 0.25em;
+	background: #eee;
+	border-radius: 0.25em;
+	cursor: pointer;
+	border: 1px solid #ccc;
+}
+.ajax-form-message-container ul { color: blue; margin: 1em; }
+.ajax-form-message-container ul > li:ONLY-CHILD { list-style: none; }
+.ajax-form-message-container .message-pre-wrap { white-space: pre-wrap; }
+
+.form-button-div { text-align: right; }
+
+.select2-container .select_option_none .dashicons { xcolor: red; margin: 0 0.1em; line-height: inherit; }
+.select2-container .select_option_add .dashicons { color: green; margin: 0 0.1em; line-height: inherit; }
+
+.reg-man-rc-object-view-main-content > .reg-man-rc-object-view-section {
+    margin: 0.5em;
+}
+.reg-man-rc-object-view-details-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.reg-man-rc-object-view-main-content .reg-man-rc-object-view-map-container {
+	height: 25em;
+	max-height: 75vh;
+}
+@media screen and ( min-width: 921px ) {
+	.reg-man-rc-object-view-main-content {
+		display: flex;
+		justify-content: space-between;
+	}
+	.reg-man-rc-object-view-main-content > .reg-man-rc-object-view-section {
+		margin: 0 0.25em;
+		flex-shrink: 0;
+		flex-grow: 1;
+		flex-basis: 0%;
+	}
+}
+
+.reg-man-rc-object-view-item {
+	line-height: normal;
+	display: flex;
+	margin-bottom: 1em;
+}
+.reg-man-rc-object-view-item .reg-man-rc-object-view-item-icon {
+	width: 20px;
+	margin: 0 0.1em;
+}
+.reg-man-rc-object-view-item .reg-man-rc-object-view-item-additional-content {
+	margin: 0.5em 0 0 0;
+}
+.reg-man-rc-object-view-item.reg-man-rc-object-view-details-event-fixer-stations .reg-man-rc-object-view-item-additional-content {
+	margin: 0;
+}
+
+.reg-man-rc-info-window-container .reg-man-rc-object-view-title {
+	font-size: 1.1em;
+	font-weight: bold;
+	margin: 0.1em 0;
+	padding: 0;
+}
+.reg-man-rc-info-window-container .reg-man-rc-object-view-item {
+	margin: 0.25em 0;
+}
+
+.reg-man-rc-info-window-container .reg-man-rc-object-view-item .reg-man-rc-object-view-item-content {
+	margin-top: 3px; /* to align 14px font with 20px icon */
+}
+
+.reg-man-rc-object-view-details-list details summary {
+	cursor: pointer;
+}
+.reg-man-rc-object-view-details-list .reg-man-rc-object-view-event-date-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+.reg-man-rc-object-view-details-list .reg-man-rc-object-view-event-date-list .object-view-event-list-date-time-item {
+	white-space: nowrap;
+	margin: 0.25em 0;
+	padding: 0.25em;
+}
+.reg-man-rc-object-view-main-content .object-view-details-fixer-station-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-start;
+}
+.reg-man-rc-object-view-details-list .object-view-details-fixer-station-list li {
+	flex-shrink: 0;
+	flex-grow: 0;
+	flex-basis: 0%;
+}
+.reg-man-rc-object-view-details-list .object-view-details-fixer-station-list li.reg-man-rc-object-view-fixer-station-text {
+	display: block;
+}
+.reg-man-rc-object-view-details-list .object-view-details-fixer-station-list li figure {
+	text-align: center;
+	margin: 0;
+	padding: 0.25em;
+}
+.object-view-details-fixer-station-list li img {
+	max-width: 4.5em;
+	height: auto;
+}
+.reg-man-rc-object-view-details-list .object-view-details-fixer-station-list li figure figcaption {
+	font-size: xx-small;
+	line-height: normal;
+}
+.reg-man-rc-object-view-main-content .reg-man-rc-google-map-container {
+	margin: 0;
+	border: 1px solid #ccc;
+}
+.reg-man-rc-object-view-main-content .reg-man-rc-colour-display {
+	margin-right: 0.25em;
+	vertical-align: middle;
+}
+.reg-man-rc-object-view-container .event-status {
+	font-weight: bold;
+}
+.reg-man-rc-object-view-container .event-status.status-complete.status-confirmed .dashicons {
+	color: #ccc;
+}
+.reg-man-rc-object-view-container .event-status.status-tentative .dashicons {
+	color: #ffcc00;
+}
+.reg-man-rc-object-view-container .event-status.status-cancelled .dashicons {
+	color: red;
+}
+.reg-man-rc-object-view-container .event-descriptor-details-location-tbd,
+.reg-man-rc-object-view-container .event-descriptor-details-date-tbd {
+	font-weight: bold;
+}
+.reg-man-rc-object-view-container .event-descriptor-details-date-time-list-container details {
+	display: inline-block;
+	vertical-align: top;
+}
+
+.reg-man-rc-info-window-container {
+	color: #333;
+	font: 400 14px Roboto, Arial, sans-serif;
+}
+.reg-man-rc-info-window-container p {
+	margin: 0.25em 0;
+} 
+.reg-man-rc-info-window-container ul li {
+	margin-top: 0.25em;
+}
+
+.reg-man-rc-object-view-container .reg-man-rc-object-view-details-description-item p {
+	margin: 0 0 0.5em 0;
+}

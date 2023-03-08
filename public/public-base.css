@@ -1,0 +1,292 @@
+/**
+ * This is the main style sheet for the public interface
+ */
+ /* Define a basic font, size and so on for the minimal template */
+.minimal-template {
+	font-family: "Helvetica Neue", "Segoe UI", Helvetica, Arial, "Lucida Grande", sans-serif;
+	font-size: 18px;
+	font-size: 1rem;
+	font-weight: 400;
+	line-height: 1.6em;
+	background: #fff;
+	color: #446;
+	min-height: 100vh;
+	margin-bottom: 3em;
+}
+
+#form-page {
+	margin: 0 auto; max-width: 50em;
+}
+
+#form-main { max-width: 100%; margin: 1em; }
+#form-banner { margin: 0 1em; color: #668; border-bottom: 1px solid #ccc; }
+#form-banner .banner-container { overflow: auto; width: 100%; display: flex; justify-content: space-between; }
+#form-banner .banner-container h1, #form-banner .banner-container img {
+	 display: table-cell; vertical-align: bottom;
+}
+#form-banner .banner-container h1 {
+	font-size: 1.75em; font-weight: 100; text-shadow: 1px 1px #eee;
+	margin: 0.5em 0; padding: 0 1em 0 0;
+	align-self: flex-end;
+}
+#form-banner .banner-container img { flex-shrink: 0; }
+@media screen and (max-width: 639px) {
+	#form-page #form-banner .banner-container img { display: none; }
+	#form-page #form-banner .banner-container h1 {
+		font-size: 1.25em; font-weight: 400; padding:0; 
+	}
+	#form-page .form-event-display { font-size: 1em; font-weight: 400; }
+}
+ 
+.minimal-template .form-input-list input[type="text"], 
+.minimal-template .form-input-list input[type="email"], 
+.minimal-template .form-input-list input[type="password"],
+.minimal-template .form-input-list fieldset, .form-input-list details,
+.minimal-template .form-input-list select, .form-input-list textarea { 
+	font-size: inherit; background: #fefefe;
+}
+.minimal-template .form-input-list .input-container input,
+.minimal-template .form-input-list .input-container textarea,
+.minimal-template .form-input-list .input-container select,
+.minimal-template .form-input-list.radio-input-list > .input-item > .input-container > label,
+.minimal-template .form-input-list .input-item.checkbox > .input-container > label {
+		font-size: inherit; font-weight: 300; color: #446;
+}
+.minimal-template .form-input-list .input-container input,
+.minimal-template .form-input-list .input-container select {
+	box-sizing: border-box; width: initial;
+}
+.minimal-template .form-input-list .input-container input { padding: 0.25em; }
+.minimal-template .form-input-list .input-container textarea {
+	padding: 0.25em; box-sizing: border-box; width: 100%;
+}
+
+.minimal-template .form-input-list .input-container input[type="text"], 
+.minimal-template .form-input-list .input-container input[type="email"], 
+.minimal-template .form-input-list .input-container input[type="password"] {
+	width: 100%;
+}
+.minimal-template .form-input-list .input-container input[type="text"], 
+.minimal-template .form-input-list .input-container input[type="email"], 
+.minimal-template .form-input-list .input-container input[type="password"],
+.minimal-template .form-input-list .input-container select {
+	min-height: 2em;
+}
+
+.minimal-template .form-input-list .input-container select {
+	font-family: inherit; font-size: inherit; font-weight: 300; color: #446; 
+	height: 2em; line-height: normal; padding: 0.25em;
+	border: 1px solid #999; border-radius: 0.25em; max-width: 100%;
+}
+
+.minimal-template .form-input-list label,
+.minimal-template .form-input-list legend,
+.minimal-template .form-input-list summary {
+	color: #668; font-weight: 400; margin: auto 0; width: auto; border: none;
+}
+.minimal-template .form-input-list .input-item.info label { cursor: auto; }
+.minimal-template .form-input-list :focus, .form-input-buttons :focus { outline: 1px solid #99f; }
+
+
+/* We use dashicons on the public interface */
+.dashicons { font-family: dashicons; }
+
+/* Make sure JQuery elements inherit the font and size, otheriwse they're out of proportion */
+body .ui-widget, body .ui-widget input, body .ui-widget select,
+body.ui-widget textarea, body .ui-widget button {
+	font-family: inherit;
+	font-size: inherit;
+}
+
+
+.login-title { font-size: x-large; font-weight: bold; }
+.login-form-container { 
+	max-width: 16em;
+	margin: 1em auto;
+	border: 1px solid #ccc;
+	padding: 0 1em;
+}
+.login-form-container input[type="text"], .login-form-container input[type="password"] {
+  width: 100%;
+  border: 1px solid #ccc;
+  font-size: inherit;
+  padding: 0.25em;
+  background: #fcfcfc;
+  margin: 0.25em 0;
+  line-height: 1.5em;
+  box-sizing: border-box;
+}
+.login-form-container .login-submit { width: 100%; overflow: auto; }
+.login-form-container input[type="submit"] { font-size: inherit; float: right; }
+
+.main-launch-container .launch-container { display: block; margin: 1em; }
+.main-launch-container .launch-button {
+	display: inline-block; width: 38%; text-align: center; font-weight: bold;
+}
+
+
+.fixer-reg-form .input-item.first-name, .fixer-reg-form .input-item.last-name {
+	display: inline-block; width: 50%; vertical-align: top;
+}
+.fixer-reg-form .input-item.first-name .input-container {
+	 margin-right: 0.25em;
+}
+
+.visitor-reg-form-container .visitor-reg-input-accordion .visitor-reg-accordion-section {
+	padding: 1em;
+}
+.visitor-reg-form-container .house-rules {
+	font-size: inherit; margin: 1em;
+}
+.visitor-reg-form-container .visitor-reg-accordion-section .house-rules {
+	max-height: 25em; overflow-y: scroll; -webkit-overflow-scrolling: touch;
+	margin: 0; padding: 0;
+ }
+ .text-fadeout {
+	position: relative;
+ 	height: 1em;
+	bottom: 1em;
+	margin-bottom: -1em;
+	background-image: linear-gradient( rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 1) 100% );
+}
+.visitor-reg-form-container .house-rules h2 { font-size: larger; }
+.reg-man-rc-inline-editor-form .form-input-list .input-item { display: inline-block; padding: 0; vertical-align: middle; margin: 0; }
+.reg-man-rc-inline-editor-form .form-input-list .label-container { padding: 0; }
+.reg-man-rc-inline-editor-form .form-input-list .label-container { display: inline-block; }
+.reg-man-rc-inline-editor-form .form-input-list .input-container { display: inline-block; width: initial; }
+.reg-man-rc-inline-editor-form .form-input-list .input-container select { margin: 0; }
+.reg-man-rc-inline-editor-form .form-input-list .input-item.required-note { display: none; }
+.reg-man-rc-inline-editor.template { display: none; }
+
+.reg-man-rc-icon-text-container .icon, .reg-man-rc-icon-text-container .text {
+	vertical-align: middle;
+}
+
+.ui-dialog { max-width: 90%; }
+
+.reg-manager-datatable-container { margin: 1em 0; }
+.datatable-container .datatable-toolbar {
+	float: right; display: flex; justify-content: space-around; margin: 0.25em 0; font-size: 0.85em;
+}
+.datatable-container .datatable-toolbar .toolbar-button { margin: 0 0.3em; }
+.datatable-container .dataTables_wrapper .dataTables_filter { float: left; margin: 0.25em 0; }
+.datatable-container .dataTables_wrapper .dataTables_filter input {
+	appearance: textfield;
+	-webkit-appearance: textfield;
+	-moz-appearance: textfield;
+	font-size: 1.1em;
+	padding: 0.15em;
+}
+.datatable-container .dataTables_wrapper .dataTables_filter input.filter-on { background: #ff9; }
+.datatable-container .dataTables_wrapper .dataTables_length { margin-top: 0.5em; }
+.datatable-container .dataTables_wrapper .dataTables_processing { top: 3em; padding: 1em 0; }
+.datatable-container .dataTables_wrapper .dataTables_info { padding: 0 0 0.5em 0; width: 100%; }
+
+.datatable-container td.action-buttons { text-align: center; }
+.datatable-container button .dashicons { margin: 0 0.1em; vertical-align: middle; }
+.datatable-container button .button-text { vertical-align: middle; }
+
+.datatable-container .visitor-button-container { float: right; font-size: 0.8em; }
+.datatable-container .visitor-button-container .form-button { margin: 0 0.25em; padding: 0.25em 0.35em; }
+
+.reg-manager-datatable-container td.visitor-item-priority { text-align: right; }
+.datatable-container td .reg-man-rc-inline-editable { cursor: pointer; display:inline-block; }
+.datatable-container td .reg-man-rc-inline-editable .dashicons-edit { color: #9cf; font-size: 0.9em; }
+.datatable-container td .reg-man-rc-inline-editor { display:inline-block; }
+.datatable-container td .reg-man-rc-inline-editor .form-input-list { display:inline-block; margin: 0; }
+.datatable-container td .reg-man-rc-inline-editor-buttons { display: block; margin: 0.5em 0 0 0; text-align: right; }
+.datatable-container td .reg-man-rc-inline-editor-buttons .cancel { cursor: pointer; padding: 0 0.5em; color: #c33; }
+.datatable-container td .reg-man-rc-inline-editor-buttons .submit { cursor: pointer; padding: 0 0.5em; color: #393; }
+
+.visitor-reg-list-table .visitor-item-list .item-separator { margin-right: 0.25em; }
+.visitor-reg-list-table .visitor-item-list .item-desc.item-surveyed { text-decoration: line-through; }
+.visitor-reg-list-table .visitor-item-list .item-status { font-weight: 200; }
+.visitor-reg-list-table .visitor-reg-list-update-button { white-space: nowrap; }
+.visitor-reg-list-table .visitor-reg-list-visitor-id { display: none; }
+
+
+.visitor-reg-input-accordion .form-input-list { margin: 0; }
+.accordion-buttons { text-align: right; margin-top: 0.5em; }
+.accordion-buttons button { min-width: 5em; margin-left: 1em; }
+.accordion-buttons .form-button.visitor-reg-back-button:DISABLED { display: none; }
+
+.item-is-fixed-radio-group .radio-input-list .input-item:LAST-CHILD {
+	margin-top: 0.5em;
+	padding: 0.5em 0;
+	border-top: 1px solid #ccc;
+}
+
+.standalone-server-upload-header { text-align: right; font-size: 80%; }
+.standalone-server-upload-form-please-wait { opacity: 0.5; }
+
+.standalone-download-events-form-container, .standalone-create-event-form-container  { width: 40em; }
+
+.rest-error-message { font-size: 80%; }
+.rest-error-message .message-pre-wrap { white-space: pre-wrap; }
+
+.upload-events-list-table .upload-cell-content { text-align: right; }
+
+.upload-records-form { width: 40em; min-height: 10em; }
+
+
+.reg-man-rc-volunteer-profile-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	width: 100%;
+}
+
+.reg-man-rc-volunteer-profile-list .reg-man-rc-volunteer-profile-list-item {
+	line-height: normal;
+	background: #fcfcfc;
+	margin: 0 0 1em 0;
+	padding: 0.75em;
+	border: 1px solid #eee;
+	box-shadow: 0.5em 0.5em 1em 0em #ccc;
+}
+.reg-man-rc-volunteer-profile-list-item .reg-man-rc-volunteer-profile-header-container {
+	display: block;
+	margin: 0;
+	padding: 0.5em;
+	background: linear-gradient(#9c9, #ada, #9c9);
+}
+.reg-man-rc-volunteer-profile-list-item .reg-man-rc-volunteer-profile-header-container .title {
+	margin: 0;
+	padding: 0;
+	font-size: 150%;
+	font-weight: bold;
+	color: inherit;
+}
+.reg-man-rc-volunteer-profile-list-item .reg-man-rc-volunteer-profile-image-container {
+	float: left;
+	width: 12em;
+	max-width: 25%;
+	margin: 0 1em 1em 0;
+}
+.reg-man-rc-volunteer-profile-list-item .reg-man-rc-volunteer-profile-content {
+	overflow: auto;
+}
+.reg-man-rc-volunteer-profile-list-item .reg-man-rc-show-hide-content {
+	max-height: 14em;
+	overflow: hidden;
+	position: relative
+}
+
+.reg-man-rc-show-hide-container.show .reg-man-rc-show-hide-content {
+	max-height: none;
+}
+.reg-man-rc-show-hide-container .reg-man-rc-show-hide-button-container {
+	display: block;
+	width: 100%;
+	overflow: auto;
+	text-align: center;
+}
+.reg-man-rc-show-hide-container .reg-man-rc-show-hide-button-container .hide-button {
+	display: none;
+}
+.reg-man-rc-show-hide-container.show .reg-man-rc-show-hide-button-container .hide-button {
+	display: inline;
+}
+.reg-man-rc-show-hide-container.show .reg-man-rc-show-hide-button-container .show-button {
+	display: none;
+}

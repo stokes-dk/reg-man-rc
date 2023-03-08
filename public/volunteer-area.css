@@ -1,0 +1,138 @@
+.volunteer-area-login-form-container {
+	max-width: 20em;
+}
+.volunteer-area-login-form-container .volunteer-area-button-container {
+	margin: 1em;
+}
+.volunteer-area-login-form-container .volunteer-area-lost-password {
+	margin: 2em 1em;
+}
+.reg-man-rc-volunteer-area-header {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	margin: 1em 0;
+	font-size: 1.25em;
+	font-weight: 400;
+}
+.reg-man-rc-volunteer-area-header .volunteer-area-title-back-link .volunteer-area-title-back-link-icon,
+.reg-man-rc-volunteer-area-header .volunteer-area-title-back-link .volunteer-area-title-back-link-text {
+	vertical-align: middle;
+}
+.reg-man-rc-dropdown-menu-container {
+	cursor: pointer;
+	white-space: nowrap;
+	position: relative;
+}
+.reg-man-rc-dropdown-menu-content {
+	list-style: none;
+	display: none;
+	position: absolute;
+	background: #eee;
+	z-index: 2000;
+	border: 1px solid #ccc;
+	padding: 0;
+	margin: 0;
+	box-shadow: 5px 5px 5px #999;
+}
+.reg-man-rc-dropdown-menu-container:HOVER .reg-man-rc-dropdown-menu-content,
+.reg-man-rc-dropdown-menu-container:FOCUS .reg-man-rc-dropdown-menu-content,
+.reg-man-rc-dropdown-menu-container:ACTIVE .reg-man-rc-dropdown-menu-content {
+	display: block;
+}
+
+.reg-man-rc-dropdown-menu-content .reg-man-rc-dropdown-menu-item {
+	padding: 0.25em 0.5em;
+	border-bottom: 1px solid #ccc;
+}
+.reg-man-rc-dropdown-menu-content .reg-man-rc-dropdown-menu-item:LAST-CHILD {
+	border-bottom: none;
+}
+.reg-man-rc-dropdown-menu-content .reg-man-rc-dropdown-menu-item:HOVER {
+	background: #fff;
+}
+.reg-man-rc-dropdown-menu-content .reg-man-rc-dropdown-menu-item .dashicons {
+	margin-right: 0.25em;
+	vertical-align: middle;
+	color: #999;
+}
+.reg-man-rc-dropdown-menu-content .reg-man-rc-dropdown-menu-item a {
+	color: initial;
+	text-decoration: none;
+	display: block;
+}
+.reg-man-rc-dropdown-menu-trigger .dropdown-menu-trigger-title,
+.reg-man-rc-dropdown-menu-trigger .dropdown-menu-trigger-icon {
+	vertical-align: middle;
+}
+.reg-man-rc-dropdown-menu-content.volunteer-area-user-actions-container {
+	font-size: initial;
+	right: 0;
+}
+
+.reg-man-rc-volunteer-area-quick-signup-form:NOT( :EMPTY ) {
+    margin: 1em 0;
+}
+
+.reg-man-rc-volunteer-registration-form {
+	line-height: normal;
+}
+
+.reg-man-rc-object-view-tabs-container.ui-tabs .ui-tabs-panel {
+	padding: 0.25em;
+}
+
+.reg-man-rc-volunteer-area-quick-signup-container .reg-man-rc-volunteer-area-view-registration-link {
+	display: inline-block;
+	border: 1px solid #ccc;
+	background: #eee;
+	padding: 0.5em;
+}
+.reg-man-rc-volunteer-registration-form .non-repair-event .volunteer-reg-form-hide-on-non-repair-event,
+.reg-man-rc-volunteer-registration-form .not-registered .volunteer-reg-form-hide-on-not-registered {
+	display: none;
+}
+.reg-man-rc-volunteer-registration-form .volunteer-roles fieldset {
+	display: inline-block;
+}
+
+.volunteer-area-container {
+	--reg-man-rc-vol-reg-registered-background: #ccf;
+}
+.volunteer-area-container.vol-reg-highlight-red {
+	--reg-man-rc-vol-reg-registered-background: #fcc;
+}
+.volunteer-area-container.vol-reg-highlight-green {
+	--reg-man-rc-vol-reg-registered-background: #cfc;
+}
+.volunteer-area-container.vol-reg-highlight-blue {
+	--reg-man-rc-vol-reg-registered-background: #ccf;
+}
+.volunteer-area-container.vol-reg-highlight-cyan {
+	--reg-man-rc-vol-reg-registered-background: #cff;
+}
+.volunteer-area-container.vol-reg-highlight-magenta {
+	--reg-man-rc-vol-reg-registered-background: #fcf;
+}
+.volunteer-area-container.vol-reg-highlight-yellow {
+	--reg-man-rc-vol-reg-registered-background: #ffc;
+}
+.volunteer-area-container .fc-event.vol-reg-registered,
+.volunteer-area-container .reg-man-rc-map-marker-label.vol-reg-registered,
+.volunteer-area-container .object-view-event-list-date-time-item.vol-reg-registered,
+.volunteer-area-container .fc-list-event.fc-event.vol-reg-registered:HOVER td,
+.volunteer-area-container .reg-man-rc-calendar-legend .vol-reg-registered .legend-item-container {
+	background-color: var( --reg-man-rc-vol-reg-registered-background ); 
+}
+
+.reg-man-rc-object-view-ajax-form-section .reg-man-rc-volunteer-registration-form {
+	border-top: 1px solid #ccc;
+	padding: 1em 0;
+}
+.reg-man-rc-object-view-ajax-form-section:FIRST-CHILD .reg-man-rc-volunteer-registration-form {
+	border-top: none;
+}
+.reg-man-rc-volunteer-registration-form .reg-man-rc-vol-reg-preferences-info {
+	margin-bottom: 1em;
+}
+

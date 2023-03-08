@@ -1,0 +1,101 @@
+/**
+ * This is the style sheet used the public interface for the registration pages
+ */
+ 
+.reg-man-rc-info-window-container .reg-man-rc-object-view-item.reg-man-rc-visitor-registration-launch-link-container {
+	margin: 1em 0;
+	display: flex;
+	justify-content: space-around;
+ }
+.reg-man-rc-visitor-registration-launch-link {
+	padding: 0.5em;
+	background: #eee;
+	border: 1px solid #ccc;
+}
+ 
+ .visitor-reg-form-container .visitor-reg-input-accordion .visitor-reg-accordion-section {
+	padding: 1em;
+}
+.visitor-reg-form-container .house-rules {
+	font-size: inherit; margin: 1em;
+}
+.visitor-reg-form-container .visitor-reg-accordion-section .house-rules {
+	max-height: 25em; overflow-y: scroll; -webkit-overflow-scrolling: touch;
+	margin: 0; padding: 0;
+ }
+ .text-fadeout {
+	position: relative;
+ 	height: 1em;
+	bottom: 1em;
+	margin-bottom: -1em;
+	background-image: linear-gradient( rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 1) 100% );
+}
+.visitor-reg-form-container .house-rules h2 { font-size: larger; }
+.form-input-list .input-container select {
+	font-family: inherit; font-size: inherit; font-weight: 300; color: #446; 
+	height: 2em; line-height: 2em; padding: 0.25em;
+	border: 1px solid #999; border-radius: 0.25em; max-width: 100%;
+}
+
+.visitor-reg-manager-table th {
+	text-align: start;
+}
+.visitor-reg-form .item-list-input,
+.add-item-to-visitor-reg-form .item-list-input {
+	margin: 0.25em 0.5em; vertical-align: top;
+}
+
+.visitor-reg-form .item-list-item .item-list-input input,
+.visitor-reg-form .item-list-item .item-list-input select,
+.add-item-to-visitor-reg-form .item-list-item .item-list-input input,
+.add-item-to-visitor-reg-form .item-list-item .item-list-input select {
+	display: block; width: 100%;
+}
+
+.visitor-reg-form .item-list-input .radio-label {
+	display: block;
+	margin: 0.5em 0.25em;
+	white-space: nowrap;
+}
+.visitor-reg-form .visitor-reg-item-list,
+.add-item-to-visitor-reg-form .add-item-to-visitor-reg-new-item-list {
+	list-style: none; margin: 0; padding: 0;
+}
+.visitor-reg-form .visitor-reg-item-list {
+ counter-reset: item-num;
+}
+.visitor-reg-form .visitor-reg-item-list .item-label:AFTER
+{
+	counter-increment: item-num;
+	content: " " counter(item-num);
+}
+
+.visitor-reg-form .visitor-reg-item-list .item-list-item:ONLY-CHILD .item-label:AFTER {
+	content: "";
+}
+.visitor-reg-form .visitor-reg-item-list .item-list-item,
+.add-item-to-visitor-reg-form .add-item-to-visitor-reg-new-item-list .item-list-item {
+	margin-bottom: 0.75em; border: 1px solid #ddd; padding: 0.25em;
+}
+.visitor-reg-form .visitor-reg-item-list .item-list-item.highlight-item { background: #eee; }
+
+.visitor-reg-form .visitor-reg-item-list + .visitor-item-add,
+.visitor-reg-form .visitor-reg-item-list .reg-item-remove-button,
+.add-item-to-visitor-reg-form .add-item-to-visitor-reg-new-item-list + .visitor-item-add,
+.add-item-to-visitor-reg-form .add-item-to-visitor-reg-new-item-list .reg-item-remove-button {
+	font-size: 80%;
+}
+.visitor-reg-form .visitor-reg-item-list .reg-item-remove-button,
+.add-item-to-visitor-reg-form .add-item-to-visitor-reg-new-item-list .reg-item-remove-button {
+	float: right; padding: 0.1em 0.25em; cursor: pointer;
+}
+@media screen and (min-width: 40em) {
+	.visitor-reg-dialog .visitor-reg-form { width: 35em; }
+}
+.visitor-reg-form .visitor-name-reset {
+	font-size: 0.75em;
+	margin: 0.25em 0;
+}
+.visitor-reg-form .auto-filled-input input:DISABLED {
+	background-color: #eee;
+}

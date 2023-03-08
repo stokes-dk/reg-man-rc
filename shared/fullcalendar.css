@@ -1,0 +1,114 @@
+/**
+ * This is the style sheet for FulLCalendar
+ */
+ .reg-man-rc-calendar-container {
+ 	position:relative;
+ }
+.reg-man-rc-calendar-container .fc-daygrid a, .reg-man-rc-calendar-container .fc-list a {
+	color: #2C3E50;
+}
+.reg-man-rc-calendar-container .fc-daygrid a, .reg-man-rc-calendar-container .fc-list a {
+	color: #2C3E50;
+}
+.object-view-event-list-date-time-item.completed,
+.reg-man-rc-calendar-view .fc-event.completed,
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item.completed {
+    text-decoration: line-through;
+    opacity: 0.5;
+}
+.object-view-event-list-date-time-item.completed a, .object-view-event-list-date-time-item.completed span,
+.object-view-event-list-date-time-item.cancelled a, .object-view-event-list-date-time-item.cancelled span,
+.reg-man-rc-calendar-legend-item .legend-item-container, .reg-man-rc-calendar-legend-item .legend-item-part {
+	text-decoration: inherit;
+}
+.object-view-event-list-date-time-item.cancelled,
+.reg-man-rc-calendar-view .fc-event.cancelled-status,
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item.cancelled {
+	text-decoration: line-through double #c00 1px;
+}
+.reg-man-rc-calendar-view .fc-list .fc-list-event td {
+	vertical-align: middle; /* fix offset graphic dots in list view */
+}
+
+.reg-man-rc-calendar-container .reg-man-rc-calendar-loading-indicator {
+	z-index: 20000;
+	height: 100%;
+	width: 100%;
+	background-color: #fff;
+	opacity: 0.5;
+	background-image: url('../../../../wp-includes/images/spinner-2x.gif');
+	background-repeat: no-repeat;
+	background-position: center;
+	position: absolute;
+	visibility: hidden;
+	margin: 0;
+	padding: 0;
+}
+.reg-man-rc-calendar-container.reg-man-rc-calendar-loading .reg-man-rc-calendar-loading-indicator {
+	visibility: visible;
+}
+
+.reg-man-rc-calendar-view table {
+	margin: 0;
+	padding: 0;
+}
+.reg-man-rc-calendar-view .fc-event {
+	cursor: pointer;
+}
+.reg-man-rc-calendar-view.fc .fc-toolbar {
+	flex-wrap: wrap;
+	margin-bottom: 0.5em;
+}
+.reg-man-rc-calendar-view.fc .fc-toolbar-chunk {
+	margin-bottom: 0.5em;
+}
+/*
+.reg-man-rc-calendar-view.fc .fc-toolbar-title {
+	display: inline-block;
+	margin: 0 1em;
+	vertical-align: middle;
+}
+*/
+.reg-man-rc-calendar-view.fc .fc-button-group > .fc-button.fc-button-active {
+	background-color: #eee;
+	color: #000;
+}
+.reg-man-rc-calendar-container .reg-man-rc-calendar-view + .reg-man-rc-calendar-map-container {
+	display: none;
+}
+.reg-man-rc-calendar-container .reg-man-rc-calendar-legend {
+	margin: 0.25em;
+	font-size: small;
+}
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-title {
+	font-size: 1em;
+	font-weight: bold;
+	margin: 0;
+	padding: 0;
+}
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item {
+	line-height: 1.6em;
+	margin: 0;
+	padding: 0;
+}
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item .legend-item-container {
+	padding: 0 0.2em;
+}
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item .legend-item-container,
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item .legend-item-part {
+	display: inline-block;
+	vertical-align: middle;
+}
+
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item .legend-item-dot {
+	height: 0.75em;
+	width: 0.75em;
+	border-radius: 0.75em;
+	margin: 0 0.25em;
+	box-sizing: content-box;
+}
