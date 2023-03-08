@@ -1,6 +1,8 @@
 <?php
 namespace Reg_Man_RC;
 
+use Reg_Man_RC\Model\Error_Log;
+
 /**
  * The autoloader function for the plugin
  *
@@ -22,7 +24,7 @@ class Plugin_Autoloader {
 	 * and their namespace parts (excluding the plugin root namespace, Reg_Man_RC) represent subdirectories.
 	 * Class file names adhere to the Wordpress file naming conventions for classes: underscores are converted to hyphes,
 	 * filenames are all lowercase, filenames start with 'class-' and end with '.php'.
-	 * For example, the class 'Reg_Man_RC\Model\Event is loaded from the file: includes\class_lib\model\class-event.php.
+	 * For example, the class '\Reg_Man_RC\Model\Event is loaded from the file: includes\class_lib\model\class-event.php.
 	 *
 	 * @since	v0.1.0
 	 * @param	string	$class_name	The name of the class to be loaded
@@ -36,13 +38,13 @@ class Plugin_Autoloader {
 			$result = FALSE; // this class name does not start with our namespace so we can't load it
 		} else {
 			// get the root directory under which all my classes are located
-			$class_root = realpath( plugin_dir_path( __FILE__ ) );
+			$class_root = plugin_dir_path( __FILE__ );
 			// get the relative class path name for the class to be loaded
 			$relative_class_path = substr($class_name, $length); // everything after our namespace indicates the relative path to the desired class
 			// replace namespace separators with directory separators
 			$relative_class_path = str_replace('\\', DIRECTORY_SEPARATOR, $relative_class_path);
-			$path_parts = pathinfo($relative_class_path); // break this path into its parts
-			$relative_dir = $path_parts['dirname'];
+			$path_parts = pathinfo( $relative_class_path ); // break this path into its parts
+			$relative_dir = strtolower( $path_parts['dirname'] );
 			$class_dir = $class_root . DIRECTORY_SEPARATOR . $relative_dir;
 			// Remove any trailing slashes
 			$class_dir = rtrim($class_dir, DIRECTORY_SEPARATOR);
@@ -56,7 +58,8 @@ class Plugin_Autoloader {
 				$result = TRUE;
 			} else {
 				/* translators: %1$s is a class name, %2$s is file path. */
-				error_log( sprintf( __('ERROR: Unable to load class %1$s.  FILE DOES NOT EXIST: %2$s', 'reg-man-rc' ), $class_name, $class_file_path ) );
+				$msg = sprintf( __('ERROR: Unable to load class %1$s.  FILE DOES NOT EXIST: %2$s', 'reg-man-rc' ), $class_name, $class_file_path );
+				Error_Log::log_msg( $msg );
 				$result = FALSE;
 			} // endif
 		} // endif

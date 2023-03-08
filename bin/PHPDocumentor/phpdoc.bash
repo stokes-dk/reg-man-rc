@@ -9,4 +9,4 @@ PATH=$bin_dir:$PATH
 
 cd "$(dirname "$0")"
 cd ../..
-php bin/PHPDocumentor/phpDocumentor.phar --visibility="public,protected" -d ./includes/class_lib -t ../../../../phpdoc/reg_man_rc
+php bin/PHPDocumentor/phpDocumentor.phar --visibility="public,protected,api" -d ./includes/class_lib -t ../../../../phpdoc/reg_man_rc

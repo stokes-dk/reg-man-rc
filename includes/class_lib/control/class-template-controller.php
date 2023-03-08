@@ -16,55 +16,80 @@ class Template_Controller {
 	/**
 	 * The slug used to identify the Minimal page template.
 	 */
-	const MINIMAL_TEMPLATE_SLUG = 'reg_man_rc_minimal_template_slug';
+	const MINIMAL_TEMPLATE_SLUG = 'reg-man-rc-minimal-template-slug.php';
 
 	/**
-	 * Set up the action and filter hooks for our templates
+	 * Register the action and filter hooks for our templates
 	 *
 	 * This method is called by the plugin controller
 	 *
 	 * @return	void
 	 * @since	v0.1.0
 	 */
-	public static function initialize() {
-		add_filter( 'page_template', array(	__CLASS__, 'get_page_template_filename' ) );
-		add_filter( 'theme_page_templates', array( __CLASS__, 'add_template_to_page_attrs_section' ), 10, 3 );
+	public static function register() {
+
+		// Filter all template includess so we can replace the ones used for our pages
+		// We allow the user to select the template for our pages
+		// And we use the standard post template for our events
+//		add_filter( 'template_include', array( __CLASS__, 'filter_template_include' ) );
+
+		// Filter the filename for the page template returning our minimal template file name when appropriate
+		add_filter( 'page_template', array( __CLASS__, 'filter_page_template' ), 10, 4 );
+
+		// Filter the list of templates shown for a page
+		add_filter( 'theme_page_templates', array( __CLASS__, 'filter_theme_page_templates' ), 10, 2 );
+
 	} // function
 
 	/**
-	 * Filter hook to get the filename for the page template
-	 *
-	 * If the slug for the current page template is our template slug then we will return the appropriate filename for our template.
-	 * Otherwise we will leave the template filename as it was passed in.
-	 *
-	 * @return	string	filename for the page template to be used
-	 * @param	string	$page_template	The filename for the template currently assigned to the page
-	 * @since	v0.1.0
+	 * Filter the actual template file name based on a template's slug
+	 * @param	string		$template
+	 * @param	string		$type
+	 * @param	string[]	$template_array
+	 * @return	string	The filtered page template
 	 */
-	public static function get_page_template_filename( $page_template ) {
-		if ( get_page_template_slug() == self::MINIMAL_TEMPLATE_SLUG) {
-			$result = dirname( dirname ( dirname ( __FILE__) ) ). DIRECTORY_SEPARATOR . 'templates' . DIRECTORY_SEPARATOR . 'minimal-template.php';
+	public static function filter_page_template( $template, $type, $template_array ) {
+//		Error_Log::var_dump( $template, $type, $template_array );
+		if ( get_page_template_slug() == self::MINIMAL_TEMPLATE_SLUG ) {
+			$result = self::get_minimal_template_file_name();
 		} else {
-			$result = $page_template; // The original template filename passed in
+			$result = $template;
 		} // endif
 		return $result;
 	} // function
 
 	/**
-	 * Filter hook to add our page template name to the page attributes section of the editor
-	 *
-	 * If the slug for the current page template is our template slug then we will return the appropriate filename for our template.
-	 * Otherwise we will leave the template filename as it was passed in.
-	 *
-	 * @return	array[string]string	An associative array of representing the page template slugs and names to be shown in the editor
-	 * @param	array[string]string	$post_templates	The current associative array of slugs and names for page templates (we will add to this)
-	 * @param	WP_Theme			$wp_theme	The theme object
-	 * @param	WP_Post				$post		The post being edited, provided for context, or null.
-	 * @since	v0.1.0
+	 * Filter the list of templates for a page
+	 * @param string[][]	$page_templates
+	 * @param \WP_Theme		$theme_object
 	 */
-	public static function add_template_to_page_attrs_section( $post_templates, $wp_theme, $post ) {
-		$post_templates[ self::MINIMAL_TEMPLATE_SLUG ] = __('Registration Manager Minimal Template');
-		return $post_templates;
+	public static function filter_theme_page_templates( $page_templates, $theme_object ) {
+		$label = __( 'Minimal Template (Registration Manager for Repair Café)', 'reg-man-rc' );
+		$page_templates[ self::MINIMAL_TEMPLATE_SLUG ] = $label;
+//		Error_Log::var_dump( $page_templates );
+		return $page_templates;
+	} // function
+
+	/**
+	 * Get the file name for our internal "minimal" template
+	 * @return string
+	 */
+	public static function get_minimal_template_file_name() {
+		$plugin_dir = dirname( \Reg_Man_RC\PLUGIN_BOOTSTRAP_FILENAME );
+		$templates_dir = $plugin_dir . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'templates';
+		$result = $templates_dir . DIRECTORY_SEPARATOR . 'minimal-template.php';
+		return $result;
+	} // function
+
+	/**
+	 * Get the file name for our internal comments template
+	 * @return string
+	 */
+	public static function get_comments_template_file_name() {
+		$plugin_dir = dirname( \Reg_Man_RC\PLUGIN_BOOTSTRAP_FILENAME );
+		$templates_dir = $plugin_dir . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'templates';
+		$result = $templates_dir . DIRECTORY_SEPARATOR . 'comment-template.php';
+		return $result;
 	} // function
 
 	/**
@@ -81,19 +106,19 @@ class Template_Controller {
 	public static function dequeue_theme_styles_and_scripts() {
 		global $wp_scripts, $wp_styles;
 
-		foreach ($wp_styles->queue as $handle) {
+		foreach ( $wp_styles->queue as $handle ) {
 			// If the src includes wp-content/themes them dequeue it
-			$src = isset($wp_styles->registered[$handle]) ? $wp_styles->registered[$handle]->src : '';
-			if (strpos($src, 'wp-content/themes') !== FALSE) {
-				wp_dequeue_style($handle);
+			$src = isset( $wp_styles->registered[ $handle ] ) ? $wp_styles->registered[ $handle ]->src : '';
+			if ( strpos( $src, 'wp-content/themes' ) !== FALSE) {
+				wp_dequeue_style( $handle );
 			} // endif
 		} // endfor
 
 		foreach ($wp_scripts->queue as $handle) {
 			// If the src includes wp-content/themes them dequeue it
-			$src = isset($wp_scripts->registered[$handle]) ? $wp_scripts->registered[$handle]->src : '';
-			if (strpos($src, 'wp-content/themes') !== FALSE) {
-				wp_dequeue_script($handle);
+			$src = isset( $wp_scripts->registered[ $handle ] ) ? $wp_scripts->registered[ $handle ]->src : '';
+			if ( strpos( $src, 'wp-content/themes' ) !== FALSE) {
+				wp_dequeue_script( $handle );
 			} // endif
 		} // endfor
 	} // function
