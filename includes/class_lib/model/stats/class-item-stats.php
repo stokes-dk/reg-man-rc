@@ -8,19 +8,41 @@ namespace Reg_Man_RC\Model\Stats;
  * @since	v0.1.0
  *
  */
-class Item_Group_Stats {
+class Item_Stats {
 
 	private $group_name;
 	private $item_count;
 	private $fixed_count;
 	private $repairable_count;
-	private $repair_status_unknown_count;
 	private $eol_count;
-
+	private $repair_status_unknown_count;
+	
 	private $ci_calculator;
 
 	private function __construct() { }
 
+	/**
+	 * Get the Item_Stats object for the total of all events specified
+	 * @param string[] $event_keys_array
+	 * @return Item_Stats
+	 */
+	public static function get_total_item_stats_for_event_keys_array( $event_keys_array ) {
+		$group_by = Item_Stats_Collection::GROUP_BY_TOTAL;
+		$stats_collection = Item_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
+		$stats_array = array_values( $stats_collection->get_all_stats_array() );
+		$result = isset( $stats_array[ 0 ] ) ? $stats_array[ 0 ] : self::create( '', 0, 0, 0, 0 ); // Defensive
+		return $result;
+	} // function
+
+	/**
+	 * Create an Item_Stats object
+	 * @param string $group_name
+	 * @param int $item_count
+	 * @param int $fixed_count
+	 * @param int $repairable_count
+	 * @param int $end_of_life_count
+	 * @return Item_Stats
+	 */
 	public static function create( $group_name, $item_count = 0, $fixed_count = 0, $repairable_count = 0, $end_of_life_count = 0 ) {
 		$result = new self();
 		$result->group_name = $group_name;
@@ -31,26 +53,50 @@ class Item_Group_Stats {
 		return $result;
 	} // function
 
+	/**
+	 * Get the group name
+	 * @return string
+	 */
 	public function get_group_name() {
 		return $this->group_name;
 	} // function
 
+	/**
+	 * Get the item count
+	 * @return int
+	 */
 	public function get_item_count() {
 		return $this->item_count;
 	} // function
 
+	/**
+	 * Get the fixed count
+	 * @return int
+	 */
 	public function get_fixed_count() {
 		return $this->fixed_count;
 	} // function
 
+	/**
+	 * Get the repairable count
+	 * @return int
+	 */
 	public function get_repairable_count() {
 		return $this->repairable_count;
 	} // function
 
+	/**
+	 * Get the end-of-life count
+	 * @return int
+	 */
 	public function get_end_of_life_count() {
 		return $this->eol_count;
 	} // function
 
+	/**
+	 * Get the count of items whose repair status was not reported
+	 * @return int
+	 */
 	public function get_repair_status_unknown_count() {
 		if ( ! isset( $this->repair_status_unknown_count ) ) {
 			$fixed = $this->get_fixed_count();
@@ -64,11 +110,11 @@ class Item_Group_Stats {
 
 	/**
 	 * Add the specified values to the existing counts for this group
-	 * @param unknown $item_count
-	 * @param unknown $fixed_count
-	 * @param unknown $repairable_count
-	 * @param unknown $end_of_life_count
-	 * @return unknown
+	 * @param int $item_count
+	 * @param int $fixed_count
+	 * @param int $repairable_count
+	 * @param int $end_of_life_count
+	 * @return void
 	 */
 	public function add_to_counts( $item_count, $fixed_count, $repairable_count, $end_of_life_count ) {
 		$this->item_count += $item_count;

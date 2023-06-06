@@ -5,7 +5,6 @@ use Reg_Man_RC\View\Admin\Admin_Menu_Page;
 use Reg_Man_RC\Control\User_Role_Controller;
 use Reg_Man_RC\View\Map_View;
 use Reg_Man_RC\View\Event_Descriptor_View;
-use Reg_Man_RC\View\Event_View;
 
 /**
  * Describes a single event or a collection of recurring events defined internally by this plugin.
@@ -233,39 +232,41 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	 * @return string[]		An array of strings indicating years in which events are scheduled.
 	 * Each string contains a 4-digit year, e.g. '2021'
 	 */
-	// FIXME - This is not used!
+/* FIXME - This is not used!
 	public static function get_internal_event_descriptor_years_list() {
 		global $wpdb;
 		$meta = $wpdb->postmeta;
 		$start_key = self::START_META_KEY;
 		$query = "SELECT DISTINCT( DATE_FORMAT( meta_value, '%Y' ) ) FROM `$meta` WHERE meta_key = '$start_key' ORDER BY meta_value DESC";
-		$data_array = $wpdb->get_results( $select, OBJECT );
+		$data_array = $wpdb->get_results( $query, OBJECT );
 		$result = array();
 		foreach ( $data_array as $data ) {
 			$result[] = $data;
 		} // endif
 		return $result;
 	} // function
-
+*/
+	
 	/**
 	 * Get an array of strings representing the months in which events are scheduled.
 	 *
 	 * @return string[]		An array of strings indicating months in which events are scheduled.
 	 * Each string is in the format of [4-digit year]-[1 or 2-digit Month], e.g. '2021-5'
 	 */
-	// FIXME - This is not used!
+/* FIXME - This is not used!
 	public static function get_internal_event_descriptor_months_list() {
 		global $wpdb;
 		$meta = $wpdb->postmeta;
 		$start_key = self::START_META_KEY;
 		$query = "SELECT DISTINCT( DATE_FORMAT( meta_value, '%Y-%m' ) ) FROM `$meta` WHERE meta_key = '$start_key' ORDER BY meta_value DESC";
-		$data_array = $wpdb->get_results( $select, OBJECT );
+		$data_array = $wpdb->get_results( $query, OBJECT );
 		$result = array();
 		foreach ( $data_array as $data ) {
 			$result[] = $data;
 		} // endif
 		return $result;
 	} // function
+*/
 
 	/**
 	 * Get the post object for this event.
@@ -1089,10 +1090,7 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 
 		global $wp_version;
 		$icon = ( version_compare( $wp_version, '5.5', '>=' ) ) ? 'dashicons-coffee' : 'dashicons-calendar';
-		$supports = array( 'title', 'editor', 'thumbnail' );
-		if ( Settings::get_is_allow_event_comments() ) {
-			$supports[] = 'comments';
-		} // endif
+		$supports = array( 'title', 'editor', 'thumbnail', 'comments' );
 		$capability_singular = User_Role_Controller::EVENT_CAPABILITY_TYPE_SINGULAR;
 		$capability_plural = User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL;
 		$args = array(
@@ -1105,14 +1103,10 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 				'show_in_rest'			=> TRUE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
 				'show_in_nav_menus'		=> FALSE, // available for selection in navigation menus?
 				'show_in_menu'			=> Admin_Menu_Page::get_CPT_show_in_menu( $capability_plural ), // Where to show in admin menu? The main menu page will determine this
-				'show_in_admin_bar'		=> FALSE, // Whether to include this post type in the admin bar
+				'show_in_admin_bar'		=> TRUE, // Whether to include this post type in the admin bar
 				'menu_position'			=> 5, // Menu order position.  5 is below Posts
 				'menu_icon'				=> $icon,
 				'hierarchical'			=> FALSE, // Can each post have a parent?
-/*
- * supports options are	'title', 'editor' (post content), 'author', 'thumbnail', 'excerpt', 'trackbacks',
- *							'custom-fields', 'comments', 'revisions', 'page-attributes', 'post-formats'
- */
 				'supports'				=> $supports,
 				'taxonomies'			=> array(
 												Event_Category::TAXONOMY_NAME,

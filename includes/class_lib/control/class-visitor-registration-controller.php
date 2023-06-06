@@ -1,18 +1,19 @@
 <?php
-namespace Reg_Man_RC\Control\Admin;
+namespace Reg_Man_RC\Control;
 
 use Reg_Man_RC\View\Pub\Visitor_Reg_Manager;
 use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Item_Status;
 use Reg_Man_RC\View\Pub\Visitor_List_View;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Item;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Ajax_Form_Response;
 use Reg_Man_RC\Model\Visitor;
 use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Settings;
-use Reg_Man_RC\Model\Event_Key;
+use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\View\Editable\Editable_Item_Type;
+use Reg_Man_RC\View\Editable\Editable_Item_Status;
 
 /**
  * The visitor registration controller
@@ -22,15 +23,17 @@ use Reg_Man_RC\Model\Event_Key;
  * @since v0.1.0
  *
  */
-class Visitor_Registration_Admin_Controller {
+class Visitor_Registration_Controller {
 
 	const DATATABLE_LOAD_AJAX_ACTION = 'reg-man-rc-visitor-list-view-ajax-datatable-load';
 
 	const REGISTER_ITEM_AJAX_ACTION = 'reg-man-rc-register-item-ajax-action';
 
-	const ITEM_STATUS_UPDATE_AJAX_ACTION = 'reg-man-rc-visitor-item-status-update-ajax-action';
+	const ITEM_STATUS_UPDATE_AJAX_ACTION = 'reg-man-rc-visitor-reg-status-update-ajax-action';
 
-	const FIXER_STATION_UPDATE_AJAX_ACTION = 'reg-man-rc-fixer-station-update-ajax-action';
+	const ITEM_TYPE_UPDATE_AJAX_ACTION = 'reg-man-rc-visitor-reg-item-type-update-ajax-action';
+
+	const FIXER_STATION_UPDATE_AJAX_ACTION = 'reg-man-rc-visitor-reg-fixer-station-update-ajax-action';
 
 	const EVENT_SELECT_FORM_POST_ACTION = 'reg-man-rc-visitor-reg-manager-event-select-post';
 
@@ -58,7 +61,11 @@ class Visitor_Registration_Admin_Controller {
 		add_action( 'wp_ajax_' . self::ITEM_STATUS_UPDATE_AJAX_ACTION, array(__CLASS__, 'handle_item_status_update_priv') );
 		add_action( 'wp_ajax_nopriv_' . self::ITEM_STATUS_UPDATE_AJAX_ACTION, array(__CLASS__, 'handle_ajax_no_priv') );
 
-		// Add handler methods for status update
+		// Add handler methods for fixer station update
+		add_action( 'wp_ajax_' . self::ITEM_TYPE_UPDATE_AJAX_ACTION, array(__CLASS__, 'handle_item_type_update_priv') );
+		add_action( 'wp_ajax_nopriv_' . self::ITEM_TYPE_UPDATE_AJAX_ACTION, array(__CLASS__, 'handle_ajax_no_priv') );
+
+		// Add handler methods for fixer station update
 		add_action( 'wp_ajax_' . self::FIXER_STATION_UPDATE_AJAX_ACTION, array(__CLASS__, 'handle_fixer_station_update_priv') );
 		add_action( 'wp_ajax_nopriv_' . self::FIXER_STATION_UPDATE_AJAX_ACTION, array(__CLASS__, 'handle_ajax_no_priv') );
 
@@ -106,6 +113,7 @@ class Visitor_Registration_Admin_Controller {
 	} // function
 
 	public static function handle_register_pre_registered_item_priv() {
+/* FIXME - this needs to be implemented
 		// The form data is serialized and put into the formData post argument that Wordpress will pass to me
 		// I need to deserialze it into a regular associative array
 		$serialized_form_data = isset($_POST[ 'formData' ] ) ? $_POST[ 'formData' ] : NULL;
@@ -117,6 +125,7 @@ class Visitor_Registration_Admin_Controller {
 		$response = ( $result === FALSE ) ? FALSE : TRUE; // Return TRUE (usually) or FALSE on error
 		echo json_encode($response);
 		wp_die(); // THIS IS REQUIRED!
+*/
 	} // function
 
 	public static function handle_item_status_update_priv() {
@@ -129,13 +138,22 @@ class Visitor_Registration_Admin_Controller {
 		$item = Item::get_item_by_id( $item_id );
 		$status_id = isset( $form_data_array[ 'item-status' ] ) ? $form_data_array[ 'item-status' ] : '';
 		$item_status = Item_Status::get_item_status_by_id( $status_id );
-		$result = isset( $item ) ? $item->set_status( $item_status ) : FALSE;
-		$response = ($result === FALSE) ? FALSE : TRUE; // Return TRUE (usually) or FALSE on error
-		echo json_encode($response);
+//		$result = isset( $item ) ? $item->set_status( $item_status ) : FALSE;
+//		$response = ($result === FALSE) ? FALSE : TRUE; // Return TRUE (usually) or FALSE on error
+		if ( ! isset( $item ) ) {
+			$response = ''; // There's no item so no result;
+		} else {
+			$item->set_status( $item_status );
+			$response = Editable_Item_Status::get_display_value_for( $item_status );
+		} // endif
+		echo json_encode( $response );
 		wp_die(); // THIS IS REQUIRED!
 	} // function
 
-	public static function handle_fixer_station_update_priv() {
+	/**
+	 * Update the fixer station for an item
+	 */
+	public static function handle_item_type_update_priv() {
 		// The form data is serialized and put into the formData post argument that Wordpress will pass to me
 		// I need to deserialze it into a regular associative array
 		$serialized_form_data = isset( $_POST[ 'formData' ] ) ? $_POST[ 'formData' ] : NULL;
@@ -143,15 +161,44 @@ class Visitor_Registration_Admin_Controller {
 		parse_str( $serialized_form_data, $form_data_array );
 		$item_id = isset( $form_data_array[ 'item-id' ] ) ? $form_data_array[ 'item-id' ] : '';
 		$item = Item::get_item_by_id( $item_id );
-		$fixer_station_id = isset( $form_data_array[ 'fixer-station' ] ) ? $form_data_array[ 'fixer-station' ] : '';
-		$fixer_station = Fixer_Station::get_fixer_station_by_id( $fixer_station_id );
-		$result = isset( $item ) ? $item->set_fixer_station( $fixer_station ) : FALSE;
-		$response = ( $result === FALSE ) ? FALSE : TRUE; // Return TRUE (usually) or FALSE on error
-		echo json_encode($response);
+		$item_type_id = isset( $form_data_array[ 'item-type' ] ) ? $form_data_array[ 'item-type' ] : '';
+		$item_type = Item_Type::get_item_type_by_id( $item_type_id );
+		if ( ! isset( $item ) ) {
+			$response = ''; // There's no item so no result;
+		} else {
+			$item->set_item_type( $item_type );
+			$response = $item_type->get_name();
+		} // endif
+		echo json_encode( $response );
 		wp_die(); // THIS IS REQUIRED!
 	} // function
 
+	/**
+	 * Update the fixer station for an item
+	 */
+	public static function handle_fixer_station_update_priv() {
+		// The form data is serialized and put into the formData post argument that Wordpress will pass to me
+		// I need to deserialze it into a regular associative array
+		$serialized_form_data = isset( $_POST[ 'formData' ] ) ? $_POST[ 'formData' ] : NULL;
+		$form_data_array = array();
+		parse_str( $serialized_form_data, $form_data_array );
+		$item_id = isset( $form_data_array[ 'object-id' ] ) ? $form_data_array[ 'object-id' ] : '';
+		$item = Item::get_item_by_id( $item_id );
+		$fixer_station_id = isset( $form_data_array[ 'fixer-station' ] ) ? $form_data_array[ 'fixer-station' ] : '';
+		$fixer_station = Fixer_Station::get_fixer_station_by_id( $fixer_station_id );
+		if ( ! isset( $item ) ) {
+			$response = ''; // There's no item so no result;
+		} else {
+			$item->set_fixer_station( $fixer_station );
+			$response = $fixer_station->get_name();
+		} // endif
+		echo json_encode( $response );
+		wp_die(); // THIS IS REQUIRED!
+	} // function
 
+	/**
+	 * Handle an ajax post for a new visitor registration
+	 */
 	public static function handle_new_registration_priv() {
 		// The form data is serialized and put into the formData post argument that Wordpress will pass to me
 		// I need to deserialze it into a regular associative array
@@ -361,10 +408,6 @@ class Visitor_Registration_Admin_Controller {
 		//	$nonce = wp_create_nonce( self::AJAX_NONCE_STR );
 		//	echo "<input type=\"hidden\" name=\"ajax-nonce\" value=\"$nonce\">";
 
-//		Error_Log::var_dump( $form_data );
-//		$form_response->add_error( 'form-data', '', 'Testing' );
-//		return;
-
 		// There is already a form to create new visitor registrations.  I'm doing the same thing
 		//  based on an item that's already registered.  So I'll just call the existing method to take
 		//  care of this (RC_Reg_Visitor_Reg_Ajax_Form) but first I need to add visitor info
@@ -443,13 +486,14 @@ class Visitor_Registration_Admin_Controller {
 		return;
 	} // function
 
-
+	/**
+	 * Handle an AJAX post for a user who is not logged in
+	 */
 	public static function handle_ajax_no_priv() {
 		$error = array( __( 'ERROR', 'reg-man-rc'), __( 'You are not logged in or your session has expired', 'reg-man-rc'),
 				__( 'Please reload the page and log in again', 'reg-man-rc'), '');
 		echo json_encode(array('data' => array($error)));
 		wp_die(); // THIS IS REQUIRED!
 	} // function
-
 
 } // class

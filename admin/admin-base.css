@@ -102,6 +102,8 @@
 
 .datatable.volunteer-my-reg-table .name { display: none; }
 
+.wp-admin .ui-dialog{ z-index: 10000 !important; }
+
 .reg-man-rc-input-group-table {
 	width: 100%;
 	border: 1px solid #ccc;
@@ -112,11 +114,13 @@
 	padding: 0.5em;
 	border: 1px solid #ccc;
 }
-.reg-man-rc-input-group-table .reg-man-rc-input-cell {
-	text-align: center;
+.reg-man-rc-input-group-table th {
+	overflow: clip;
+	white-space: break-spaces;
+	text-overflow: ellipsis;
 }
-.reg-man-rc-input-group-table.reg-man-rc-sup-item-table .num-col {
-	width: 10%;
+.reg-man-rc-input-group-table .reg-man-rc-sup-data-table-cell {
+	text-align: center;
 }
 .reg-man-rc-input-group-table.reg-man-rc-sup-item-table .reg-man-rc-sup-item-data-template {
 	display: none;
@@ -188,9 +192,6 @@
 	color: #999;
 	margin: 0 0.125em;
 }
-.reg-man-rc-tab-list-item span {
-	vertical-align: middle;
-}
 .reg-man-rc-tabs-container { visibility: hidden; }
 .reg-man-rc-tabs-container.tabs-init-complete { visibility: visible; }
 
@@ -236,4 +237,39 @@
 .reg-man-rc-info-window-container.admin-events-calendar .object-view-details-fixer-station-list figcaption,
 .reg-man-rc-info-window-container.admin-cal-map .object-view-details-fixer-station-list figcaption {
 	display: none;
+}
+
+
+.reg-man-rc-admin-dashboard-header {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	margin: 1em 0;
+	font-size: 1.4em;
+	font-weight: 400;
+}
+.reg-man-rc-admin-dashboard-header .admin-dashboard-title-back-link .admin-dashboard-title-back-link-icon,
+.reg-man-rc-admin-dashboard-header .admin-dashboard-title-back-link .admin-dashboard-title-back-link-text {
+	vertical-align: middle;
+}
+
+.reg-man-rc-admin-dashboard-header a {
+	text-decoration: none;
+}
+.reg-man-rc-admin-dashboard-header .reg-man-rc-admin-dashboard-header-part.admin-dashboard-title-text {
+	flex-grow: 1;
+	text-align: center;
+}
+
+.wp-admin .postbox .ui-widget {
+	font-family: inherit;
+	font-size: inherit;
+}
+
+.reg-man-rc-sup-data-table-head-repair-status, .reg-man-rc-sup-data-table-head-item-type {
+  font-weight: normal;
+}
+
+.postbox .form-input-list {
+	margin: 0;
 }

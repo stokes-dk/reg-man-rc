@@ -2,11 +2,10 @@
 namespace Reg_Man_RC\Control;
 
 use Reg_Man_RC\Model\Volunteer;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Ajax_Form_Response;
 use Reg_Man_RC\View\Pub\Volunteer_Area;
-use Reg_Man_RC\Model\Cookie;
 use Reg_Man_RC\Model\Event_Key;
+use Reg_Man_RC\Model\Settings;
 
 /**
  * The volunteer controller
@@ -105,7 +104,9 @@ class Volunteer_Controller {
 		$nonce			= isset( $form_data_array[ '_wpnonce' ] )		? $form_data_array[ '_wpnonce' ]			: NULL;
 
 		$volunteer		= ! empty( $email ) ? Volunteer::get_volunteer_by_email( $email )	 : NULL;
-
+		
+		$is_registered_user = Volunteer::get_is_exist_registered_user_for_email( $email );
+		
 //		Error_Log::var_dump( $email, $is_remember );
 
 		if ( ! wp_verify_nonce( $nonce, self::AJAX_VOLUNTEER_LOGIN_ACTION ) ) {
@@ -120,17 +121,21 @@ class Volunteer_Controller {
 
 		} elseif( empty( $volunteer ) ) {
 
-			$error_msg = __( 'Volunteer email not found. ', 'reg-man-rc' );
+			$error_msg = __( 'Volunteer email not found.', 'reg-man-rc' );
+			$ajax_response->add_error( 'vol-email', $email, $error_msg );
+
+		} elseif( Settings::get_is_require_volunteer_area_registered_user() && ! $is_registered_user ) {
+
+			$error_msg = __( 'You must have a registered user ID and password to access the volunteer area.', 'reg-man-rc' );
 			$ajax_response->add_error( 'vol-email', $email, $error_msg );
 
 		} else {
 
 			// We have a volunteer, check if we need a password and if so, was the correct one was supplied
 
-			$is_password_required = Volunteer::get_is_login_required_for_email( $email );
-
 			// If everything is fine then this is the page I will redirect to
 			$redirect_url = Volunteer_Area::get_href_for_main_page();
+			
 			// If we have an event key then add that arg to the redirect
 			if ( isset( $event_key ) ) {
 				$args = array( Event_Key::EVENT_KEY_QUERY_ARG_NAME => $event_key );
@@ -138,12 +143,12 @@ class Volunteer_Controller {
 			} // endif
 //			Error_Log::var_dump( $redirect_url );
 
-			if ( $is_password_required ) {
+			if ( $is_registered_user ) {
 
 				if ( $pwd === NULL ) {
 
 					// No password field was presented in the form so create the form and return it
-					$pwd_form_content = Volunteer_Area::get_volunteer_login_form_content( $email, $is_remember, $is_password_required, $event_key );
+					$pwd_form_content = Volunteer_Area::get_volunteer_login_form_content( $email, $is_remember, $is_registered_user, $event_key );
 					$ajax_response->set_html_data( $pwd_form_content );
 
 				} else {

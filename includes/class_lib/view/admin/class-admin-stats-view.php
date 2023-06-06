@@ -2,17 +2,16 @@
 namespace Reg_Man_RC\View\Admin;
 
 use Reg_Man_RC\Control\Scripts_And_Styles;
-use Reg_Man_RC\Model\Event;
-use Reg_Man_RC\Model\Item;
-use Reg_Man_RC\Model\Volunteer;
-use Reg_Man_RC\Model\Visitor;
-use Reg_Man_RC\View\Chart_View;
-use Reg_Man_RC\Model\Event_Category;
-use Reg_Man_RC\Model\Event_Filter;
+use Reg_Man_RC\View\Stats\Ajax_Chart_View;
 use Reg_Man_RC\View\Map_View;
 use Reg_Man_RC\View\Event_Filter_Input_Form;
-use Reg_Man_RC\Control\Map_Controller;
-use Reg_Man_RC\Model\Stats\Item_Statistics;
+use Reg_Man_RC\Model\Stats\Item_Stats_Collection;
+use Reg_Man_RC\Model\Stats\Events_Chart_Model;
+use Reg_Man_RC\Model\Stats\Repairs_Chart_Model;
+use Reg_Man_RC\Model\Stats\Items_Chart_Model;
+use Reg_Man_RC\Model\Stats\Volunteers_Chart_Model;
+use Reg_Man_RC\Model\Stats\Visitors_And_Volunteers_Chart_Model;
+use Reg_Man_RC\Model\Stats\Visitors_Chart_Model;
 
 /**
  * The administrative view for statistics
@@ -64,7 +63,7 @@ class Admin_Stats_View {
 
 	public function render() {
 
-		echo '<div class="reg-man-rc-stats-view-container">';
+		echo '<div class="reg-man-rc-admin-stats-view-container reg-man-rc-admin-filtered-stats">';
 
 			echo '<div class="reg-man-rc-stats-view-filter-container">';
 				$this->render_filter();
@@ -92,21 +91,27 @@ class Admin_Stats_View {
 		$map_title			= esc_html__( 'Map', 'reg-man-rc' );
 		$events_title		= esc_html__( 'Events', 'reg-man-rc' );
 		$items_title		= esc_html__( 'Items', 'reg-man-rc' );
-		$vol_reg_title		= esc_html__( 'Volunteers', 'reg-man-rc' );
 		$visitors_title		= esc_html__( 'Visitors', 'reg-man-rc' );
+		$vol_reg_title		= esc_html__( 'Volunteers', 'reg-man-rc' );
 
-		$format = '<li class="reg-man-rc-tab-list-item"><a href="#tab-%1$s"><i class="dashicons dashicons-%3$s"></i><span>%2$s</span></a></li>';
+		$format =
+				'<li class="reg-man-rc-tab-list-item">' . 
+					'<a href="#tab-%1$s" class="reg-man-rc-icon-text-container">' . 
+						'<i class="icon dashicons dashicons-%3$s"></i><span class="text">%2$s</span>' . 
+					'</a>' . 
+				'</li>';
+		
 		echo '<div class="reg-man-rc-tabs-container">';
 			echo '<ul>';
 				printf( $format, 'summary',			$summary_title,			'chart-bar' );
-				printf( $format, 'fixed',			$fixed_title,			'editor-table' );
+				printf( $format, 'fixed',			$fixed_title,			'admin-tools' );
 				printf( $format, 'fixers',			$fixers_title,			'chart-bar' );
 				printf( $format, 'non-fixers',		$non_fixers_title,		'chart-bar' );
 				printf( $format, 'map',				$map_title,				'location-alt' );
-				printf( $format, 'events',			$events_title,			'editor-table' );
-				printf( $format, 'items',			$items_title,			'editor-table' );
-				printf( $format, 'vol-reg',			$vol_reg_title,			'editor-table' );
-				printf( $format, 'visitors'	,		$visitors_title,		'editor-table' );
+				printf( $format, 'events',			$events_title,			'calendar' );
+				printf( $format, 'items',			$items_title,			'clipboard' );
+				printf( $format, 'visitors'	,		$visitors_title,		'groups' );
+				printf( $format, 'vol-reg',			$vol_reg_title,			'admin-users' );
 			echo '</ul>';
 
 			echo '<div id="tab-summary" class="tab-panel" data-name="summary">';
@@ -137,12 +142,12 @@ class Admin_Stats_View {
 				self::render_items_tab();
 			echo '</div>';
 
-			echo '<div id="tab-vol-reg" class="tab-panel" data-name="volunteer_registration">';
-				self::render_volunteer_registration_tab();
-			echo '</div>';
-
 			echo '<div id="tab-visitors" class="tab-panel" data-name="visitors">';
 				self::render_visitors_tab();
+			echo '</div>';
+
+			echo '<div id="tab-vol-reg" class="tab-panel" data-name="volunteer_registration">';
+				self::render_volunteer_registration_tab();
 			echo '</div>';
 
 		echo '</div>';
@@ -152,19 +157,29 @@ class Admin_Stats_View {
 		echo '<div class="reg-man-rc-chart-group-container">';
 
 			$label = esc_html__( 'Events', 'reg-man-rc' );
-			$box = Chart_View::create( $label, 'event', 'event_category' );
+			$box = Ajax_Chart_View::create( $label, Events_Chart_Model::CHART_TYPE );
+			$box->set_classes( 'event-filter-change-listener' );
 			$box->render();
 
 			$label = esc_html__( 'Repairs', 'reg-man-rc' );
-			$box = Chart_View::create( $label, 'fixed', 'summary' );
+			$box = Ajax_Chart_View::create( $label, Repairs_Chart_Model::CHART_TYPE_DETAILED );
+			$box->set_classes( 'event-filter-change-listener' );
 			$box->render();
 
 			$label = esc_html__( 'Visitors & Volunteers', 'reg-man-rc' );
-			$box = Chart_View::create( $label, 'people', 'summary' );
+			$box = Ajax_Chart_View::create( $label, Visitors_And_Volunteers_Chart_Model::CHART_TYPE );
+			$box->set_classes( 'event-filter-change-listener' );
 			$box->render();
 
 		echo '</div>';
 
+	} // function
+
+	private static function render_fixed_tab() {
+		echo '<div class="reg-man-rc-chart-group-container">';
+			$fixed_table = Items_Fixed_Admin_Table_View::create( Item_Stats_Collection::GROUP_BY_FIXER_STATION );
+			$fixed_table->render();
+		echo '</div>';
 	} // function
 
 	private static function render_events_tab() {
@@ -181,10 +196,10 @@ class Admin_Stats_View {
 		echo '</div>';
 	} // function
 
-	private static function render_fixed_tab() {
+	private static function render_visitors_tab() {
 		echo '<div class="reg-man-rc-chart-group-container">';
-			$fixed_table = Items_Fixed_Admin_Table_View::create( Item_Statistics::GROUP_BY_FIXER_STATION );
-			$fixed_table->render();
+			$visitor_table = Visitor_Admin_Table_View::create();
+			$visitor_table->render();
 		echo '</div>';
 	} // function
 
@@ -195,26 +210,22 @@ class Admin_Stats_View {
 		echo '</div>';
 	} // function
 
-	private static function render_visitors_tab() {
-		echo '<div class="reg-man-rc-chart-group-container">';
-			$visitor_table = Visitor_Admin_Table_View::create();
-			$visitor_table->render();
-		echo '</div>';
-	} // function
-
 	private static function render_fixers_tab() {
 		echo '<div class="reg-man-rc-chart-group-container">';
 
 			$label = esc_html__( 'Fixers per Event', 'reg-man-rc' );
-			$box = Chart_View::create( $label, 'fixer', 'fixer_station' );
+			$box = Ajax_Chart_View::create( $label, Volunteers_Chart_Model::CHART_TYPE_FIXERS_PER_EVENT );
+			$box->set_classes( 'event-filter-change-listener' );
 			$box->render();
 
 			$label = esc_html__( 'Items per Event', 'reg-man-rc' );
-			$box = Chart_View::create( $label, 'item', 'fixer_station' );
+			$box = Ajax_Chart_View::create( $label, Items_Chart_Model::CHART_TYPE_ITEMS_BY_FIXER_STATION );
+			$box->set_classes( 'event-filter-change-listener' );
 			$box->render();
 
 			$label = esc_html__( 'Items per Fixer', 'reg-man-rc' );
-			$box = Chart_View::create( $label, 'items-per-fixer', 'fixer_station' );
+			$box = Ajax_Chart_View::create( $label, Volunteers_Chart_Model::CHART_TYPE_ITEMS_PER_FIXER_BY_STATION );
+			$box->set_classes( 'event-filter-change-listener' );
 			$box->render();
 
 		echo '</div>';
@@ -225,15 +236,18 @@ class Admin_Stats_View {
 		echo '<div class="reg-man-rc-chart-group-container">';
 
 			$label = esc_html__( 'Non-Fixer Volunteers per Event', 'reg-man-rc' );
-			$box = Chart_View::create( $label, 'non-fixer', 'volunteer_role' );
+			$box = Ajax_Chart_View::create( $label, Volunteers_Chart_Model::CHART_TYPE_NON_FIXERS_PER_EVENT );
+			$box->set_classes( 'event-filter-change-listener' );
 			$box->render();
 
 			$label = esc_html__( 'Visitors per Event', 'reg-man-rc' );
-			$box = Chart_View::create( $label, 'visitor', 'summary' );
+			$box = Ajax_Chart_View::create( $label, Visitors_Chart_Model::CHART_TYPE );
+			$box->set_classes( 'event-filter-change-listener' );
 			$box->render();
 
 			$label = esc_html__( 'Visitors per Non-Fixer Volunteer', 'reg-man-rc' );
-			$box = Chart_View::create( $label, 'visitors-per-volunteer', 'volunteer_role' );
+			$box = Ajax_Chart_View::create( $label, Volunteers_Chart_Model::CHART_TYPE_VISITORS_PER_VOLUNTEER_ROLE );
+			$box->set_classes( 'event-filter-change-listener' );
 			$box->render();
 
 		echo '</div>';

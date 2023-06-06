@@ -1,8 +1,6 @@
 <?php
 namespace Reg_Man_RC\Model;
 
-use Reg_Man_RC\View\Admin\Event_Category_Admin_View;
-use Reg_Man_RC\Control\Term_Order_Controller;
 
 /**
  * An instance of this class represents a category for an event, e.g. Repair Café, Mini Café.
@@ -46,7 +44,7 @@ class Event_Category {
 	/**
 	 * Instantiate this class using the supplied data object
 	 *
-	 * @param	WP_Term			$term	The object containing the data for this instance
+	 * @param	\WP_Term			$term	The object containing the data for this instance
 	 * @return	Event_Category	An instance of this class
 	 *
 	 * @since v0.1.0
@@ -550,7 +548,10 @@ class Event_Category {
 				'public'				=> TRUE,	// whether it's intended for public use - must be TRUE to enable polylang translations
 				'publicly_queryable'	=> FALSE,	// can it be queried
 				'show_ui'				=> TRUE,	// does it have a UI for managing it
-				'show_in_rest'			=> TRUE,	// is it accessible via REST, TRUE is required for the Gutenberg editor!!!
+				// Note that if we set show_in_rest to TRUE then the block editor will show a metabox in post types
+				//  that use this taxonom REGARDLESS of the setting for meta_box_cb
+				// There is a way around that using the 'rest_prepare_taxonomy' filter if absolutely necessary
+				'show_in_rest'			=> FALSE,	// is it accessible via REST, TRUE is required for the Gutenberg editor!!!
 				'show_in_menu'			=> TRUE,	// TRUE means show in submenu under its associated post type
 				'show_in_nav_menus'		=> FALSE,	// available for selection in navigation menus?
 				'show_admin_column'		=> TRUE,	// show values as column in admin post listing screens
@@ -688,7 +689,7 @@ class Event_Category {
 				'taxonomy'			   => self::TAXONOMY_NAME,
 				'hide_empty'			 => FALSE,
 		);
-		$query = new WP_Term_Query( $args );
+		$query = new \WP_Term_Query( $args );
 		foreach( $query->get_terms() as $term ){
 			wp_delete_term( $term->term_id, self::TAXONOMY_NAME );
 		} // endfor

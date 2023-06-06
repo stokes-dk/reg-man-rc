@@ -1,7 +1,6 @@
 <?php
 namespace Reg_Man_RC\Model;
 
-use Reg_Man_RC\View\Map_View;
 
 /**
  * An instance of this interface provides the details required to mark something on a map, including title, position and so on.

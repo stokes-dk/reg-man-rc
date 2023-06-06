@@ -2,12 +2,6 @@
 namespace Reg_Man_RC\Control\Admin;
 
 use Reg_Man_RC\Model\Event_Category;
-use Reg_Man_RC\Model\Error_Log;
-use Reg_Man_RC\Model\Settings;
-use Reg_Man_RC\View\Admin\Event_Category_Admin_View;
-use Reg_Man_RC\Model\Ajax_Form_Response;
-use Reg_Man_RC\View\Admin\Admin_Help_View;
-use Reg_Man_RC\Control\Term_Order_Controller;
 use Reg_Man_RC\Model\Calendar;
 
 /**

@@ -17,14 +17,13 @@ jQuery(document).ready(function($) {
 		]
 	});
 	
-	
 	// TOP
 	
-	$('.visitor-reg-list-table').on('init-datatable', function(evt) {
-		var me = $(this);
-		var container = me.closest('.visitor-reg-manager-container');
-		var domSetting = me.data('dom-setting');
-		var myDataTable = me.DataTable({
+	$( '.visitor-reg-list-table' ).on( 'init-datatable', function( evt ) {
+		var me = $( this );
+		var container = me.closest( '.visitor-reg-manager-container' );
+		var dom_setting = me.data( 'dom-setting' );
+		var my_data_table = me.DataTable({
 			'ajax' : {
 				'url'  : me.data('ajax-url'),
 				'data' : {
@@ -32,30 +31,37 @@ jQuery(document).ready(function($) {
 					'event_key'	: me.data( 'event-key' )					
 				},
 			},
-			orderFixed: [0, 'asc'],
+			orderFixed: [ 0, 'asc' ],
 			rowGroup: {
-				dataSrc: 0
+				dataSrc: 0 // The name column must be first!
 			},
 			'autoWidth' : false,
-			'dom': domSetting,
+			'dom': dom_setting,
 			'paging' : false, // hide pagination and just show everything
 			'processing' : true,
-			'columns': [
-				{ className: 'visitor-short-name', 'visible' : false  }, // this is the row grouping column
-				{ className: 'visitor-item-priority', 'visible' : false },
-				{ className: 'visitor-item-desc', 'orderable' : false },
-				{ className: 'visitor-item-status', 'orderable' : false },
-				{ className: 'visitor-item-station', 'orderable' : false },
-				{ className: 'visitor-item-id', 'visible' : false },
-				{ className: 'visitor-is-surveyed', 'visible' : false },
-				{ className: 'visitor-id', 'visible' : false }
+			'columnDefs'	: [
+				{
+					'targets'	: 'group-by',
+					'visible'	: false, // The original column is hidden, the data becomes grouping row
+				},
+				{
+					'targets'	: 'col-hidden',
+					'searchable': false, // don't allow searching on hidden columns
+					'visible'	: false,
+				},
+				{
+					'targets'	: 'col-not-searchable',
+					'searchable': false,
+				},
+				{
+					'targets'	: 'col-not-sortable',
+					'sortable'	: false,
+				},
 			],
 			'language' : {
 				'emptyTable'		: __('No visitors registered', 'reg-man-rc'),
-				// info is handled by a callback below
-				// 'info'			: __('Total events: _TOTAL_', 'reg-man-rc'),
 			    'thousands'			: _x(',', 'Thousands separator', 'reg-man-rc'),
-				// translators: _MENU_ is a replacement variable replaced with a count of table entries
+				/* translators: _MENU_ is a replacement variable for the count of table entries to show */
 			    'lengthMenu'		: __('Show _MENU_ entries', 'reg-man-rc'),
 				'loadingRecords'	: ' ',
 				'processing'		: __('Loading. Please wait...', 'reg-man-rc'),
@@ -69,67 +75,84 @@ jQuery(document).ready(function($) {
 			    },
 			},
 			createdRow: function( row, data, dataIndex ) {
-				$(row).addClass('visitor-reg-list-item'); // Allow me to launch dialog when row clicked
+				var row = $( row );
+				var item_id = data[ 5 ];
+				var visitor_id = data[ 6 ];
+				var is_outcome_reported = data[ 7 ];
+				row.addClass( 'visitor-reg-list-item' ); // Allow me to launch dialog when row clicked
 				// We need to be able to access data in hidden columns like the item id
 				//  but datatables actually removes the column from the table when it's hidden
 				// So to make it accessible we need to store the data in a data attribute
-				$(row).attr('data-item-id', data[5]); // Store the item ids as a data attribute
-				$(row).attr('data-is-surveyed', data[6]); // Store the surveyed item flag
-				$(row).attr('data-visitor-id', data[7]); // Store the surveyed item flag
+				row.attr( 'data-item-id', item_id ); // Store the item ids as a data attribute
+				row.attr( 'data-visitor-id', visitor_id ); // Store the visitor ID
+				row.attr( 'data-is-outcome-reported', is_outcome_reported ); // Store the flag for outcome reported
 			},
 			'infoCallback' : function( settings, start, end, max, total, pre ) {
 				var result;
 				if (max === 0) {
 					result = '';
-					container.find('input[type=search]').removeClass('filter-on');
+					container.find( 'input[type=search]' ).removeClass( 'filter-on' );
 				} else if (total !== max) { // the filter is being used so not all items are showing
 					// translators: %1$s is replaced with a count of items showing, %2$s with the total count of registered items
-					result = sprintf(_n('Showing %1$s item (filtered from a total of %2$s registered)',
-										'Showing %1$s items (filtered from a total of %2$s registered)', total, 'reg-man-rc'),
-										total, max);
+					result = sprintf( _n( 'Showing %1$s item (filtered from a total of %2$s registered)',
+										'Showing %1$s items (filtered from a total of %2$s registered)', total, 'reg-man-rc' ),
+									total, max );
 					result = '<span class="visitor-reg-list-filter-info">' + result + '</span>';
 					container.find('input[type=search]').addClass('filter-on'); // highlight the filter
 				} else { // all items showing, give full details on the list
 					container.find('input[type=search]').removeClass('filter-on');
-					var itemCount = max; // the item count is the total number of rows
-					var visitorArray = {}, visitorCount = 0, visitorId;
-					var isSurveyed, itemSurveyCount = 0, responseRate;
-					var rows = me.find('tbody tr'), currRow;
-					rows.each(function(index, value) {
-						currRow = $(value);
-						isSurveyed = currRow.data('is-surveyed');
-						if (isSurveyed) itemSurveyCount++;
-						visitorId = currRow.data('visitor-id');
-						if ( !(visitorId in visitorArray) ) {
-							visitorArray[visitorId] = 1; // mark the visitor array so we can keep count
-							visitorCount++; // this visitor is new to the list so increment counter
+					var item_count = max; // the item count is the total number of rows
+					var visitor_array = {}, visitors_count = 0, visitor_id;
+					var is_outcome_reported, outcome_reported_count = 0, response_rate;
+					var rows = me.find( 'tbody tr' ), curr_row;
+					rows.each( function( index, value ) {
+						curr_row = $(value);
+						is_outcome_reported = curr_row.data( 'is-outcome-reported' );
+						if ( is_outcome_reported ) outcome_reported_count++;
+						visitor_id = curr_row.data('visitor-id');
+						if ( ! ( visitor_id in visitor_array ) ) {
+							visitor_array[ visitor_id ] = 1; // mark the visitor array so we can keep count
+							visitors_count++; // this visitor is new to the list so increment counter
 						} // endif
 					});
-					responseRate = Math.round(itemSurveyCount / itemCount * 100);
-					var visitorsText = _n('visitor', 'visitors', visitorCount, 'reg-man-rc');
-					var regItemsText = _n('registered item', 'registered items', itemCount, 'reg-man-rc');
-					var surveyedItemsText = _n('item', 'items', itemSurveyCount, 'reg-man-rc');
-					var percentSign = '%';
-					/* translators: %1$s is replaced with the visitor count, %2$s with 'visitor' or 'visitors' depending on count
-					  %3$s with the registered item count
-					  %4$s with 'registered item' or 'registered items' depending on the registered item count
-					  %5$s with the response rate of surved of items surveyed as a percentage, and %6$s with a percent sign, i.e. "%"
+					/* Translators: %s is a count of visitors */
+					var visitors_text = sprintf( _n( '%s visitor', '%s visitors', visitors_count, 'reg-man-rc' ), visitors_count );
+					/* Translators: %s is a count of items */
+					var reg_items_text = sprintf( _n( '%s item', '%s items', item_count, 'reg-man-rc' ), item_count );
+					response_rate = Math.round( outcome_reported_count / item_count * 100 );
+					/* Translators: %s is a percentage of items whose repair outcome is reported divided by total items.
+						Note that %s%% will produce a number followed by a single percent sign
+					 */
+					var response_rate_text = sprintf( __( '%s%% response rate', response_rate, 'reg-man-rc' ), response_rate );
+					/* translators: %1$s is visitor count text like "45 visitors"
+					  %2$s is the item count text like "50 items"
+					  %3$s is the response rate text like "28% response rate"
 					*/
-					var format = __('%1$s %2$s, %3$s %4$s, %5$s%6$s response rate', 'reg-man-rc');
-					result = sprintf(format, visitorCount, visitorsText, itemCount, regItemsText, responseRate, percentSign);
+					var format = __( '%1$s, %2$s, %3$s', 'reg-man-rc' );
+					result = sprintf( format, visitors_text, reg_items_text, response_rate_text );
 				} // endif
 				return result;
 			},
-			'initComplete': function(settings, json) { $(this).addClass('datatable-init-complete'); }
+			'initComplete': function(settings, json) {
+				// Executes after initialization
+				var me = $( this );
+				me.addClass( 'datatable-init-complete' );
+			},
+			'drawCallback': function( settings ) {
+				// Executes on every re-draw, e.g. data is loaded
+				var me = $( this );
+				var popup_editable = me.find( '.reg-man-rc-popup-editable-container' );
+				popup_editable.trigger( 'init-popup-editable' );
+			}
 		});
 		me.on('datatable-reload', function(evt) {
-			myDataTable.search('');
-			myDataTable.ajax.reload();
+			my_data_table.search('');
+			my_data_table.ajax.reload();
 		});
-		me.on('datatable-replace-data', function(evt, newData) {
-			myDataTable.clear();
-			myDataTable.rows.add(newData);
-			myDataTable.draw();
+		me.on('datatable-replace-data', function( evt, newData ) {
+			my_data_table.clear();
+			my_data_table.rows.add( newData );
+			my_data_table.draw();
 		});
 	});
 	$('.visitor-reg-list-table').trigger('init-datatable');
@@ -137,6 +160,13 @@ jQuery(document).ready(function($) {
 	
 	/// BOTTOM
 		
+	$( '.visitor-reg-list-table' ).on( 'edit-submit-end', '.reg-man-rc-editable-item-status', function( evt ) {
+		// When the item status has been updated, I need to trigger a table reload to update the response rate
+		var me = $( this );
+		var table = me.closest( '.visitor-reg-list-table' );
+		table.trigger( 'datatable-reload' );
+	});
+
 		
 	$('.visitor-reg-manager-container').on('initialize', function(evt) {
 		var me = $(this);
@@ -145,7 +175,7 @@ jQuery(document).ready(function($) {
 		var buttonLabelFormat = _x('%1$s%2$s', 'Creating a label for a button with icon and text', 'reg-man-rc');
 		var refreshButtonIcon = '<span class="dashicons dashicons-update"></span>';
 		var refreshButtonText = '<span class="button-text">' + __('Refresh List', 'reg-man-rc') + '</span>';
-		var surveyButtonIcon = '<span class="dashicons dashicons-clipboard"></span>';
+//		var surveyButtonIcon = '<span class="dashicons dashicons-clipboard"></span>';
 //		var surveyButtonText = '<span class="button-text">' + __('Visitor Feedback', 'reg-man-rc') + '</span>';
 		var addButtonIcon = '<span class="dashicons dashicons-plus-alt"></span>';
 		var addButtonText = '<span class="button-text">' + __('Add Visitor', 'reg-man-rc') + '</span>';
@@ -187,107 +217,7 @@ jQuery(document).ready(function($) {
 	});
 	$('.visitor-reg-manager-container').trigger('initialize'); // initialize if there's data already on the page
 	
-	// Inline editors
-	$('body').on('click', function(evt) {
-		// Close any open editor on a click that does not come from inside my editable or editor
-		var me = $(evt.target);
-		var editable = me.closest('.reg-man-rc-inline-editable');
-		var editor = me.closest('.reg-man-rc-inline-editor');
-		if ( ( editable.length === 0 ) && ( editor.length === 0 ) ) {
-			$('.reg-man-rc-inline-editor.editor-open').trigger('close-editor'); // close open editor
-		} // endif
-	});
-	$( '.reg-man-rc-inline-editor' ).on( 'input', function( evt ) {
-		var me = $( this );
-		me.find( '.reg-man-rc-ajax-form' ).trigger( 'ajax-submit' ); // Save open editor
-		me.trigger( 'set-editor-submitted' );
-	});
-	$('.reg-man-rc-inline-editor').on('set-editor-submitted', function(evt) {
-		editor = $(this);
-		var parent = editor.parent();
-		editor.hide();
-		var saving_message = __( 'Saving...', 'reg-man-rc' );
-		parent.find('.reg-man-rc-inline-editable').text( saving_message ).show(); // show the contents
-	});
-	$('.reg-man-rc-inline-editor').on('close-editor', function(evt) {
-		editor = $(this);
-		var parent = editor.parent();
-		editor.remove();
-		parent.find('.reg-man-rc-inline-editable').show(); // show the contents
-	});
-	$('body').on('submit-end', '.reg-man-rc-inline-editor', function(evt) { // end ALWAYS triggers even on fail
-		// attach to body so other elements can process it first
-		$(this).trigger('close-editor');
-	});
-//	$('body').on('submit-fail', '.reg-man-rc-inline-editor', function(evt) {
-//		$(this).trigger('close-editor');
-//	});
-	$('.reg-man-rc-inline-editor .cancel').on('click', function(evt) {
-		$(this).trigger('close-editor');
-	});
-	$('.reg-man-rc-inline-editor .submit').on('click', function(evt) {
-		$(this).closest('.reg-man-rc-inline-editor').find('.reg-man-rc-ajax-form').trigger('ajax-submit');
-	});
-	// The editables will be replaced on the client side using AJAX so we have to bind to body 
-	$('body').on('click', '.reg-man-rc-inline-editable', function(evt) {
-		var editable = $(this);
-		$('.reg-man-rc-inline-editor.editor-open').trigger('close-editor'); // close any open editors on the page
-		var parent = editable.parent();
-		var templateSelector = editable.data('reg-man-rc-inline-editor-selector');
-		var editorTemplate = $(templateSelector);
-		var editor = editorTemplate.clone(true); // clone with all data and events handlers copied
-		editor.removeClass('template').addClass('clone');
-		editable.hide();
-		parent.append(editor);
-		editor.show();
-		editor.addClass('editor-open');
-		editor.trigger('reg-man-rc-inline-editor-init-inputs'); // Set up the inputs
-	});
-	$('.visitor-reg-item-status-inline-editor').on('reg-man-rc-inline-editor-init-inputs', function(evt) {
-		var me = $(this);
-		var parent = me.parent();
-		var editable = parent.find('.reg-man-rc-inline-editable');
-		var regListItem = me.closest('.visitor-reg-list-item');
-		if ((editable.length !== 0) && (regListItem.length !== 0)) {
-			var itemId = regListItem.data('item-id');
-			var itemStatus = editable.data('item-status');
-			me.find('input[name="item-id"]').val(itemId);
-			var sel = me.find('select[name="item-status"]');
-			sel.val(itemStatus);
-		} // endif
-	});
-	$('.visitor-reg-fixer-station-inline-editor').on('reg-man-rc-inline-editor-init-inputs', function(evt) {
-		var me = $(this);
-		var parent = me.parent();
-		var editable = parent.find('.reg-man-rc-inline-editable');
-		var regListItem = me.closest('.visitor-reg-list-item');
-		if ((editable.length !== 0) && (regListItem.length !== 0)) {
-			var itemId = regListItem.data('item-id');
-			var fixerStation = editable.data('item-fixer-station');
-			me.find('input[name="item-id"]').val(itemId);
-			var sel = me.find('select[name="fixer-station"]');
-			sel.val(fixerStation);
-		} // endif
-	});
-	
-	$('.visitor-reg-manager-table').on('submit-end', '.reg-man-rc-inline-editor-form', function(evt) {
-		evt.stopPropagation();
-		$('.visitor-reg-manager-table').trigger('datatable-reload');
-	});
-	$('.visitor-reg-register-item-inline-editor').on('reg-man-rc-inline-editor-init-inputs', function(evt) {
-		var me = $(this);
-		var regListItem = me.closest('.visitor-reg-list-item');
-		if (regListItem.length !== 0) {
-			var itemId = regListItem.data('item-id');
-			var checkbox = me.find('input[name="register-item"]');
-			checkbox.val(itemId);
-			checkbox.prop('checked', true);
-		} // endif
-	});
-	// Note that submit-complete is no longer used, also we need to catch this on the parent above
-//	$('.visitor-reg-register-item-inline-editor').on('submit-complete', function(evt) {
-//		$('.visitor-reg-manager-table').trigger('datatable-reload');
-//	});
+
 
 	$('.visitor-reg-manager-container').on('click', '.visitor-reg-add-visitor-item-button', function(evt) {
 		var target_row = $( evt.target ).closest( 'tr'); // Get the row that the click came from
@@ -302,7 +232,6 @@ jQuery(document).ready(function($) {
 		form.find( 'input[name="visitor-id"]' ).val( visitor_id ); // insert the visitor's ID
 		dialog.dialog('open');
 	});
-
 
 	// Initialize the returning visitor data
 	var RC_REG_RETURNING_VISITOR_DATA;
@@ -458,7 +387,8 @@ jQuery(document).ready(function($) {
 		modal		: true,
 		position	: { my: 'top', at: 'top+100' }, // Put it near the top to avoid going off bottom of screen
 		width		: 'auto',
-		height		: 'auto'
+		height		: 'auto',
+		maxHeight	: '80vh'
 	});
 	$('.visitor-reg-dialog').on('visitor-reg-ajax-form-submit', function() {
 		$(this).find('.visitor-reg-form.reg-man-rc-ajax-form').trigger('ajax-submit'); // triggers my ajax form submission
@@ -535,7 +465,7 @@ jQuery(document).ready(function($) {
 		cln.trigger('initialize-item-inputs'); // initialize it
 		cln.find('input').first().focus();
 	});
-	$( '.visitor-reg-item-list' ).on('click', '.reg-item-remove-button', function(evt) {
+	$( '.visitor-reg-item-list' ).on('click', '.reg-item-remove-button .dashicons', function(evt) {
 		var targetItem = $(evt.target).closest('.item-list-item'); // Get the item that the click came from
 		targetItem.remove();
 	});
@@ -569,6 +499,7 @@ jQuery(document).ready(function($) {
 		modal		: true,
 		width		: 'auto',
 		height		: 'auto',
+		position	: { my: 'top', at: 'top+100' }, // Put it near the top to avoid going off bottom of screen
 		buttons : [
 			{ 
 				'text' : __('Cancel', 'reg-man-rc'),

@@ -4,10 +4,8 @@ namespace Reg_Man_RC\Control\Admin;
 use Reg_Man_RC\Model\Item;
 use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Fixer_Station;
-use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Item_Status;
 use Reg_Man_RC\Model\Visitor;
-use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The item controller
@@ -157,7 +155,7 @@ class Item_Admin_Controller {
 					remove_action( 'save_post_' . Item::POST_TYPE, array( __CLASS__, 'handle_post_save' ) );
 					// Set the post status to draft since it doesn't have a valid item type
 					$post_data = array(
-						'ID'          => $post_id,
+						'ID'		  => $post_id,
 						'post_status' => 'draft',
 					);
 					wp_update_post( $post_data );
@@ -200,7 +198,7 @@ class Item_Admin_Controller {
 					printf( $error_format, esc_html__( __( 'Item type is required.', 'reg-man-rc' ) ) );
 				} // endif
 
-		        if ( empty( $item->get_fixer_station() ) ) {
+				if ( empty( $item->get_fixer_station() ) ) {
 					printf( $error_format, esc_html__( __( 'Fixer station is required.', 'reg-man-rc' ) ) );
 				} // endif
 

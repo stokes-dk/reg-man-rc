@@ -12,12 +12,15 @@
 	flex-wrap: wrap;
 	justify-content: space-between;
 	margin: 1em 0;
-	font-size: 1.25em;
+	font-size: 1.4em;
 	font-weight: 400;
 }
 .reg-man-rc-volunteer-area-header .volunteer-area-title-back-link .volunteer-area-title-back-link-icon,
 .reg-man-rc-volunteer-area-header .volunteer-area-title-back-link .volunteer-area-title-back-link-text {
 	vertical-align: middle;
+}
+.reg-man-rc-volunteer-area-header a {
+	text-decoration: none !important;
 }
 .reg-man-rc-dropdown-menu-container {
 	cursor: pointer;
@@ -135,4 +138,12 @@
 .reg-man-rc-volunteer-registration-form .reg-man-rc-vol-reg-preferences-info {
 	margin-bottom: 1em;
 }
-
+.reg-man-rc-volunteer-registration-form  .reg-man-rc-volunteer-reg-comments-button-container {
+  margin: 0 2em 0.5em;
+  display: flex;
+  justify-content: flex-end;
+}
+.reg-man-rc-volunteer-registration-form  .reg-man-rc-volunteer-reg-comments-button-container button:DISABLED {
+	opacity: 0.33;
+	cursor: not-allowed;
+}

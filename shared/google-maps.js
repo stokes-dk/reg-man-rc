@@ -225,7 +225,7 @@ jQuery( document ).ready( function( $ ) {
 			map_element.trigger( 'map-initialized' );
 		} // endif
 	});
-	$( '.reg-man-rc-google-map-container' ).trigger( 'init-map' ); // initialize the map
+//	init-map is triggered below, after maps library has loaded
 
 	$( '.reg-man-rc-settings-google-map-container').on( 'init-auto-complete', function( evt ) {
 		// Initialize the autocomplete elements for the venue location
@@ -257,7 +257,7 @@ jQuery( document ).ready( function( $ ) {
 		});
 	});
 
-	$( '.reg-man-rc-settings-google-map-container' ).trigger( 'init-auto-complete' ); // initialize the place autocomplete
+//	init-auto-complete is triggered below, after maps library has loaded
 
 	$( '.reg-man-rc-settings-google-map-container' ).on( 'autocomplete_place_changed', function( evt, autocomplete ) {
 		var me = $(this);
@@ -347,7 +347,8 @@ jQuery( document ).ready( function( $ ) {
 			});
 		} // endif
 	});
-	$( '.reg-man-rc-venue-location-container' ).trigger( 'init-auto-complete' ); // initialize the place autocomplete
+	
+//	init-auto-complete is triggered below, after maps library has loaded
 
 	$( '.reg-man-rc-venue-location-container' ).on( 'autocomplete_place_changed', function( evt, autocomplete ) {
 		var me = $(this);
@@ -398,3 +399,24 @@ jQuery( document ).ready( function( $ ) {
 	});
 
 });
+
+/*
+ * This callback is required by Google Maps API library.
+ * It is included in the script tag and called automatically by Google
+ */
+async function reg_man_rc_google_maps_callback() {
+	
+	// Wait for the library to load
+	const { Map } = await google.maps.importLibrary("maps");
+
+	// Then trigger my initialization
+	jQuery( document ).ready( function( $ ) {
+		
+		$( '.reg-man-rc-google-map-container' ).trigger( 'init-map' ); // initialize the map
+
+		$( '.reg-man-rc-settings-google-map-container' ).trigger( 'init-auto-complete' ); // initialize the place autocomplete
+		$( '.reg-man-rc-venue-location-container' ).trigger( 'init-auto-complete' ); // initialize the place autocomplete
+
+	});
+} // function
+

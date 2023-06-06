@@ -6,7 +6,6 @@ use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Control\User_Role_Controller;
-use Reg_Man_RC\Model\Error_Log;
 
 /**
  * Describes an item registered to an event by an external source.
@@ -36,7 +35,7 @@ class External_Item implements Item_Descriptor {
 	 * and supplied by active add-on plugins for external item providers like Repair Cafe Toronto Legacy data
 	 *
 	 * @param	Event_Key[]		$event_key_array	An array of Event_Key objects whose registered items are to be returned.
-	 * @return	\Reg_Man_RC\Model\Item_Descriptor[]
+	 * @return	\Reg_Man_RC\Model\Stats\Item_Descriptor[]
 	 */
 	public static function get_external_items( $event_key_array ) {
 		/**
@@ -92,7 +91,7 @@ class External_Item implements Item_Descriptor {
 	 * 		@type	string	'status'			The status of the item provided as one of the constants defined in Item_Status
 	 * 		@type	string	'source'			The source of this record, e.g. "legacy"
 	 * }
-	 * @return	\Reg_Man_RC\Model\External_Item		The External_Item object constructed from the data provided.
+	 * @return	\Reg_Man_RC\Model\Stats\External_Item	The External_Item object constructed from the data provided.
 	 */
 	private static function instantiate_from_data_array( $data_array ) {
 
@@ -120,7 +119,7 @@ class External_Item implements Item_Descriptor {
 		// The external name provided may need to be converted into our internal name
 		if ( isset( $data_array[ 'fixer-station' ] ) ) {
 			$station = Fixer_Station::get_fixer_station_by_name( $data_array[ 'fixer-station' ] );
-			$result->fixer_station_name = isset( $type ) ? $station->get_name() : NULL;
+			$result->fixer_station_name = isset( $station ) ? $station->get_name() : NULL;
 		} // endif
 
 		$result->status_name = isset( $data_array[ 'status' ] ) ? $data_array[ 'status' ] : NULL;
@@ -140,6 +139,15 @@ class External_Item implements Item_Descriptor {
 		return $this->description;
 	} // function
 
+	/**
+	 * Get the key for the event for which this item was registered
+	 * @return	string	The event key for the event for which this item was registered.
+	 * @since	v0.1.0
+	 */
+	public function get_event_key() {
+		return $this->event_key;
+	} // function
+	
 	/**
 	 * Get the event for which this item was registered
 	 * @return	Event	The event for which this item was registered.

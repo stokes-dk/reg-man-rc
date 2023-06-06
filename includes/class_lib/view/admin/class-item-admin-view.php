@@ -3,14 +3,11 @@ namespace Reg_Man_RC\View\Admin;
 
 use Reg_Man_RC\Model\Item;
 use Reg_Man_RC\Control\Scripts_And_Styles;
-use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Item_Status;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Visitor;
 use Reg_Man_RC\View\Form_Input_List;
-use Reg_Man_RC\Model\Event_Filter;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\View\Event_View;
 use Reg_Man_RC\Model\Calendar;
@@ -73,7 +70,7 @@ class Item_Admin_View {
 					Item::POST_TYPE, 				// Post type for this meta box
 					'side', 						// Meta box position
 					'high'							// Meta box priority
-	        );
+			);
 
 			$new_id = Item::POST_TYPE . '-visitor-metabox';
 			$render_fn = array( __CLASS__, 'render_visitor_meta_box' );
@@ -84,7 +81,7 @@ class Item_Admin_View {
 					Item::POST_TYPE, 				// Post type for this meta box
 					'side', 						// Meta box position
 					'high'							// Meta box priority
-	        );
+			);
 
 			// Item Type metabox - if item types are defined
 			if ( ! empty( Item_Type::get_all_item_types() ) ) {
@@ -98,7 +95,7 @@ class Item_Admin_View {
 						Item::POST_TYPE, 						// Post type for this meta box
 						'side',									// Meta box position
 						'high'									// Meta box priority
-		        );
+				);
 			} // endif
 
 			$view = Fixer_Station_Admin_View::create();
@@ -111,7 +108,7 @@ class Item_Admin_View {
 					Item::POST_TYPE, 						// Post type for this meta box
 					'side',									// Meta box position
 					'high'									// Meta box priority
-	        );
+			);
 
 			$new_id = Item::POST_TYPE . '-status-metabox';
 			$render_fn = array( __CLASS__, 'render_status_meta_box' );
@@ -122,7 +119,7 @@ class Item_Admin_View {
 					Item::POST_TYPE, 					// Post type for this meta box
 					'side',								// Meta box position
 					'high'								// Meta box priority
-	        );
+			);
 		} // endif
 	} // function
 
@@ -392,12 +389,10 @@ class Item_Admin_View {
 			'item_type'			=> __( 'Item Type', 'reg-man-rc' ),
 			'fixer_station'		=> __( 'Fixer Station', 'reg-man-rc' ),
 			'item_status'		=> __( 'Status', 'reg-man-rc' ),
+			'comments'			=>	$columns[ 'comments' ],
 			'date'				=> __( 'Last Update', 'reg-man-rc' ),
 			'author'			=> __( 'Author', 'reg-man-rc' ),
 		);
-		if ( Settings::get_is_allow_item_comments() ) {
-			$result[ 'comments' ]	= $columns[ 'comments' ];
-		} // endif
 		return $result;
 	} // function
 
@@ -557,12 +552,12 @@ class Item_Admin_View {
 //					'option_none_value'	=> -1,
 					'class'				=> 'reg-man-rc-filter postform',
 					'taxonomy'			=> $tax_name,
-		            'name'				=> $tax_name,
-		            'orderby'			=> 'count',
+					'name'				=> $tax_name,
+					'orderby'			=> 'count',
 					'order'				=> 'DESC',
-		            'value_field'		=> 'slug',
-		            'selected'			=> $curr_id,
-		            'hierarchical'		=> $taxonomy->hierarchical,
+					'value_field'		=> 'slug',
+					'selected'			=> $curr_id,
+					'hierarchical'		=> $taxonomy->hierarchical,
 					'show_count'		=> FALSE,
 					'hide_if_empty'		=> TRUE,
 				) );

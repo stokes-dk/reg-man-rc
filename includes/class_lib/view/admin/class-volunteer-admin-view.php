@@ -4,10 +4,8 @@ namespace Reg_Man_RC\View\Admin;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Model\Volunteer;
 use Reg_Man_RC\View\Form_Input_List;
-use Reg_Man_RC\Model\Event_Filter;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Volunteer_Role;
-use Reg_Man_RC\Model\Volunteer_Registration_Descriptor_Factory;
 use Reg_Man_RC\View\Volunteer_Registration_List_View;
 
 /**
@@ -69,7 +67,7 @@ class Volunteer_Admin_View {
 					Volunteer::POST_TYPE, 										// Post type for this meta box
 					'side', 													// Meta box position
 					'high'														// Meta box priority
-		    );
+			);
 
 			add_meta_box(
 					'custom-metabox-volunteer-is-public',						// Unique ID for the element
@@ -78,7 +76,7 @@ class Volunteer_Admin_View {
 					Volunteer::POST_TYPE, 										// Post type for this meta box
 					'side',														// Meta box position
 					'high'														// Meta box priority
-	        );
+			);
 
 			$new_id = Volunteer::POST_TYPE . '-fixer-station-metabox';
 			$view = Fixer_Station_Admin_View::create();
@@ -106,7 +104,7 @@ class Volunteer_Admin_View {
 
 			add_meta_box(
 					'custom-metabox-volunteer-proxy',							// Unique ID for the element
-					__( 'Proxy', 'reg-man-rc' ),								// Box title
+					__( 'Registration Proxy', 'reg-man-rc' ),					// Box title
 					array( __CLASS__, 'render_volunteer_proxy_meta_box' ),		// Content callback, must be of type callable
 					Volunteer::POST_TYPE, 										// Post type for this meta box
 					'side', 													// Meta box position
@@ -114,16 +112,14 @@ class Volunteer_Admin_View {
 			);
 
 
-/* FIXME - is this useful? It shows a table with all the registrations for this volunteer
 			add_meta_box(
 					'custom-metabox-volunteer-reg-list',						// Unique ID for the element
 					__( 'Event Registrations', 'reg-man-rc' ),					// Box title
 					array( __CLASS__, 'render_volunteer_reg_list_meta_box' ),	// Content callback, must be of type callable
 					Volunteer::POST_TYPE, 										// Post type for this meta box
 					'normal', 													// Meta box position
-					'default'													// Meta box priority
+					'high'													// Meta box priority
 			);
-*/
 		} // endif
 	} // function
 
@@ -204,6 +200,12 @@ class Volunteer_Admin_View {
 			$val = isset( $volunteer ) ? $volunteer->get_email() : '';
 			$input_list->add_email_input( $label, $input_name, $val );
 
+			$label = __( 'WordPress User', 'reg-man-rc' );
+			$input_name = 'wp_user';
+			$wp_user = isset( $volunteer ) ? $volunteer->get_wp_user() : NULL;
+			$display_name = ! empty( $wp_user ) ? $wp_user->display_name : __( '[ none ]', 'reg-man-rc' );
+			$input_list->add_information( $label, $display_name );
+
 		$input_list->render();
 
 	} // function
@@ -254,8 +256,12 @@ class Volunteer_Admin_View {
 				echo '</select>';
 			$proxy_input_content = ob_get_clean();
 
-			$label = __( 'Assign proxy to', 'reg-man-rc' );
-			$hint = __( 'Allow this volunteer to be registered for events by the specified proxy', 'reg-man-rc' );
+			$label = __( 'Proxy', 'reg-man-rc' );
+			$hint = __(
+					'Allow the selected proxy to register this volunteer for events.' .
+					'  This may be used to allow the proxy to register their spouse, for example,' .
+					' or when the current volunteer has no email address and cannot access the volunteer area.',
+					'reg-man-rc' );
 			$input_list->add_custom_html_input( $label, $input_name, $proxy_input_content, $hint );
 
 		$input_list->render();
@@ -336,11 +342,11 @@ class Volunteer_Admin_View {
 			'full_name'					=> __( 'Full Name',					'reg-man-rc' ),
 			'email'						=> __( 'Email',						'reg-man-rc' ),
 			'proxy'						=> __( 'Proxy',						'reg-man-rc' ),
-//			'access_key'				=> __( 'Key',						'reg-man-rc' ),
-			'reg_count'					=> __( 'Events',					'reg-man-rc' ),
 			$fixer_station_tax_col		=> __( 'Preferred Fixer Station',	'reg-man-rc' ),
 			'is_apprentice'				=> __( 'Apprentice',				'reg-man-rc' ),
 			$volunteer_role_tax_col		=> __( 'Preferred Roles',			'reg-man-rc' ),
+			'reg_count'					=> __( 'Events',					'reg-man-rc' ),
+			'wp_user'					=> __( 'WP User',					'reg-man-rc' ),
 			'date'						=> __( 'Last Update',				'reg-man-rc' ),
 			'author'					=> __( 'Author',					'reg-man-rc' ),
 		);
@@ -393,10 +399,16 @@ class Volunteer_Admin_View {
 						$result = ! empty( $proxy_volunteer ) ? esc_html( $proxy_volunteer->get_full_name() ) : $em_dash;
 					} // endif
 					break;
-
+				
+/* FIXME - Not currently used
 				case 'access_key':
 					$access_key = $volunteer->get_access_key();
 					$result = ! empty( $access_key ) ? esc_html( $access_key ) : $em_dash;
+					break;
+*/
+				case 'is_apprentice':
+					$is_apprentice = $volunteer->get_is_fixer_apprentice();
+					$result = $is_apprentice ? __( 'Yes', 'reg-man-rc' ) : $em_dash;
 					break;
 
 				case 'reg_count':
@@ -404,14 +416,18 @@ class Volunteer_Admin_View {
 					$result = ! empty( $reg_array ) ? esc_html( count( $reg_array ) ) : $em_dash;
 					break;
 
-				case 'is_apprentice':
-					$is_apprentice = $volunteer->get_is_fixer_apprentice();
-					$result = $is_apprentice ? __( 'Yes', 'reg-man-rc' ) : $em_dash;
+				case 'wp_user':
+					$wp_user = $volunteer->get_wp_user();
+					if ( ! empty( $wp_user ) ) {
+						$display_name = $wp_user->display_name;
+						$result = $display_name;
+					} // endif
 					break;
-
+					
 				default:
 					$result = $em_dash;
 					break;
+					
 			} // endswitch
 		} // endif
 		echo $result;

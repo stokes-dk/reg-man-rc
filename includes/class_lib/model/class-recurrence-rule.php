@@ -79,7 +79,7 @@ class Recurrence_Rule {
 		$start = $this->get_start_date_time();
 		$end = $this->get_end_date_time();
 		if ( ( $start instanceof \DateTimeInterface ) && ( $end instanceof \DateTimeInterface ) ) {
-	        $result = $start->diff( $end );
+			$result = $start->diff( $end );
 		} else {
 			$now = new \DateTime( 'now', wp_timezone() );
 			$result = $now->diff( $now ); // we don't have one of the dates so just don't fail
@@ -187,8 +187,8 @@ class Recurrence_Rule {
 	 * This must be used in conjunction with another set_by*() method.
 	 *
 	 * For example "the first and last Friday of every month" could be represented as:
-     *   RRULE:FREQ=MONTHLY;BYDAY=FR;BYSETPOS=1,-1
-     * In this case call set_by_position( array( 1, -1 ) ) and set_by_day( array ( 'FR' ) );
+	 *   RRULE:FREQ=MONTHLY;BYDAY=FR;BYSETPOS=1,-1
+	 * In this case call set_by_position( array( 1, -1 ) ) and set_by_day( array ( 'FR' ) );
 	 * @param array	$by_set_position_array	An array of strings representing some subset of the days of the week.
 	 * Use the following shortforms for the days:
 	 * SU => Sunday, MO => Monday, TU => Tuesday, WE => Wednesday, TH => Thursday, FR => Friday, SA => Saturday
@@ -242,7 +242,7 @@ class Recurrence_Rule {
 	/**
 	 * Get the recurring event dates for the event.
 	 *
-	 * @return	DateTimeInterface[][]	Pairs of event start and end dates and times, e.g.
+	 * @return	\DateTimeInterface[][]	Pairs of event start and end dates and times, e.g.
 	 * ```
 	 * 	array(
 	 * 		array(
@@ -266,9 +266,9 @@ class Recurrence_Rule {
 			// There is a fix for this but it's not in any build yet.
 			// I will need to search for any of those recurrences and modify the end date/time
 			if ( ( $start instanceof \DateTimeInterface ) && ( $end instanceof \DateTimeInterface ) ) {
-	        	if ( $start == $end ) {
+				if ( $start == $end ) {
 					$end->add( $duration );
-	        	} // endif
+				} // endif
 			} // endif
 			if ( isset( $range_min_date_time ) || isset( $range_max_date_time ) ) {
 				// Only return dates that fall within the specified range.  Note that an event may span a range border.

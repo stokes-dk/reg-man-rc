@@ -1,23 +1,21 @@
 <?php
 namespace Reg_Man_RC\View\Object_View;
 
-use Reg_Man_RC\Model\Settings;
-use Reg_Man_RC\Model\Event;
-use Reg_Man_RC\Model\Event_Status;
-
 /**
  * Implementors of this interface provide the detail used to render an object in a template.
  */
 interface Object_View {
 
-	const OBJECT_PAGE_TYPE_EVENT				= 'event-page';
-	const OBJECT_PAGE_TYPE_EVENT_DESCRIPTOR		= 'event-descriptor-page';
-	const OBJECT_PAGE_TYPE_VENUE				= 'venue-page';
-	const OBJECT_PAGE_TYPE_VOLUNTEER_REG		= 'vol-reg-page';
-
+	const OBJECT_PAGE_TYPE_EVENT							= 'event-page';
+	const OBJECT_PAGE_TYPE_EVENT_DESCRIPTOR					= 'event-descriptor-page';
+	const OBJECT_PAGE_TYPE_VENUE							= 'venue-page';
+	const OBJECT_PAGE_TYPE_VOLUNTEER_REGISTRATION			= 'volunteer-registration-page';
+	const OBJECT_PAGE_TYPE_ADMIN_DASHBOARD_EVENT_DETAILS	= 'admin-dashboard-event-page';
+	const OBJECT_PAGE_TYPE_VISITOR_REGISTRATION				= 'visitor-registration-page';
+	
 	// TODO: Others?  We have these objects but they doesn't use this interface right now
 //	const OBJECT_PAGE_TYPE_ITEM				= 'item-object';
-//	const OBJECT_PAGE_TYPE_VOLUNTEER			= 'volunteer-object';
+//	const OBJECT_PAGE_TYPE_VOLUNTEER		= 'volunteer-object';
 
 	/**
 	 * Get the flag indicating whether this view is for an object's page, e.g. the page showing an event.

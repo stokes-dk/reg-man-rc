@@ -21,11 +21,6 @@ class Map_View {
 	const DEFAULT_MARKER_COLOUR = '#AAAAAA';
 
 	const MAP_TYPE_OBJECT_PAGE				= 'object-page'; 			// A map on an object's page like an event page or venue page
-	// FIXME: should this just be MAP_TYPE_CALENDAR ? the object view knows what object type, EVENT, VOL_REG etc.
-	// I think yes, but first get rid of volunteer_event_*
-	// Maybe I don't need these at all?
-	//  VIEW_TYPE (page_content, calendar_info, map_info)
-	//  OBJECT_TYPE(event, event desc, venue, vol_reg, visitor_reg, event_admin, event_stats)
 	const MAP_TYPE_CALENDAR_EVENTS			= 'events-cal-map';			// A map inside an events calendar like upcoming events
 	const MAP_TYPE_CALENDAR_VISITOR_REG		= 'visitor-reg-cal-map';	// In the visitor registration calendar
 	const MAP_TYPE_CALENDAR_VOLUNTEER_REG	= 'volunteer-reg-cal-map';	// In the volunteer registration calendar

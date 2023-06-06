@@ -2,7 +2,7 @@
 namespace Reg_Man_RC\Model;
 
 use Reg_Man_RC\View\Admin\Fixer_Station_Admin_View;
-use Reg_Man_RC\Control\Admin\Fixer_Station_Admin_Controller;
+use const Reg_Man_RC\PLUGIN_BOOTSTRAP_FILENAME;
 
 /**
  * An instance of this class represents a fixer station.
@@ -47,7 +47,7 @@ class Fixer_Station {
 	/**
 	 * Create a new instance of this class using the supplied data object
 	 *
-	 * @param	WP_Term			$term	The object containing the data for this instance
+	 * @param	\WP_Term		$term	The object containing the data for this instance
 	 * @return	Fixer_Station	An instance of this class
 	 *
 	 * @since v0.1.0
@@ -121,7 +121,6 @@ class Fixer_Station {
 	 * @since v0.1.0
 	 */
 	public static function get_all_fixer_stations() {
-//		Error_Log::log_backtrace();
 		if ( ! isset( self::$all_stations ) ) {
 			// Returns an array of instances of this class
 			self::$all_stations = array();
@@ -147,7 +146,6 @@ class Fixer_Station {
 	 * @since v0.1.0
 	 */
 	public static function get_all_term_taxonomy_ids() {
-//		Error_Log::log_backtrace();
 		if ( ! isset( self::$term_tax_ids_array ) ) {
 			self::$term_tax_ids_array = get_terms( array(
 					'taxonomy'		=> self::TAXONOMY_NAME,
@@ -693,7 +691,10 @@ class Fixer_Station {
 				'public'				=> TRUE, // whether it's intended for public use - must be TRUE to enable polylang translations
 				'publicly_queryable'	=> FALSE, // can it be queried
 				'show_ui'				=> TRUE, // does it have a UI for managing it
-				'show_in_rest'			=> TRUE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
+				// Note that if we set show_in_rest to TRUE then the block editor will show a metabox in post types
+				//  that use this taxonom REGARDLESS of the setting for meta_box_cb
+				// There is a way around that using the 'rest_prepare_taxonomy' filter if absolutely necessary
+				'show_in_rest'			=> FALSE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
 				'show_in_menu'			=> TRUE, // TRUE means show in submenu under its associated post type
 				'show_in_nav_menus'		=> FALSE, // available for selection in navigation menus?
 				'show_admin_column'		=> TRUE, // show values as column in in admin post listing screens
@@ -874,7 +875,7 @@ class Fixer_Station {
 //		Error_Log::var_dump( $name, $title, $file_name );
 
 		$icon_rel_dir = 'images/icons';
-		$icon_root = plugin_dir_path( \Reg_Man_RC\PLUGIN_BOOTSTRAP_FILENAME ) . $icon_rel_dir;
+		$icon_root = plugin_dir_path( PLUGIN_BOOTSTRAP_FILENAME ) . $icon_rel_dir;
 		$source_file_path = "$icon_root/$file_name";
 
 		if ( ! file_exists( $source_file_path ) ) {
@@ -945,7 +946,7 @@ class Fixer_Station {
 				'taxonomy'		=> self::TAXONOMY_NAME,
 				'hide_empty'	=> FALSE,
 		);
-		$query = new WP_Term_Query( $args );
+		$query = new \WP_Term_Query( $args );
 		foreach( $query->get_terms() as $term ){
 			wp_delete_term( $term->term_id, self::TAXONOMY_NAME );
 		} // endfor

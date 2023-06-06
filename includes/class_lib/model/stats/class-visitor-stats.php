@@ -7,7 +7,7 @@ namespace Reg_Man_RC\Model\Stats;
  * @since	v0.1.0
  *
  */
-class Visitor_Group_Stats {
+class Visitor_Stats {
 
 	private $group_name;
 	private $first_time_count;
@@ -19,6 +19,20 @@ class Visitor_Group_Stats {
 
 	private function __construct() { }
 
+	/**
+	 * Get the Visitor_Stats object for the total of all events specified
+	 * @param string[] $event_keys_array
+	 * @return Visitor_Stats
+	 */
+	public static function get_total_visitor_stats_for_event_keys_array( $event_keys_array ) {
+		$group_by = Visitor_Stats_Collection::GROUP_BY_TOTAL;
+		$stats_collection = Visitor_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
+		$stats_array = array_values( $stats_collection->get_all_stats_array() );
+		$result = isset( $stats_array[ 0 ] ) ? $stats_array[ 0 ] : self::create( '', 0, 0, 0, 0, 0, 0 ); // Defensive
+		return $result;
+	} // function
+
+	
 	public static function create( $group_name, $first_time_count, $returning_count, $return_status_unknown_count, $provided_email_count, $join_mail_list_count ) {
 		$result = new self();
 		$result->group_name = $group_name;

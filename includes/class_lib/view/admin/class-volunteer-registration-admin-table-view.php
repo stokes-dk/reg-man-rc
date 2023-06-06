@@ -2,11 +2,8 @@
 namespace Reg_Man_RC\View\Admin;
 
 use Reg_Man_RC\Control\Admin\Table_View_Admin_Controller;
-use Reg_Man_RC\Model\Volunteer_Registration_Descriptor;
+use Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor;
 use Reg_Man_RC\Model\Event;
-use Reg_Man_RC\Model\Error_Log;
-use Reg_Man_RC\Model\Event_Key;
-use Reg_Man_RC\Model\Fixer_Station;
 
 /**
  * The administrative view for an item stats table
@@ -16,6 +13,8 @@ use Reg_Man_RC\Model\Fixer_Station;
  */
 class Volunteer_Registration_Admin_Table_View {
 
+	private $is_event_column_hidden = FALSE;
+
 	private function __construct() { }
 
 	public static function create() {
@@ -23,17 +22,31 @@ class Volunteer_Registration_Admin_Table_View {
 		return $result;
 	} // function
 
-// Name (email) | Event | Fixer Station (apprentice) | Volunteer Roles | Attendance | Source | ISO 8601 Date
+	private function get_is_event_column_hidden() {
+		return $this->is_event_column_hidden;
+	} // function
+	
+	/**
+	 * Set a flag to indicate whether the event column should be hidden
+	 * @param boolean $is_event_column_hidden
+	 */
+	public function set_is_event_column_hidden( $is_event_column_hidden ) {
+		$this->is_event_column_hidden = boolval( $is_event_column_hidden );
+	} // function
+
 	public function render() {
+		// Name (email) | Event | ISO 8601 Date | Fixer Station (apprentice) | Volunteer Roles | Comments | Attendance | Source
+		$event_col_class = $this->get_is_event_column_hidden() ? 'col-hidden' : '';
 		$rowFormat =
 			'<tr>' .
-				'<%1$s class="name">%2$s</%1$s>' .
-				'<%1$s class="event">%3$s</%1$s>' .
-				'<%1$s class="fixer-station">%4$s</%1$s>' .
-				'<%1$s class="volunteer-roles">%5$s</%1$s>' .
-				'<%1$s class="attendance">%6$s</%1$s>' .
-				'<%1$s class="source">%7$s</%1$s>' .
-				'<%1$s class="iso-8601-date">%8$s</%1$s>' .
+				'<%1$s class="volunteer-name">%2$s</%1$s>' .
+				'<%1$s class="event-date-text ' . $event_col_class . '">%3$s</%1$s>' . // This column will be sorted by the next col's data
+				'<%1$s class="event-date-iso-8601 col-hidden always-hidden not-searchable">%4$s</%1$s>' . // Must be after date
+				'<%1$s class="fixer-station">%5$s</%1$s>' .
+				'<%1$s class="volunteer-roles">%6$s</%1$s>' .
+				'<%1$s class="volunteer-comments">%7$s</%1$s>' .
+				'<%1$s class="volunteer-attendance">%8$s</%1$s>' .
+				'<%1$s class="volunteer-source">%9$s</%1$s>' .
 			'</tr>';
 		$ajax_url = esc_url( admin_url( 'admin-ajax.php' ) );
 		$ajax_action = Table_View_Admin_Controller::AJAX_GET_DATA_ACTION;
@@ -56,16 +69,17 @@ class Volunteer_Registration_Admin_Table_View {
 					" data-scope=\"\"" .
 					" data-dom-setting=\"$dom_setting\">";
 				echo '<thead>';
-// Name (email) | Event | Fixer Station (apprentice) | Volunteer Roles | Attendance | Source | ISO 8601 Date
+
 				printf( $rowFormat,
 								'th',
 								esc_html__( 'Volunteer Name (email)',			'reg-man-rc' ),
 								esc_html__( 'Event',							'reg-man-rc' ),
+								esc_html__( 'Numeric Event Date & Time',		'reg-man-rc' ), // Will be hidden
 								esc_html__( 'Fixer Station',					'reg-man-rc' ),
 								esc_html__( 'Volunteer Roles',					'reg-man-rc' ),
+								esc_html__( 'Volunteer Note',					'reg-man-rc' ),
 								esc_html__( 'Attendance',						'reg-man-rc' ),
 								esc_html__( 'Source',							'reg-man-rc' ),
-								'' // The ISO 8601 date will be hidden and does not need a column header
 						);
 					echo '</thead>';
 					echo '<tbody>';
@@ -141,6 +155,9 @@ class Volunteer_Registration_Admin_Table_View {
 				$roles_text = $em_dash;
 			} // endif
 
+			$comments = $vol_reg_desc->get_volunteer_registration_comments();
+			$comments = esc_html( $comments );
+			
 			$attendance = $vol_reg_desc->get_volunteer_attendance();
 			if ( ! isset( $attendance ) ) {
 				$attendance_text = $em_dash;
@@ -154,11 +171,12 @@ class Volunteer_Registration_Admin_Table_View {
 			$row = array();
 			$row[] = $name_text;
 			$row[] = $event_text;
+			$row[] = $event_date_iso_8601;
 			$row[] = $fixer_station_text;
 			$row[] = $roles_text;
+			$row[] = $comments;
 			$row[] = $attendance_text;
 			$row[] = $source_text;
-			$row[] = $event_date_iso_8601;
 			$result[] = $row;
 		} // endfor
 		return $result;

@@ -4,6 +4,8 @@ namespace Reg_Man_RC\Model\Stats;
 use Reg_Man_RC\Model\Event_Key;
 use Reg_Man_RC\Model\Volunteer_Role;
 use Reg_Man_RC\Model\Fixer_Station;
+use Reg_Man_RC\Model\Event;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * Describes a supplemental registration record for a volunteer for an event
@@ -29,8 +31,8 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 	 * This method will return an array of instances of this class describing volunteer registrations for
 	 *  the supplemental records stored in the database.
 	 *
-	 * @param	Event_Key[]		$event_keys_array	An array of Event_Key objects whose volunteer registrations are to be returned.
-	 * @return \Reg_Man_RC\Model\Volunteer_Registration_Descriptor[]
+	 * @param	string[]		$event_keys_array	An array of keys for events whose volunteer registrations are to be returned.
+	 * @return	Volunteer_Registration_Descriptor[]
 	 */
 	public static function get_all_supplemental_volunteer_registrations( $event_keys_array ) {
 
@@ -39,6 +41,7 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 			global $wpdb;
 			$table = $wpdb->prefix . self::SUPPLEMENTAL_VOLUNTEERS_TABLE_NAME;
 
+//	Error_Log::var_dump( $event_keys_array );
 			$cols = 'id, event_key, role_id, station_id, head_count, apprentice_count ';
 			$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
 			$placehold_string = implode( ', ', $placeholder_array );
@@ -47,7 +50,7 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 			$query = "SELECT $cols FROM $table WHERE $where_clause";
 			$stmt = $wpdb->prepare( $query, $event_keys_array );
 			$desc_data_arrays = $wpdb->get_results( $stmt, ARRAY_A );
-	//Error_Log::var_dump( $query, $desc_data_arrays );
+//	Error_Log::var_dump( $query, $desc_data_arrays );
 
 			foreach ( $desc_data_arrays as $data_array ) {
 				$inst_array = self::create_instance_array_from_data_array( $data_array );
@@ -78,7 +81,7 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 	 * 		@type	string	'head_count'				The number of volunteers registered to perform this role or station
 	 * 		@type	string	'apprentice_count'			The number of apprentices registered for this station (does not apply to roles)
 	 * }
-	 * @return	\Reg_Man_RC\Model\Supplemental_Volunteer_Registration[]		An array of instances of this class.
+	 * @return	Supplemental_Volunteer_Registration[]	An array of instances of this class.
 	 */
 	private static function create_instance_array_from_data_array( $data_array ) {
 
@@ -97,10 +100,12 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 		$role_name_array = isset( $role ) ? array( $role->get_name() ) : array();
 		$station = isset( $station_id ) ? Fixer_Station::get_fixer_station_by_id( $station_id ) : NULL;
 		$station_name = isset( $station ) ? $station->get_name() : NULL;
+		
+		$non_appr_count = $head_count - $appr_count;
 
-		// Roles / Fixer station
-		if ( $head_count > 0 ) {
-			for ( $index = 0; $index < $head_count; $index++  ) {
+		// Non-apprentices
+		if ( $non_appr_count > 0 ) {
+			for ( $index = 0; $index < $non_appr_count; $index++  ) {
 				$curr = new self();
 				$curr->event_key = $event_key;
 				$curr->assigned_fixer_station = $station_name;
@@ -130,8 +135,8 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 	/**
 	 * Get the supplemental volunteer group stats for the specified events and grouped in the specified way
 	 * @param	Event_Key[]		$event_key_array	An array of event keys whose group stats are to be returned
-	 * @param	string			$group_by			One of the "GROUP_BY" constants from Volunteer_Statistics
-	 * @return Volunteer_Group_Stats[]	An array of instances of Volunteer_Group_Stats describing the volunteers and their related head counts.
+	 * @param	string			$group_by			One of the "GROUP_BY" constants from Volunteer_Stats_Collection
+	 * @return Volunteer_Stats[]	An array of instances of Volunteer_Stats describing the volunteers and their related head counts.
 	 */
 	public static function get_supplemental_group_stats_array( $event_key_array, $group_by ) {
 
@@ -142,21 +147,21 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 			$table = $wpdb->prefix . self::SUPPLEMENTAL_VOLUNTEERS_TABLE_NAME;
 			switch( $group_by ) {
 
-				case Volunteer_Statistics::GROUP_BY_EVENT:
+				case Volunteer_Stats_Collection::GROUP_BY_EVENT:
 					$name_col = 'event_key';
 					break;
 
-				case Volunteer_Statistics::GROUP_BY_VOLUNTEER_ROLE:
+				case Volunteer_Stats_Collection::GROUP_BY_VOLUNTEER_ROLE:
 					$name_col = 'role_id';
 					break;
 
-				case Volunteer_Statistics::GROUP_BY_FIXER_STATION:
+				case Volunteer_Stats_Collection::GROUP_BY_FIXER_STATION:
 					$name_col = 'station_id';
 					break;
 
-				case Volunteer_Statistics::GROUP_BY_TOTAL_FIXERS:
-				case Volunteer_Statistics::GROUP_BY_TOTAL_NON_FIXERS:
-				case Volunteer_Statistics::GROUP_BY_TOTAL:
+				case Volunteer_Stats_Collection::GROUP_BY_TOTAL_FIXERS:
+				case Volunteer_Stats_Collection::GROUP_BY_TOTAL_NON_FIXERS:
+				case Volunteer_Stats_Collection::GROUP_BY_TOTAL:
 				default:
 					$name_col = "''"; // must be a quoted string for SQL otherwise illegal column name
 					break;
@@ -171,11 +176,11 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 			$where_clause = "( event_key IN ( $placehold_string ) )";
 
 			// Get only records for fixers or non-fixers when grouping that way
-			if ( $group_by == Volunteer_Statistics::GROUP_BY_FIXER_STATION ||
-				 $group_by == Volunteer_Statistics::GROUP_BY_TOTAL_FIXERS ) {
+			if ( $group_by == Volunteer_Stats_Collection::GROUP_BY_FIXER_STATION ||
+				 $group_by == Volunteer_Stats_Collection::GROUP_BY_TOTAL_FIXERS ) {
 				$where_clause .= ' AND station_id IS NOT NULL';
-			} elseif (  $group_by == Volunteer_Statistics::GROUP_BY_VOLUNTEER_ROLE ||
-						$group_by == Volunteer_Statistics::GROUP_BY_TOTAL_NON_FIXERS ) {
+			} elseif (  $group_by == Volunteer_Stats_Collection::GROUP_BY_VOLUNTEER_ROLE ||
+						$group_by == Volunteer_Stats_Collection::GROUP_BY_TOTAL_NON_FIXERS ) {
 				$where_clause .= ' AND role_id IS NOT NULL';
 			} // endif
 
@@ -186,7 +191,7 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 //	Error_Log::var_dump( $query, $data_array );
 
 			foreach( $data_array as $name => $obj ) {
-				$result[ $name ] = Volunteer_Group_Stats::create( $name, $obj->head_count, $obj->apprentice_count );
+				$result[ $name ] = Volunteer_Stats::create( $name, $obj->head_count, $obj->apprentice_count );
 			} // endfor
 		} // endif
 		return $result;
@@ -198,12 +203,14 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 	 * @param	int|string	$head_count				The count of fixers for the specified station for the event
 	 * @since	v0.1.0
 	 */
-	public static function set_supplemental_fixer_count( $event_key, $fixer_station_id, $head_count ) {
+	public static function set_supplemental_fixer_count( $event_key, $fixer_station_id, $fixer_count, $appr_count ) {
 		global $wpdb;
 
 		$table = $wpdb->prefix . self::SUPPLEMENTAL_VOLUNTEERS_TABLE_NAME;
 
-		$head_count = max( 0, intval( $head_count ) ); // It must be a positive integer,
+		$fixer_count = max( 0, intval( $fixer_count ) ); // It must be a positive integer
+		$appr_count = max( 0, intval( $appr_count ) ); // It must be a positive integer
+		$head_count = $fixer_count + $appr_count;
 
 		$query = "SELECT id FROM $table WHERE event_key=%s AND station_id=%s LIMIT 1";
 		$stmt = $wpdb->prepare( $query, $event_key, $fixer_station_id );
@@ -224,6 +231,7 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 			// Otherwise, we need to record the supplied data so either update an existing record or insert a new one
 			$vals = array(
 				'head_count'		=> $head_count,
+				'apprentice_count'	=> $appr_count,
 			);
 			$types = array_fill( 0, count( $vals ), '%s');
 
@@ -394,7 +402,7 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 	public function get_event() {
 		if ( ! isset( $this->event ) ) {
 			if ( isset( $this->event_key ) ) {
-				$this->event = Event::get_event_by_key( $event_key );
+				$this->event = Event::get_event_by_key( $this->event_key );
 			} // endif
 		} // endif
 		return $this->event;

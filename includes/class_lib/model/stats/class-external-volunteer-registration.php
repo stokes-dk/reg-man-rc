@@ -1,6 +1,7 @@
 <?php
 namespace Reg_Man_RC\Model\Stats;
 
+use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Event_Key;
 
 /**
@@ -35,7 +36,7 @@ class External_Volunteer_Registration implements Volunteer_Registration_Descript
 	 * active add-on plugins for external registration data providers like Registration Manager for Repair Cafe Legacy data
 	 *
 	 * @param	Event_Key[]		$event_keys_array	An array of Event_Key objects whose volunteer registrations are to be returned.
-	 * @return \Reg_Man_RC\Model\Volunteer_Registration_Descriptor[]
+	 * @return \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor[]
 	 */
 	public static function get_all_external_volunteer_registrations( $event_keys_array ) {
 		$key_data_array = self::get_event_key_data_array( $event_keys_array );
@@ -74,7 +75,7 @@ class External_Volunteer_Registration implements Volunteer_Registration_Descript
 	 * active add-on plugins for external registration data providers like Registration Manager for Repair Cafe Legacy data
 	 *
 	 * @param	Event_Key[]		$event_keys_array	An array of Event_Key objects whose registered items are to be returned.
-	 * @return \Reg_Man_RC\Model\Volunteer_Registration_Descriptor[]
+	 * @return \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor[]
 	 */
 	public static function get_external_fixer_registrations( $event_keys_array ) {
 		$key_data_array = self::get_event_key_data_array( $event_keys_array );
@@ -123,7 +124,7 @@ class External_Volunteer_Registration implements Volunteer_Registration_Descript
 	 * active add-on plugins for external registration data providers like Registration Manager for Repair Cafe Legacy data
 	 *
 	 * @param	string		$email	The email address of the volunteer whose registrations are to be returned
-	 * @return \Reg_Man_RC\Model\Volunteer_Registration_Descriptor[]
+	 * @return \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor[]
 	 */
 	public static function get_external_volunteer_registrations_for_email( $email ) {
 		/**
@@ -159,7 +160,7 @@ class External_Volunteer_Registration implements Volunteer_Registration_Descript
 	 * active add-on plugins for external registration data providers like Registration Manager for Repair Cafe Legacy data
 	 *
 	 * @param	Event_Key[]		$event_keys_array	An array of Event_Key objects whose registered items are to be returned.
-	 * @return \Reg_Man_RC\Model\Volunteer_Registration_Descriptor[]
+	 * @return \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor[]
 
 	 */
 	public static function get_external_non_fixer_registrations( $event_keys_array ) {
@@ -330,7 +331,7 @@ class External_Volunteer_Registration implements Volunteer_Registration_Descript
 	public function get_event() {
 		if ( ! isset( $this->event ) ) {
 			if ( isset( $this->event_key ) ) {
-				$this->event = Event::get_event_by_key( $event_key );
+				$this->event = Event::get_event_by_key( $this->event_key );
 			} // endif
 		} // endif
 		return $this->event;

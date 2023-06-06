@@ -1,6 +1,8 @@
 <?php
 namespace Reg_Man_RC\Model\Stats;
 
+use Reg_Man_RC\Model\Event;
+
 /**
  * An implementor of this interface represents an item registered by a visitor for an event.
  * This plugin provides an implementation for items created within it (the Item class) and an implementation
@@ -17,6 +19,13 @@ interface Item_Descriptor {
 	 * @since	v0.1.0
 	 */
 	public function get_item_description();
+
+	/**
+	 * Get the key for the event for which this item was registered
+	 * @return	string	The event key for the event for which this item was registered.
+	 * @since	v0.1.0
+	 */
+	public function get_event_key();
 
 	/**
 	 * Get the event for which this item was registered

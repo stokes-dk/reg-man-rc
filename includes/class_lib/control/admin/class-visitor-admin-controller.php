@@ -2,7 +2,6 @@
 namespace Reg_Man_RC\Control\Admin;
 
 use Reg_Man_RC\Model\Visitor;
-use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The visitor controller
@@ -50,6 +49,10 @@ class Visitor_Admin_Controller {
 					$email = isset( $_POST[ 'visitor_email' ] ) ? stripslashes( trim( $_POST[ 'visitor_email' ] ) ) : NULL;
 					$visitor->set_personal_info( $full_name, $email );
 
+					// Join Mail List?
+					$is_join = isset( $_POST[ 'visitor_join_mail_list' ] ) ? boolval( $_POST[ 'visitor_join_mail_list' ] ) : FALSE;
+					$visitor->set_is_join_mail_list( $is_join );
+					
 				} // endif
 
 			} // endif

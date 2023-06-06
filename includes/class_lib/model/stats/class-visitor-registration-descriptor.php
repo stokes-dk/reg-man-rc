@@ -62,6 +62,13 @@ interface Visitor_Registration_Descriptor {
 	public function get_is_join_mail_list();
 
 	/**
+	 * Get a count of the number of items registered by this visitor, if known.
+	 * @return	int|NULL	A count of the number of items registered by this visitor or NULL if we don't know.
+	 * @since	v0.1.0
+	 */
+	public function get_item_count();
+	
+	/**
 	 * Get a string indicating the source of this descriptor
 	 *
 	 * @return	string	A string indicating where this descriptor came from, e.g. 'registration', 'supplemental'

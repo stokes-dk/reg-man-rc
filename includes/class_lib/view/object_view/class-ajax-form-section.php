@@ -1,7 +1,6 @@
 <?php
 namespace Reg_Man_RC\View\Object_View;
 
-use Reg_Man_RC\Model\Map_Marker;
 use Reg_Man_RC\View\Ajax_Form;
 
 /**

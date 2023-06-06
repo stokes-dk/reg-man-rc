@@ -7,7 +7,6 @@ use Reg_Man_RC\Model\Volunteer_Registration;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Volunteer_Role;
 use Reg_Man_RC\Model\Event;
-use Reg_Man_RC\Model\Error_Log;
 
 class Volunteer_Registration_Form {
 
@@ -120,7 +119,7 @@ class Volunteer_Registration_Form {
 	 * @param	boolean	$is_open	TRUE if the details section should be open, FALSE otherwise
 	 * @return string
 	 */
-	public function get_form_content( $is_open = FALSE ) {
+	public function get_form_content( $is_open = TRUE ) {
 		$input_list = $this->get_input_list( $is_open );
 		ob_start();
 			// Add a nonce
@@ -138,7 +137,7 @@ class Volunteer_Registration_Form {
 	 * @param	boolean	$is_open	TRUE if the details section should be open, FALSE otherwise
 	 * @return Form_Input_List
 	 */
-	private function get_input_list( $is_open = FALSE ) {
+	private function get_input_list( $is_open = TRUE ) {
 		$form_type = $this->get_form_type();
 		if ( $form_type === self::FORM_TYPE_VOLUNTEER_PREF ) {
 			$result = self::get_preferences_input_list();
@@ -153,7 +152,7 @@ class Volunteer_Registration_Form {
 	 * @param	boolean	$is_open	TRUE if the details section should be open, FALSE otherwise
 	 * @return Form_Input_List
 	 */
-	private function get_registration_input_list( $is_open = FALSE ) {
+	private function get_registration_input_list( $is_open = TRUE ) {
 
 		if ( ! isset( $this->input_list ) ) {
 
@@ -199,32 +198,25 @@ class Volunteer_Registration_Form {
 				$value = 1;
 				$input_list->add_hidden_input( $name, $value );
 
-				if ( ( $is_registered ) && ( ! $is_non_repair ) ) {
-
+				if ( $is_registered ) {
+					
 					// Tell the controller not to use the volunteer's defaults when they are updating their registration
 					$name = 'use-volunteer-defaults';
 					$value = 0;
 					$input_list->add_hidden_input( $name, $value );
-
-					$details_list = Form_Input_List::create();
+					
+					if ( ! $is_non_repair ) {
 
 						// Fixer station
-						$this->add_fixer_station( $details_list, $volunteer, $vol_reg );
+						$this->add_fixer_station( $input_list, $volunteer, $vol_reg );
 
 						// Volunteer roles
-						$this->add_volunteer_roles( $details_list, $volunteer, $vol_reg );
-
-					$open_attr = $is_open ? 'open="open"' : '';
-					ob_start();
-						$title = __( 'Details', 'reg-man-rc' );
-						echo "<details $open_attr>";
-							echo '<summary>';
-								echo $title;
-							echo '</summary>';
-							$details_list->render();
-						echo '</details>';
-					$details = ob_get_clean();
-					$input_list->add_custom_html_input( '', '', $details );
+						$this->add_volunteer_roles( $input_list, $volunteer, $vol_reg );
+	
+					} // endif
+					
+					// Comments
+					$this->add_registration_comments( $input_list, $volunteer, $vol_reg );
 
 				} else {
 
@@ -291,7 +283,6 @@ class Volunteer_Registration_Form {
 	private function add_registration_status( $input_list, $is_registered, $volunteer ) {
 
 		$event = $this->get_event();
-		$is_event_complete = $event->get_is_event_complete();
 
 		$format =
 			'<span class="reg-man-rc-icon-text-container">' .
@@ -326,7 +317,7 @@ class Volunteer_Registration_Form {
 
 			$label_text = ( $is_current_volunteer ) ? __( 'Not able to make it?', 'reg-man-rc' ) : '';
 			$button_text = esc_html__( 'Cancel registration', 'reg-man-rc' );
-			$label = "<span class=\"dashicons dashicons-dismiss\"></span><span class=\"label-text\">$button_text</span>";
+			$label = "<span class=\"dashicons dashicons-dismiss icon\"></span><span class=\"label-text text\">$button_text</span>";
 			$classes = 'reg-man-rc-volunteer-registration-form-cancel-button reg-man-rc-icon-text-container';
 			$info_html = "<button type=\"button\" class=\"$classes\">$label</button>";
 
@@ -334,7 +325,7 @@ class Volunteer_Registration_Form {
 
 			$label_text = '';
 			$button_text = esc_html__( 'Register', 'reg-man-rc' );
-			$label = "<span class=\"dashicons dashicons-welcome-write-blog\"></span><span class=\"label-text\">$button_text</span>";
+			$label = "<span class=\"dashicons dashicons-welcome-write-blog icon\"></span><span class=\"label-text text\">$button_text</span>";
 			$classes = 'reg-man-rc-volunteer-registration-form-signup-button reg-man-rc-icon-text-container';
 			$info_html = "<button type=\"submit\" class=\"$classes\">$label</button>";
 
@@ -380,16 +371,13 @@ class Volunteer_Registration_Form {
 		$classes = 'reg-man-rc-volunteer-registration-form-part is-apprentice';
 		$classes .= ' volunteer-reg-form-hide-on-not-registered volunteer-reg-form-hide-on-non-repair-event';
 		$is_required = FALSE; // Not required if the person is un-registering
-		$custom_label = NULL;
-		$custom_value = NULL;
-		$is_compact = TRUE;
 		$addn_attrs = ( $selected_station_id == 0 ) ? 'disabled="disabled"' : '';
 		$input_list->add_checkbox_input( $label, $name, $val, $is_checked, $hint, $classes, $is_required, $addn_attrs );
 
 	} // function
 
 	/**
-	 * Add the fixer station input
+	 * Add the volunteer roles input
 	 * @param Form_Input_List			$input_list
 	 * @param Volunteer					$volunteer
 	 * @param Volunteer_Registration	$vol_reg
@@ -419,4 +407,38 @@ class Volunteer_Registration_Form {
 
 	} // function
 
+	/**
+	 * Add the registration comments input
+	 * @param Form_Input_List			$input_list
+	 * @param Volunteer					$volunteer
+	 * @param Volunteer_Registration	$vol_reg
+	 */
+	private function add_registration_comments( $input_list, $volunteer, $vol_reg = NULL ) {
+		
+		$comments_fieldset = Form_Input_List::create();
+			$label = '';
+			$input_name = 'volunteer-comments';
+			$rows = 3;
+			$val = isset( $vol_reg ) ? $vol_reg->get_volunteer_registration_comments() : '';
+			$hint = '';
+			$classes = '';
+			$is_required = FALSE;
+			$comments_fieldset->add_text_area_input( $label, $input_name, $rows, $val, $hint, $classes, $is_required );
+			
+			$label = __( 'Save note', 'reg-man-rc' );
+			$type = 'button';
+			$classes = 'reg-man-rc-volunteer-reg-comments-save-button';
+			$addn_attrs = 'disabled="disabled" autocomplete="off"';
+			$comments_fieldset->add_form_button( $label, $type, $classes, $addn_attrs );
+			
+			$classes = 'reg-man-rc-volunteer-reg-comments-button-container';
+			$comments_fieldset->set_button_container_classes( $classes );
+
+		$label = __( 'Private note', 'reg-man-rc' );
+		$hint = __( 'This note is visible only to the event organizer and not other volunteers', 'reg-man-rc' );
+		$classes = 'reg-man-rc-volunteer-registration-form-part volunteer-comments-fieldset';
+		$input_list->add_fieldset( $label, $comments_fieldset, $hint, $classes );
+		
+	} // function
+	
 } // class

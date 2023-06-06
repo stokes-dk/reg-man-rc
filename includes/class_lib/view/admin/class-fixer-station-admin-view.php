@@ -2,16 +2,12 @@
 namespace Reg_Man_RC\View\Admin;
 
 use Reg_Man_RC\Model\Fixer_Station;
-use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Item;
-use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Internal_Event_Descriptor;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Model\Volunteer_Registration;
 use Reg_Man_RC\Model\Volunteer;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Settings;
-use Reg_Man_RC\Control\Admin\Event_Category_Admin_Controller;
 use Reg_Man_RC\Control\Admin\Fixer_Station_Admin_Controller;
 use Reg_Man_RC\Model\Item_Suggestion;
 use Reg_Man_RC\View\Form_Input_List;
@@ -259,7 +255,7 @@ class Fixer_Station_Admin_View {
 				foreach ( $stations as $station ) {
 					$selected_id_array[] = $station->get_id();
 				} // endfor
-				$is_non_repair_event = $event->get_event_is_non_repair();
+				$is_non_repair_event =  isset( $event ) ? $event->get_event_is_non_repair() : FALSE;
 				self::render_checkboxes_for_event( $selected_id_array, $is_non_repair_event );
 				break;
 
@@ -633,7 +629,7 @@ class Fixer_Station_Admin_View {
 			$input_id = 'fixer-station-ext-names-input';
 			$input_name = 'fixer-station-ext-names';
 			$label = __( 'Alternate Names', 'reg-man-rc' );
-			$desc = __( 'Enter a pipe-separated list of alternate names for this fixer station, e.g. "Name 1 | Name 2".', 'reg-man-rc' );
+			$desc = __( 'Enter a pipe-separated list of alternate names used in external registration data for this fixer station, e.g. "Name 1 | Name 2".', 'reg-man-rc' );
 			$ext_names = ! empty( $fixer_station ) ? $fixer_station->get_external_names() : '';
 			echo '<tr class="form-field term-group-wrap">';
 				echo '<th scope="row">';

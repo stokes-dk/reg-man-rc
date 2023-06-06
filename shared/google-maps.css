@@ -79,7 +79,7 @@
 
 .reg-man-rc-google-map-container .reg-man-rc-map-marker-label {
 	background: #eee;
-	padding: 0.1em 0.2em;
-	border: 1px solid #ccc;
+	xxpadding: 0.1em 0.2em;
+	xxborder: 1px solid #ccc;
 	box-shadow: 1px 1px 2px #000;
 }

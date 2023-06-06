@@ -97,11 +97,17 @@ final class Event_Key implements \JsonSerializable {
 	 *  or for all events known to the system if the $filter argument is NULL.
 	 */
 	public static function get_event_keys_for_filter( $filter ) {
-		// Because of recurring events we need to create all the event objects and request their keys
-		$events = Event::get_all_events_by_filter( $filter );
-		$result = array();
-		foreach ( $events as $event ) {
-			$result[] = $event->get_key();
+		// When the filter is NULL, I will use NULL as the key array to indicate ALL events
+		// Note that an empty array means an empty set of events so that's different
+		if ( $filter === NULL ) {
+			$result = NULL;
+		} else {
+			// Because of recurring events we need to create all the event objects and request their keys
+			$events = Event::get_all_events_by_filter( $filter );
+			$result = array();
+			foreach ( $events as $event ) {
+				$result[] = $event->get_key();
+			} // endif
 		} // endif
 		return $result;
 	} // function
@@ -180,7 +186,7 @@ final class Event_Key implements \JsonSerializable {
 	 * @return string	This object converted to a string.
 	 * @since v0.1.0
 	 */
-	public function jsonSerialize() {
+	public function jsonSerialize() : string {
 		$result = $this->get_as_string();
 		return $result;
 	} // function

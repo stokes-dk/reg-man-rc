@@ -269,13 +269,15 @@ jQuery(document).ready(function($) {
 		me.removeClass( 'filter-active' );
 	});
 	
-	$( '.admin-datatable' ).on( 'init-datatable', function( evt, datatable_args ) {
+	$( '.reg-man-rc-admin-object-list-datatable' ).on( 'init-datatable', function( evt, datatable_args ) {
 		var me = $(this);
 		datatable_args.initComplete = function( settings, json ) { me.addClass( 'datatable-init-complete' ); };
 		var my_data_table = me.DataTable( datatable_args );
 		me.data( 'my-datatable', my_data_table );
 	});
-	$( '.admin-datatable.volunteer-my-reg-table' ).trigger( 'init-datatable', [{
+	
+	// TODO: use class names instead of column index - see stats.js
+	$( '.reg-man-rc-admin-object-list-datatable.volunteer-my-reg-table' ).trigger( 'init-datatable', [{
 		'columnDefs'	: [
 			{
 				'targets'	: [ 0 ],
@@ -288,6 +290,25 @@ jQuery(document).ready(function($) {
 			},
 			{
 				'targets'		: 5, // Hide the Date ISO 8601
+				'visible'		: false,
+				'searchable'	: false,
+			},
+		],
+		'order'			: [ [ 1, 'desc' ] ]
+	}] );
+	$( '.reg-man-rc-admin-object-list-datatable.visitor-my-reg-table' ).trigger( 'init-datatable', [{
+		'columnDefs'	: [
+			{
+				'targets'	: [ 0, 3, 4 ],
+				'visible'	: false // Hide the name column when showing registrations for a visitor (always the same)
+				// Also hide the first event and join mail list columns because these are shown elseswhere on the page
+			},
+			{
+				'targets'		: 1, // Order the date column using data from Date ISO 8601
+				'orderData'		: 6
+			},
+			{
+				'targets'		: 6, // Hide the Date ISO 8601
 				'visible'		: false,
 				'searchable'	: false,
 			},
@@ -327,6 +348,5 @@ jQuery(document).ready(function($) {
 		var options = metabox.find( 'input[name="fixer_station[]"' );
 		options.prop( 'disabled', is_checked );
 	});
-	
 	
 });

@@ -12,45 +12,41 @@ use Reg_Man_RC\View\Map_View;
  */
 class Calendar_View_Format {
 
-	const MONTH_GRID_VIEW	= 'month_grid';	// dayGridMonth for FullCalendar
-	const MONTH_LIST_VIEW	= 'month_list';	// listMonth
-	const MAP_VIEW			= 'map';		// Google map
+	const GRID_VIEW		= 'grid_view';	// dayGridMonth or multiMonth for FullCalendar, depending on duration
+	const LIST_VIEW		= 'list_view';	// FullCalendar list type
+	const MAP_VIEW		= 'map_view';	// Google map
 
 	private static $ALL_VIEWS_ARRAY;
 
 	private $id;
 	private $name;
 	private $desc;
-	private $full_calendar_name;
 
 	private function __construct() { }
 
 	public static function get_all_calendar_view_formats() {
 		if ( !isset( self::$ALL_VIEWS_ARRAY ) ) {
 
-			$month_grid = new self();
-			$month_grid->id						= self::MONTH_GRID_VIEW;
-			$month_grid->name					= __( 'Traditional Calendar', 'reg-man-rc' );
-			$month_grid->desc					= __( 'A typical grid of days.', 'reg-man-rc' );
-			$month_grid->full_calendar_name		= 'dayGridMonth';
+			$grid_view = new self();
+			$grid_view->id						= self::GRID_VIEW;
+			$grid_view->name					= __( 'Calendar', 'reg-man-rc' );
+			$grid_view->desc					= __( 'A typical grid of days.', 'reg-man-rc' );
 
-			$month_list = new self();
-			$month_list->id						= self::MONTH_LIST_VIEW;
-			$month_list->name					= __( 'Event List', 'reg-man-rc' );
-			$month_list->desc					= __( 'A list of events.', 'reg-man-rc' );
-			$month_list->full_calendar_name		= 'listMonth';
+			$list_view = new self();
+			$list_view->id						= self::LIST_VIEW;
+			$list_view->name					= __( 'List', 'reg-man-rc' );
+			$list_view->desc					= __( 'A list of events.', 'reg-man-rc' );
 
 			self::$ALL_VIEWS_ARRAY = array(
-				self::MONTH_GRID_VIEW	=> $month_grid,
-				self::MONTH_LIST_VIEW	=> $month_list,
+				self::GRID_VIEW	=> $grid_view,
+				self::LIST_VIEW	=> $list_view,
 			);
 
 			if ( Map_View::get_is_map_view_enabled() ) {
 				$map_view = new self();
 				$map_view->id						= self::MAP_VIEW;
-				$map_view->name						= __( 'Event Map', 'reg-man-rc' );
+				$map_view->name						= __( 'Map', 'reg-man-rc' );
 				$map_view->desc						= __( 'Events shown on a map', 'reg-man-rc' );
-				$map_view->full_calendar_name		= 'custom_map_view';
 				self::$ALL_VIEWS_ARRAY[ self::MAP_VIEW ] = $map_view;
 			} // endif
 		} // endif
@@ -105,18 +101,5 @@ class Calendar_View_Format {
 	public function get_description() {
 		return $this->desc;
 	} // function
-
-	/**
-	 * Get the name used internally by FullCalendar for this view.
-	 * This is used to initialize FullCalendar on the client side.
-	 *
-	 * @return	string	The name of this view used internally by FullCalendar
-	 *
-	 * @since v0.1.0
-	 */
-	public function get_full_calendar_name() {
-		return $this->full_calendar_name;
-	} // function
-
 
 } // class

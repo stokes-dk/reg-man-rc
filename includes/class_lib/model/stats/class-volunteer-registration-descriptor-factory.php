@@ -3,6 +3,9 @@ namespace Reg_Man_RC\Model\Stats;
 
 use Reg_Man_RC\Model\Event_Key;
 use Reg_Man_RC\Model\Volunteer_Registration;
+use Reg_Man_RC\Model\Event_Filter;
+use Reg_Man_RC\Model\Volunteer;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * This class provides factory methods for instances of Volunteer_R
@@ -23,6 +26,21 @@ class Volunteer_Registration_Descriptor_Factory {
 	public static function get_all_volunteer_registration_descriptors_for_filter( $filter ) {
 		// Get all the internal and external event descriptors
 		$keys_array = isset( $filter ) ? Event_Key::get_event_keys_for_filter( $filter ) : NULL;
+		$result = self::get_all_volunteer_registration_descriptors_for_events( $keys_array );
+		return $result;
+	} // function
+		
+		
+	/**
+	 * Get all volunteer registration descriptors known to the system including those defined by both internal and external providers.
+	 *
+	 * @param	string[]|NULL	$keys_array	An array of event keys specifying the set of events whose
+	 *  registered items are to be returned, or NULL if all registered items are to be returned.
+	 * @return	Volunteer_Registration_Descriptor[]		An array of Volunteer_Registration_Descriptor objects describing
+	 *  all volunteer registrations known to the system and limited to the events described by the filter.
+	 */
+	public static function get_all_volunteer_registration_descriptors_for_events( $keys_array ) {
+		// Passing an event key array of NULL signifies that we want everything
 		$internal = Volunteer_Registration::get_all_registrations_for_event_keys( $keys_array );
 		$external = External_Volunteer_Registration::get_all_external_volunteer_registrations( $keys_array );
 		$supplemental = Supplemental_Volunteer_Registration::get_all_supplemental_volunteer_registrations( $keys_array );
@@ -63,9 +81,30 @@ class Volunteer_Registration_Descriptor_Factory {
 	 */
 	public static function get_fixers_for_filter( $filter ) {
 		// If the filter is NULL then I will pass an event key array of NULL to signify that we want everything
-		$keys_array = isset( $filter ) ? Event_Key::get_event_keys_for_filter( $filter ) : NULL;
-		$internal = Volunteer_Registration::get_fixer_registrations_for_event_keys( $keys_array );
-		$external = External_Volunteer_Registration::get_external_fixer_registrations( $keys_array );
+		$event_keys_array = isset( $filter ) ? Event_Key::get_event_keys_for_filter( $filter ) : NULL;
+		$result = self::get_fixers_for_events( $event_keys_array );
+		return $result;
+	} // function
+
+	/**
+	 * Get fixer volunteer registration descriptors including those defined internally
+	 *  and by external providers like the legacy registration data add-on.
+	 *
+	 * This method returns volunteer registrations that have a fixer role.
+	 *
+	 * Note that some volunteers have a fixer role AND a non-fixer role like Setup & Cleanup.
+	 * Those registrations are INCLUDED in the result of this method.
+	 *
+	 * Registrations with no fixer role are excluded.
+	 *
+	 * @param	string[]|NULL	$event_keys_array		An array of event keys which limits the set of events whose
+	 *  registered fixers are to be returned, or NULL if all registered fixers are to be returned.
+	 * @return	Volunteer_Registration_Descriptor[]		An array of Volunteer_Registration_Descriptor objects describing
+	 *  all fixer registrations known to the system and limited to the events specified.
+	 */
+	public static function get_fixers_for_events( $event_keys_array ) {
+		$internal = Volunteer_Registration::get_fixer_registrations_for_event_keys( $event_keys_array );
+		$external = External_Volunteer_Registration::get_external_fixer_registrations( $event_keys_array );
 		$result = array_merge( $internal, $external );
 		return $result;
 	} // function
@@ -87,12 +126,32 @@ class Volunteer_Registration_Descriptor_Factory {
 	 */
 	public static function get_non_fixers_for_filter( $filter ) {
 		// If the filter is NULL then I will pass an event key array of NULL to signify that we want everything
-		$keys_array = isset( $filter ) ? Event_Key::get_event_keys_for_filter( $filter ) : NULL;
-		$internal = Volunteer_Registration::get_non_fixer_registrations_for_event_keys( $keys_array );
-		$external = External_Volunteer_Registration::get_external_non_fixer_registrations( $keys_array );
+		$event_keys_array = isset( $filter ) ? Event_Key::get_event_keys_for_filter( $filter ) : NULL;
+		$result = self::get_non_fixers_for_events( $event_keys_array );
+		return $result;
+	} // function
+
+	/**
+	 * Get volunteer registration descriptors for volunteers who registered for a non-fixer role like "Setup & Cleanup"
+	 *  including those defined internally and by external providers like the legacy registration data add-on.
+	 *
+	 * Note that some volunteers may have a fixer role AND a non-fixer role like "Setup & Cleanup".  Those registrations
+	 *   are INCLUDED in the result of this method.
+	 *
+	 * Also note that some volunteers select no role at all intending to show up and perform a task assigned at the event.
+	 * Those registrations are also INCLUDED in the result of this method.
+	 *
+	 * @param	string[]|NULL	$event_keys_array		An array of event keys which limits the set of events whose
+	 *  registered non-fixers are to be returned, or NULL if all registered non-fixers are to be returned.
+	 * @return	Volunteer_Registration_Descriptor[]		An array of Volunteer_Registration_Descriptor objects describing
+	 *  all non-fixer registrations known to the system and limited to the events specified.
+	 */
+	public static function get_non_fixers_for_events( $event_keys_array ) {
+		$internal = Volunteer_Registration::get_non_fixer_registrations_for_event_keys( $event_keys_array );
+		$external = External_Volunteer_Registration::get_external_non_fixer_registrations( $event_keys_array );
 		$result = array_merge( $internal, $external );
 		return $result;
 	} // function
 
-
+	
 } // class

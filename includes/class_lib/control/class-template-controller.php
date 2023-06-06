@@ -1,6 +1,8 @@
 <?php
 namespace Reg_Man_RC\Control;
 
+use const Reg_Man_RC\PLUGIN_BOOTSTRAP_FILENAME;
+
 /**
  * Controller for page templates
  *
@@ -75,7 +77,7 @@ class Template_Controller {
 	 * @return string
 	 */
 	public static function get_minimal_template_file_name() {
-		$plugin_dir = dirname( \Reg_Man_RC\PLUGIN_BOOTSTRAP_FILENAME );
+		$plugin_dir = dirname( PLUGIN_BOOTSTRAP_FILENAME );
 		$templates_dir = $plugin_dir . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'templates';
 		$result = $templates_dir . DIRECTORY_SEPARATOR . 'minimal-template.php';
 		return $result;
@@ -86,7 +88,7 @@ class Template_Controller {
 	 * @return string
 	 */
 	public static function get_comments_template_file_name() {
-		$plugin_dir = dirname( \Reg_Man_RC\PLUGIN_BOOTSTRAP_FILENAME );
+		$plugin_dir = dirname( PLUGIN_BOOTSTRAP_FILENAME );
 		$templates_dir = $plugin_dir . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'templates';
 		$result = $templates_dir . DIRECTORY_SEPARATOR . 'comment-template.php';
 		return $result;

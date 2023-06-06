@@ -1,13 +1,16 @@
 <?php
 namespace Reg_Man_RC\Model\Stats;
 
+use Reg_Man_RC\Model\Error_Log;
+
 /**
- * An instance of this class describes a graphical chart like a pie chart or bar chart
+ * An instance of this class is a json serializable configuration object
+ *  which describes a graphical chart like a pie chart or bar chart.
  *
  * @since v0.1.0
  *
  */
-class Chart implements \JsonSerializable {
+class Chart_Config implements \JsonSerializable {
 
 	private $type;
 	private $is_stacked = FALSE; // A flag used to indicate a stacked bar chart
@@ -17,6 +20,7 @@ class Chart implements \JsonSerializable {
 	private $labels = array();
 	private $datasets = array();
 	private $options = array();
+	private $animation;
 
 	private function __construct() { }
 
@@ -80,21 +84,80 @@ class Chart implements \JsonSerializable {
 	} // function
 
 	/**
+	 * Set an option value
+	 * @param	string	$name
+	 * @param	mixed	$value
+	 */
+	public function set_option( $name, $value ) {
+		$this->options[ $name ] = $value;
+	} // function
+
+	/**
+	 * Set the font size in pixels
+	 * @param	int		$size
+	 */
+	public function set_font_size( $size ) {
+		$this->options[ 'plugins' ][ 'legend' ][ 'labels' ][ 'font' ][ 'size' ] = intval( $size );
+	} // function
+
+	/**
+	 * Set the font weight
+	 * @param	string		$weight
+	 */
+	public function set_font_weight( $weight ) {
+		$this->options[ 'plugins' ][ 'legend' ][ 'labels' ][ 'font' ][ 'weight' ] = $weight;
+	} // function
+
+	/**
+	 * Set whether or not the legend is displayed
+	 * @param	boolean		$is_display_legend
+	 */
+	public function set_is_display_legend( $is_display_legend ) {
+		$this->options[ 'plugins' ][ 'legend' ][ 'display' ] = boolval( $is_display_legend );
+	} // function
+
+	/**
+	 * Set whether or not a tooltip is displayed when hovering over the chart
+	 * @param	boolean		$is_display_tooltips
+	 */
+	public function set_is_display_tooltip( $is_display_tooltip ) {
+		$this->options[ 'plugins' ][ 'tooltip' ][ 'enabled' ] = boolval( $is_display_tooltip );
+	} // function
+
+	/**
+	 * Get the animation object
+	 * @return Chart_Animation
+	 */
+	private function get_animation() {
+		return $this->animation;
+	} // function
+
+	/**
+	 * Set the animation object
+	 * @param Chart_Animation	$animation
+	 */
+	public function set_animation( $animation ) {
+		$this->animation = $animation;
+	} // function
+
+	/**
 	 * Get an object which can be serialized using json_encode()
 	 * @return string[][]	An associative array of chart attributes including type, data and options.
 	 * @since v0.1.0
 	 */
-	public function jsonSerialize() {
+	public function jsonSerialize() : array {
 		$type = $this->get_type();
 
 		$options = $this->get_options();
 		$options[ 'responsive' ] = TRUE;
+		
+		$animation = $this->get_animation();
+		if ( isset( $animation ) && ( $animation instanceof Chart_Animation ) ) {
+			$options[ 'animation' ] = $animation;
+		} // endif
 
 		$title = $this->get_title();
 		if ( ! empty( $title ) ) {
-			if ( ! isset( $options[ 'plugins' ] ) ) {
-				$options[ 'plugins' ] = array();
-			} // endif
 			$options[ 'plugins' ][ 'title' ] = array(
 				'display'		=> TRUE,
 				'text'			=> $title,
@@ -127,7 +190,7 @@ class Chart implements \JsonSerializable {
 			} // endif
 			$options[ 'maintainAspectRatio' ] = FALSE;
 		} // endif
-
+		
 		$result = array(
 			'type'		=> $type,
 			'data'		=> array(
@@ -135,8 +198,11 @@ class Chart implements \JsonSerializable {
 					'datasets'	=> $datasets,
 			),
 			'options'	=> $options,
+			'plugins'
 		);
+		
 //		Error_Log::var_dump( $result );
 		return $result;
+		
 	} // function
 } // class

@@ -4,12 +4,8 @@ namespace Reg_Man_RC\View\Admin;
 use Reg_Man_RC\Model\Event_Category;
 use Reg_Man_RC\Model\Internal_Event_Descriptor;
 use Reg_Man_RC\Model\Calendar;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Model\Settings;
-use Reg_Man_RC\View\Form_Input_List;
-use Reg_Man_RC\Control\Admin\Event_Category_Admin_Controller;
-use Reg_Man_RC\View\Ajax_Form;
 
 /**
  * The administrative view for event category
@@ -340,7 +336,7 @@ class Event_Category_Admin_View {
 				$input_id = 'event-category-ext-names-input';
 				$input_name = 'event-category-ext-names';
 				$label = __( 'Alternate Names', 'reg-man-rc' );
-				$desc = __( 'Enter a pipe-separated list of alternate names for this event category, e.g. "Name 1 | Name 2".', 'reg-man-rc' );
+				$desc = __( 'Enter a pipe-separated list of alternate names used in external event providers for this event category, e.g. "Name 1 | Name 2".', 'reg-man-rc' );
 				$ext_names = ! empty( $event_category ) ? $event_category->get_external_names() : '';
 				echo '<tr class="form-field term-group-wrap">';
 					echo '<th scope="row">';

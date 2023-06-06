@@ -2,8 +2,9 @@
 namespace Reg_Man_RC\Model\Stats;
 
 use Reg_Man_RC\Model\Item;
-use Reg_Man_RC\Model\Stats\Supplemental_Item;
 use Reg_Man_RC\Model\Event_Key;
+use Reg_Man_RC\Model\Event_Filter;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * This class provides factory methods for instances of Item_Descriptor

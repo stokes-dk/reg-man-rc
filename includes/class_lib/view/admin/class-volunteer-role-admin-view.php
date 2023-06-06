@@ -299,7 +299,7 @@ class Volunteer_Role_Admin_View {
 		$input_id = 'volunteer-role-ext-names-input';
 		$input_name = 'volunteer-role-ext-names';
 		$label = __( 'Alternate Names', 'reg-man-rc' );
-		$desc = __( 'Enter a pipe-separated list of alternate names for this volunteer role, e.g. "Name 1 | Name 2".', 'reg-man-rc' );
+		$desc = __( 'Enter a pipe-separated list of alternate names used in external registration data for this volunteer role, e.g. "Name 1 | Name 2".', 'reg-man-rc' );
 		$ext_names = ! empty( $volunteer_role ) ? $volunteer_role->get_external_names() : '';
 		echo '<tr class="form-field term-group-wrap">';
 			echo '<th scope="row">';

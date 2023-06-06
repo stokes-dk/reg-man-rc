@@ -1,9 +1,8 @@
 <?php
 namespace Reg_Man_RC\View;
 
-use Reg_Man_RC\Model\Volunteer_Registration_Descriptor;
+use Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor;
 use Reg_Man_RC\Model\Event;
-use Reg_Man_RC\Model\Error_Log;
 
 /**
  * An instance of this class will render a list (in table format) of volunteer registration descriptors.
@@ -53,19 +52,19 @@ class Volunteer_Registration_List_View {
 		echo '<div class="datatable-container volunteer-reg-table-container">';
 			// Using inline style width 100% allows Datatables to calculate the proper width, css doesn't work
 			$dom_setting = '';
-			echo '<table class="datatable admin-datatable volunteer-my-reg-table" style="width:100%"' .
+			echo '<table class="datatable reg-man-rc-admin-object-list-datatable volunteer-my-reg-table" style="width:100%"' .
 				" data-dom-setting=\"$dom_setting\">";
 			echo '<thead>';
 	// Name | Date | Event | Fixer Station | Volunteer Roles
 				printf( $row_format,
 							'th',
-							esc_html__( 'Name',					'reg-man-rc' ),
-							esc_html__( 'Date',					'reg-man-rc' ),
-							esc_html__( 'Event',				'reg-man-rc' ),
-							esc_html__( 'Fixer Station',		'reg-man-rc' ),
-							esc_html__( 'Volunteer Roles',		'reg-man-rc' ),
-							'' // The ISO 8601 date will be hidden and does not need a column header
-				);
+							esc_html__( 'Name',							'reg-man-rc' ),
+							esc_html__( 'Date',							'reg-man-rc' ),
+							esc_html__( 'Event',						'reg-man-rc' ),
+							esc_html__( 'Fixer Station',				'reg-man-rc' ),
+							esc_html__( 'Volunteer Roles',				'reg-man-rc' ),
+							esc_html__( 'Numeric Event Date & Time',	'reg-man-rc' ),
+						);
 				echo '</thead>';
 				echo '<tbody>';
 					$reg_array = $this->get_registration_descriptor_array();

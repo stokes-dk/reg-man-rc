@@ -54,7 +54,7 @@ class Cookie {
 			$result = setcookie( $name, $value, $options );
 		} else {
 			// Versions before 7.3 will not use the samesite argument
-			$result = setcookie( $cookie_name, $value, $expires, $path, $domain, $is_secure, $is_http_only );
+			$result = setcookie( $name, $value, $expires, $path, $domain, $is_secure, $is_http_only );
 		} // endif
 		if ( $result == FALSE ) {
 			$format = __( 'ERROR: Failed to set cookie %1$s', 'reg-man-rc' );

@@ -2,7 +2,6 @@
 namespace Reg_Man_RC\Control\Admin;
 
 use Reg_Man_RC\Model\Fixer_Station;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Settings;
 
 /**

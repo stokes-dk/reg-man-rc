@@ -151,7 +151,7 @@ class Geographic_Position implements \JsonSerializable {
 	 * @return string	A string version of this object
 	 * @since v0.1.0
 	 */
-	public function jsonSerialize() {
+	public function jsonSerialize() : string {
 		return $this->get_as_string();
 	} // function
 

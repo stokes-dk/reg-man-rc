@@ -1,18 +1,16 @@
 <?php
 namespace Reg_Man_RC\View;
 
-use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Calendar;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Control\Calendar_Controller;
-use Reg_Man_RC\View\Map_View;
-use Reg_Man_RC\Control\Map_Controller;
 use Reg_Man_RC\Model\Calendar_View_Format;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Cookie;
 use Reg_Man_RC\Model\Event_Category;
-use Reg_Man_RC\Model\Calendar_Entry;
 use Reg_Man_RC\Model\Event_Status;
+use Reg_Man_RC\Model\Event_Filter;
+use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\View\Object_View\Details_Disclosure_Object_View_Template;
 
 /**
  * An instance of this class provides a user interfrace for a calendar that appears on the public-facing (frontend) side of the website.
@@ -25,12 +23,16 @@ class Calendar_View {
 	/** The shortcode used to render a calendar */
 	const CALENDAR_SHORTCODE	= 'rc-calendar';
 
-	/** The shortcode used to render a calendar */
+	/** The shortcode used to show the next event on a calendar */
 	const NEXT_EVENT_SHORTCODE	= 'rc-next-event';
+
+	/** The shortcode used to show a set of upcoming events on a calendar */
+	const UPCOMING_EVENTS_SHORTCODE	= 'rc-upcoming-events';
 
 	private $calendar; // The calendar object shown in this view
 	private $view_format_ids_array; // an array of IDs for Calendar_View_Format objects defining which views to show
-
+	private $duration_ids_array; // an array of IDs for Calendar_Duration objects defining which durations to show
+	
 	/** A private constructor forces users to use one of the factory methods */
 	private function __construct() {
 	} // constructor
@@ -44,7 +46,7 @@ class Calendar_View {
 	public static function create( $calendar ) {
 		$result = new self();
 		$result->calendar = $calendar;
-		$result->calendar_id = $calendar->get_id();
+//		$result->calendar_id = $calendar->get_id();
 		return $result;
 	} // function
 
@@ -91,11 +93,21 @@ class Calendar_View {
 			$result = $this->view_format_ids_array;
 		} else {
 			$calendar = $this->get_calendar();
-			$result = ( ! empty( $calendar ) ) ? $calendar->get_view_format_ids_array() : Calendar::get_default_view_format_ids_array();
+			$result = ! empty( $calendar ) ? $calendar->get_view_format_ids_array() : Calendar::get_default_view_format_ids_array();
 		} // endif
 		return $result;
 	} // function
 
+	private function get_duration_ids_array() {
+		if ( isset( $this->duration_ids_array ) ) {
+			$result = $this->duration_ids_array;
+		} else {
+			$calendar = $this->get_calendar();
+			$result = ! empty( $calendar ) ? $calendar->get_duration_ids_array() : Calendar::get_default_duration_ids_array();
+		} // endif
+		return $result;
+	} // function
+	
 	private function get_week_start() {
 		$result = get_option( 'start_of_week' ); // Use the setting for the site
 		return $result;
@@ -132,23 +144,10 @@ class Calendar_View {
 		$feed_url = esc_attr( $this->get_feed_url() );
 
 		$view_ids = $this->get_view_format_ids_array();
-		$full_calendar_names_array = array();
-		foreach( $view_ids as $view_format_id ) {
-			$view_format = Calendar_View_Format::get_view_format_by_id( $view_format_id );
-			if ( isset( $view_format ) ) {
-				$full_calendar_names_array[] = $view_format->get_full_calendar_name();
-			} // endif
-		} // endfor
-		// Note that a space after the comma will cause the buttons to be separated, no space groups them
-		$view_data = esc_attr( implode( ',' , $full_calendar_names_array ) );
+		$view_data = esc_attr( implode( ',' , $view_ids ) );
 
-		// If the user has been to this page then their last view will be saved in a cookie
-		$cookie_view = Cookie::get_cookie( 'reg-man-rc-calendar-view' );
-		if ( isset( $cookie_view ) && in_array( $cookie_view, $full_calendar_names_array ) ) {
-			$initial_view = $cookie_view;
-		} else {
-			$initial_view = isset( $full_calendar_names_array[ 0 ] ) ? $full_calendar_names_array[ 0 ] : NULL;
-		} // endif
+		$duration_ids = $this->get_duration_ids_array();
+		$duration_data = esc_attr( implode( ',' , $duration_ids ) );
 
 		$is_render_map = ( Map_View::get_is_map_view_enabled() && in_array( Calendar_View_Format::MAP_VIEW, $view_ids ) );
 
@@ -159,14 +158,22 @@ class Calendar_View {
 		$data_array = array();
 		$data_array[] = "data-calendar-id=\"$calendar_id\"";
 		$data_array[] = "data-views=\"$view_data\"";
+		$data_array[] = "data-durations=\"$duration_data\"";
 		$data_array[] = "data-week-start=\"$start_of_week\"";
 		$data_array[] = "data-lang=\"$lang\"";
 		$data_array[] = "data-feed-url=\"$feed_url\"";
 		$data_array[] = "data-is-show-past-events=\"$is_show_past_events_data\"";
-		$data_array[] = 'data-wp-nonce="' . wp_create_nonce( 'wp_rest' ) . '"';
-		if ( isset( $initial_view ) ) {
-			$data_array[] = "data-initial-view=\"$initial_view\"";
+		
+		// When the calendar is the admin calendar then we MUST include a nonce so that the user can be checked
+		// When the calendar is the volunteer calendar then we should include a nonce if a user is logged in
+		// When the calendar is anything else then including a nonce may require the user to refresh the page
+		//  after a day which is not helpful to them and not really necessary for any security reason
+		$calendar_type = $calendar->get_calendar_type();
+		if ( ( $calendar_type == Calendar::CALENDAR_TYPE_ADMIN_EVENTS ) ||
+			 ( ( $calendar_type == Calendar::CALENDAR_TYPE_VOLUNTEER_REG ) && ( is_user_logged_in() ) ) ) {
+			$data_array[] = 'data-wp-nonce="' . wp_create_nonce( 'wp_rest' ) . '"';
 		} // endif
+
 		$data = implode( ' ', $data_array );
 
 		// I will set up the container as a listener for ajax form events from my map's form which is in the footer
@@ -274,8 +281,12 @@ class Calendar_View {
 			// create my shortcode to show the next event
 			add_shortcode( self::NEXT_EVENT_SHORTCODE, array( __CLASS__, 'get_next_event_shortcode_content' ) );
 
+			// create my shortcode to show the upcoming events
+			add_shortcode( self::UPCOMING_EVENTS_SHORTCODE, array( __CLASS__, 'get_upcoming_events_shortcode_content' ) );
+
 			// Add a filter to change the content written for this type
 			add_filter( 'the_content', array(__CLASS__, 'modify_post_content') );
+
 		} // endif
 
 	} // function
@@ -372,7 +383,7 @@ class Calendar_View {
 		$attribute_values = shortcode_atts( array(
 			'calendar'			=> NULL,
 			'title'				=> __( 'Next event', 'reg-man-rc' ),
-			'no-event-title'	=> '',
+			'no-event-title'	=> __( 'No upcoming events scheduled', 'reg-man-rc' ),
 		), $attributes );
 
 		$error_array = array();
@@ -406,8 +417,9 @@ class Calendar_View {
 			} // endif
 
 			if ( isset( $calendar ) ) {
-				$event = $calendar->get_next_calendar_event();
-				echo '<wp-block-button class="reg-man-rc-next-event-shortcode-button">';
+				$events_array = $calendar->get_upcoming_calendar_events( $count = 1, $is_exclude_cancelled = TRUE );
+				$event = isset( $events_array[ 0 ] ) ? $events_array[ 0 ] : NULL;
+				echo '<div class="reg-man-rc-shortcode-container next-event">';
 					if ( ! isset( $event ) ) {
 						$title = $attribute_values[ 'no-event-title' ];
 						echo $title;
@@ -415,15 +427,128 @@ class Calendar_View {
 						$title = $attribute_values[ 'title' ];
 						/* Translators: %1$s is a fixed title like "Next event", %2$s is an event description */
 						$text_format = _x( '%1$s: %2$s',
-								'A format to a title and an event description like "Next event: Wed Sept 21 @ Central Library"',
+								'A format for a title and an event description like "Next event: Wed Sept 21 @ Central Library"',
 								'reg-man-rc' );
 						$event_title = $event->get_label();
 						$url = $event->get_event_page_url();
-						echo "<a class=\"wp-block-button__link\" href=\"$url\">";
+						echo "<a class=\"reg-man-rc-next-event-shortcode-link\" href=\"$url\">";
 							printf( $text_format, $title, $event_title );
 						echo '</a>';
 					} // endif
-				echo '</wp-block-button>';
+				echo '</div>';
+			} // endif
+
+		$result = ob_get_clean();
+
+		return $result;
+	} // function
+
+	/**
+	 * Get the content for the upcoming events shortcode
+	 *
+	 * This method is called automatically when the shortcode is on the current page.
+	 *
+	 * @return	string	The contents of the next event shortcode.  Wordpress will insert this into the page.
+	 * @since	v0.1.0
+	 */
+	public static function get_upcoming_events_shortcode_content( $attributes ) {
+
+		$default_upcoming_events_count = 3; // Used when the count is not specified or not valid
+		
+		$attribute_values = shortcode_atts( array(
+			'calendar'			=> NULL,
+			'count'				=> $default_upcoming_events_count,
+		), $attributes );
+
+		$error_array = array();
+		if ( ! isset( $attribute_values[ 'calendar' ] ) ) {
+			$error_array[] = __( 'Please specify a calendar ID in the shortcode.', 'reg-man-rc' );
+		} else {
+			$calendar_id = $attribute_values[ 'calendar' ];
+			$calendar = Calendar::get_calendar_by_id( $calendar_id );
+			if ( ! isset( $calendar ) ) {
+				// Try finding the calendar by its slug
+				$calendar = Calendar::get_calendar_by_slug( $calendar_id );
+			} // endif
+			if ( ! isset( $calendar ) ) {
+				$calendar = NULL;
+				/* translators: %1$s is an invalid event status name specified in the calendar shortcode */
+				$msg = __( 'Could not find the calendar specified in the shortcode: "%1$s"', 'reg-man-rc' );
+				$error_array[] = sprintf( $msg, $calendar_id );
+			} // endif
+		} // endif
+		
+		$count = $attribute_values[ 'count' ];
+		if ( intval( $count ) != $count ) {
+			/* translators: %1$s is an invalid event count specified in the calendar shortcode, %2$s is the default count */
+			$msg = __( 'The specified count "%1$s" is not a valid number.  Using default count of %2$s.', 'reg-man-rc' );
+			$error_array[] = sprintf( $msg, $count, $default_upcoming_events_count );
+			$count = $default_upcoming_events_count;
+		} // endif
+		
+		ob_start();
+			// If there are any errors, show them to the author
+			if ( ! empty( $error_array ) ) {
+				global $post, $current_user;
+				// If there is an error in the shortcode and current user is the author then I will show them their errors
+				if ( is_user_logged_in() && $current_user->ID == $post->post_author )  {
+					foreach( $error_array as $error ) {
+						echo '<div class="reg-man-rc shortcode-error">' . $error . '</div>';
+					} // endfor
+				} // endif
+			} // endif
+
+			if ( isset( $calendar ) ) {
+				$events_array = $calendar->get_upcoming_calendar_events( $count );
+				
+				// We may have two events on the same day so we need to group events by their date
+				$event_dates_array = array(); // create an array of dates
+				foreach( $events_array as $event ) {
+					$date_time = $event->get_start_date_time_local_timezone_object();
+					$date = $date_time->format( 'Ymd' );
+					if ( ! isset( $event_dates_array[ $date ] ) ) {
+						$event_dates_array[ $date ] = array( $event );
+					} else {
+						$event_dates_array[ $date ][] = $event;
+					} // endfor
+				} // endfor
+
+				$day_label_format =
+					'<div class="reg-man-rc-upcoming-events-day-label-container" title="%4$s">' .
+						'<div class="month">%1$s</div>' .
+						'<div class="day-of-month">%2$s</div>' .
+						'<div class="day-of-week">%3$s</div>' .
+					'</div>';
+				
+				echo '<div class="reg-man-rc-shortcode-container upcoming-events">';
+				$wp_date_format = get_option( 'date_format' );
+				
+				foreach( $event_dates_array as $date => $curr_date_events_array ) {
+					echo '<div class="reg-man-rc-upcoming-events-date-container">';
+
+						$curr_date = new \DateTime( $date );
+						$day_of_week = $curr_date->format( 'l' ); // l => Full name, D => 3 letters
+						$day_of_month = $curr_date->format( 'j' );
+						$month = $curr_date->format( 'F' ); // F => Full name, M => 3 letters
+						$full_date = $curr_date->format( $wp_date_format );
+						printf( $day_label_format, $month, $day_of_month, $day_of_week, $full_date );
+						
+						echo '<div class="reg-man-rc-upcoming-events-event-group-container">';
+
+							$template = Details_Disclosure_Object_View_Template::create();
+							$classes = 'reg-man-rc-upcoming-events-event-container reg-man-rc-info-window-container';
+							$template->set_classes( $classes );
+							foreach( $curr_date_events_array as $event ) {
+								$event_view = Event_View::create_for_calendar_agenda_entry( $event );
+								$template->set_object_view( $event_view );
+								$content = $template->get_content();
+								echo $content;
+							} // endfor
+						echo '</div>'; // Event group container
+
+					echo '</div>'; // Date container
+				} // endfor
+				echo '</div>';
 			} // endif
 
 		$result = ob_get_clean();
@@ -444,6 +569,12 @@ class Calendar_View {
 		if ( $post instanceof \WP_Post ) {
 			if ( has_shortcode( $post->post_content, self::CALENDAR_SHORTCODE ) ) {
 				Scripts_And_Styles::enqueue_fullcalendar();
+			} // endif
+			if ( has_shortcode( $post->post_content, self::NEXT_EVENT_SHORTCODE ) ) {
+				Scripts_And_Styles::enqueue_public_base_scripts_and_styles();
+			} // endif
+			if ( has_shortcode( $post->post_content, self::UPCOMING_EVENTS_SHORTCODE ) ) {
+				Scripts_And_Styles::enqueue_public_base_scripts_and_styles();
 			} // endif
 		} // endif
 	} // function

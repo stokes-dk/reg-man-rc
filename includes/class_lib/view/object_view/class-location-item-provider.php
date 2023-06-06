@@ -1,8 +1,6 @@
 <?php
 namespace Reg_Man_RC\View\Object_View;
 
-use Reg_Man_RC\Model\Event;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\View\Map_View;
 use Reg_Man_RC\Model\Venue;
@@ -127,7 +125,7 @@ class Location_Item_Provider implements List_item_Provider {
 	 */
 	private function get_location_address_item() {
 		$location_address = $this->get_location_address();
-		$classes = 'reg-man-rc-object-view-details-location_address';
+		$classes = 'reg-man-rc-object-view-details-location-address';
 		$icon = 'location-alt';
 		$icon_title = __( 'Location', 'reg-man-rc' );
 		if ( empty( $location_address ) ) {

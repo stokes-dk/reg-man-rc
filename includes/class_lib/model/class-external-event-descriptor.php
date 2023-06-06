@@ -3,7 +3,6 @@ namespace Reg_Man_RC\Model;
 
 use Reg_Man_RC\View\Map_View;
 use Reg_Man_RC\View\Event_Descriptor_View;
-use Reg_Man_RC\View\Event_View;
 
 /**
  * Describes a single event or a collection of recurring events defined by an external event provider like ECWD.

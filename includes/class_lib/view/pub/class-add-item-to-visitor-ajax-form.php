@@ -3,7 +3,7 @@ namespace Reg_Man_RC\View\Pub;
 
 use Reg_Man_RC\View\Form_Input_List;
 use Reg_Man_RC\Model\Event;
-use Reg_Man_RC\Control\Admin\Visitor_Registration_Admin_Controller;
+use Reg_Man_RC\Control\Visitor_Registration_Controller;
 
 class Add_Item_To_Visitor_Ajax_Form {
 
@@ -43,7 +43,7 @@ class Add_Item_To_Visitor_Ajax_Form {
 		} else { // User is logged in so show the page content
 			$form_action = self::get_form_action();
 //			$nonce = self::getNonce();
-			$ajax_action = Visitor_Registration_Admin_Controller::AJAX_ADD_ITEM_TO_VISITOR_ACTION;
+			$ajax_action = Visitor_Registration_Controller::AJAX_ADD_ITEM_TO_VISITOR_ACTION;
 			echo '<div class="add-item-to-visitor-reg-form-container autocomplete-item-desc-container">';
 				echo "<form action=\"$form_action\" method=\"POST\" data-ajax-action=\"$ajax_action\"" .
 						' class="add-item-to-visitor-reg-form reg-man-rc-ajax-form reg-man-rc-js-validation">';

@@ -1,15 +1,15 @@
 <?php
 namespace Reg_Man_RC\View\Admin;
 
-use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Event_Status;
 use Reg_Man_RC\Model\Calendar;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Model\Event_Category;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Event_Class;
 use Reg_Man_RC\Model\Calendar_View_Format;
 use Reg_Man_RC\Model\Settings;
+use Reg_Man_RC\Model\Calendar_Duration;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * An instance of this class provides a user interfrace for a calendar.
@@ -51,64 +51,77 @@ class Calendar_Admin_View {
 
 			// Status metabox
 			add_meta_box(
-				'reg-man-rc-event-status-metabox',
-				__( 'Event Statuses', 'reg-man-rc' ),
-				array( __CLASS__, 'render_event_status_metabox'),
-				Calendar::POST_TYPE,
-				'side', // section to place the metabox (normal, side or advanced)
-				'default' // priority within the section (high, low or default)
-			);
-
+					'reg-man-rc-event-status-metabox',
+					__( 'Event Statuses', 'reg-man-rc' ),
+					array( __CLASS__, 'render_event_status_metabox'),
+					Calendar::POST_TYPE,
+					'side', // section to place the metabox (normal, side or advanced)
+					'default' // priority within the section (high, low or default)
+					);
+			
 			// Category metabox
 			$view = Event_Category_Admin_View::create();
 			add_meta_box(
-				'reg-man-rc-event-category-metabox',
-				__( 'Event Categories', 'reg-man-rc' ),
-				array( $view, 'render_post_metabox' ),
-				Calendar::POST_TYPE,
-				'side', // section to place the metabox (normal, side or advanced)
-				'default' // priority within the section (high, low or default)
+					'reg-man-rc-event-category-metabox',
+					__( 'Event Categories', 'reg-man-rc' ),
+					array( $view, 'render_post_metabox' ),
+					Calendar::POST_TYPE,
+					'side', // section to place the metabox (normal, side or advanced)
+					'default' // priority within the section (high, low or default)
 			);
 
 			// Show Past Events
 			add_meta_box(
-				'reg-man-rc-past-events-metabox',
-				__( 'Show Past Events', 'reg-man-rc' ),
-				array( __CLASS__, 'render_past_events_metabox' ),
-				Calendar::POST_TYPE,
-				'side', // section to place the metabox (normal, side or advanced)
-				'default' // priority within the section (high, low or default)
+					'reg-man-rc-past-events-metabox',
+					__( 'Show Past Events', 'reg-man-rc' ),
+					array( __CLASS__, 'render_past_events_metabox' ),
+					Calendar::POST_TYPE,
+					'side', // section to place the metabox (normal, side or advanced)
+					'default' // priority within the section (high, low or default)
 			);
 
 			// Calendar views metabox
 			add_meta_box(
-				'reg-man-rc-view-format-metabox',
-				__( 'Calendar Views', 'reg-man-rc' ),
-				array( __CLASS__, 'render_view_format_metabox' ),
-				Calendar::POST_TYPE,
-				'side', // section to place the metabox (normal, side or advanced)
-				'default' // priority within the section (high, low or default)
+					'reg-man-rc-view-format-metabox',
+					__( 'Views', 'reg-man-rc' ),
+					array( __CLASS__, 'render_view_format_metabox' ),
+					Calendar::POST_TYPE,
+					'side', // section to place the metabox (normal, side or advanced)
+					'default' // priority within the section (high, low or default)
 			);
 
+			// Calendar durations metabox
+			add_meta_box(
+					'reg-man-rc-durations-metabox',
+					__( 'Timespans', 'reg-man-rc' ),
+					array( __CLASS__, 'render_durations_metabox' ),
+					Calendar::POST_TYPE,
+					'side', // section to place the metabox (normal, side or advanced)
+					'default' // priority within the section (high, low or default)
+					);
+			
 			// Class metabox
 			add_meta_box(
-				'reg-man-rc-event-class-metabox',
-				__( 'Event Classes', 'reg-man-rc' ),
-				array( __CLASS__, 'render_event_class_metabox' ),
-				Calendar::POST_TYPE,
-				'side', // section to place the metabox (normal, side or advanced)
-				'default' // priority within the section (high, low or default)
+					'reg-man-rc-event-class-metabox',
+					__( 'Event Classes', 'reg-man-rc' ),
+					array( __CLASS__, 'render_event_class_metabox' ),
+					Calendar::POST_TYPE,
+					'side', // section to place the metabox (normal, side or advanced)
+					'default' // priority within the section (high, low or default)
 			);
-
-			// Purpose metabox
+			
+			
+/* FIXME - NOT USED, these are assigned in the settings
+			// Registration metabox
 			add_meta_box(
-				'reg-man-rc-calendar-purpose-metabox',
-				__( 'Registration Calendars', 'reg-man-rc' ),
-				array( __CLASS__, 'render_registration_calendars_metabox' ),
-				Calendar::POST_TYPE,
-				'side', // section to place the metabox (normal, side or advanced)
-				'default' // priority within the section (high, low or default)
-			);
+					'reg-man-rc-calendar-purpose-metabox',
+					__( 'Registration', 'reg-man-rc' ),
+					array( __CLASS__, 'render_registration_calendars_metabox' ),
+					Calendar::POST_TYPE,
+					'side', // section to place the metabox (normal, side or advanced)
+					'default' // priority within the section (high, low or default)
+					);
+*/
 
 		} // endif
 	} // function
@@ -239,7 +252,7 @@ class Calendar_Admin_View {
 		$selected_id_array = isset( $calendar ) ? $calendar->get_view_format_ids_array() : array();
 		self::render_view_format_checkboxes( $selected_id_array );
 		$msg = __(
-				'Views provide different options the end user may select for displaying events.',
+				'Select the views used to display events in this calendar.',
 				'reg-man-rc'
 		);
 		echo '<p>' . $msg . '</p>';
@@ -262,20 +275,65 @@ class Calendar_Admin_View {
 		foreach ( $view_formats as $view_format_obj ) {
 			$id = $view_format_obj->get_id();
 			$name = $view_format_obj->get_name();
+			$desc = $view_format_obj->get_description();
 			$html_name = esc_html( $name );
-			$attr_name = esc_attr( $name );
+			$attr_desc = esc_attr( $desc );
 			$checked = in_array( $id, $selected_id_array ) ? 'checked="checked"' : '';
-			printf( $format, $attr_name, $id, $checked, $html_name );
+			printf( $format, $attr_desc, $id, $checked, $html_name );
 		} // endfor
 	} // function
 
-
 	/**
-	 * Render the "purpose" metabox for the calendar
+	 * Render the durations metabox for the calendar
 	 * @param	\WP_Post	$post
 	 * @return	void
 	 * @since	v0.1.0
 	 */
+	public static function render_durations_metabox( $post ) {
+		$calendar = Calendar::get_calendar_by_id( $post->ID );
+		$selected_id_array = isset( $calendar ) ? $calendar->get_duration_ids_array() : array();
+		self::render_duration_checkboxes( $selected_id_array );
+		$msg = __(
+				'Select the timespans used to display events in this calendar.' .
+				'  The calendar may show one or more months at a time.',
+				'reg-man-rc'
+				);
+		echo '<p>' . $msg . '</p>';
+	} // function
+	
+	private static function render_duration_checkboxes( $selected_id_array ) {
+		
+		// We need a flag to distinguish the case where no durations were chosen by the user
+		//  versus the case where no checkboxes were presented at all like in quick edit mode
+		echo '<input type="hidden" name="durations_selection_flag" value="TRUE">';
+		
+		$durations = Calendar_Duration::get_all_calendar_durations();
+		$input_name = 'duration';
+		
+		$format =
+		'<div><label title="%1$s">' .
+		'<input type="checkbox" name="' . $input_name . '[]" value="%2$s" %3$s>' .
+		'<span>%4$s</span>' .
+		'</label></div>';
+		foreach ( $durations as $duration_obj ) {
+			$id = $duration_obj->get_id();
+			$name = $duration_obj->get_name();
+			$desc = $duration_obj->get_description();
+			$html_name = esc_html( $name );
+			$attr_desc = esc_attr( $desc );
+			$checked = in_array( $id, $selected_id_array ) ? 'checked="checked"' : '';
+			printf( $format, $attr_desc, $id, $checked, $html_name );
+		} // endfor
+	} // function
+	
+	
+	/**
+	 * Render the registration calendars metabox for the calendar
+	 * @param	\WP_Post	$post
+	 * @return	void
+	 * @since	v0.1.0
+	 */
+/* FIXME - NOT USED
 	public static function render_registration_calendars_metabox( $post ) {
 		self::render_registration_select_inputs( $post->ID );
 		$msg = __(
@@ -293,7 +351,7 @@ class Calendar_Admin_View {
 
 		$calendars_array = Calendar::get_all_calendars();
 		$calendar_names_array = array();
-		$calendar_names_array[ $calendar_post_id ] = __( '[ This calendar ]', 'reg-man-rc' ); // Put this at top
+		$calendar_names_array[ $calendar_post_id ] = __( '[ Use this calendar ]', 'reg-man-rc' ); // Put this at top
 		foreach( $calendars_array as $calendar ) {
 			$id = $calendar->get_post_id();
 			if ( $id !== $calendar_post_id ) {
@@ -321,6 +379,7 @@ class Calendar_Admin_View {
 
 	} // function
 
+
 	private static function render_calendar_select( $calendar_names_array, $input_name, $selected_id, $is_required = TRUE ) {
 
 		$input_name = esc_attr( $input_name );
@@ -336,7 +395,7 @@ class Calendar_Admin_View {
 
 	} // function
 
-
+*/
 
 	/**
 	 * Conditionally enqueue the correct scripts for this user interface on the backend when we're on the right page
@@ -361,10 +420,11 @@ class Calendar_Admin_View {
 
 		$result = array(
 			'cb'						=> $columns[ 'cb' ],
-			'title'						=> __( 'Calendar Title',				'reg-man-rc' ),
+			'title'						=> __( 'Calendar Title',			'reg-man-rc' ),
 			$event_category_tax_col		=> __( 'Event Categories',			'reg-man-rc' ),
 			'event_statuses'			=> __( 'Event Statuses',			'reg-man-rc' ),
 			'view_formats'				=> __( 'Views',						'reg-man-rc' ),
+			'durations'					=> __( 'Timespans',					'reg-man-rc' ),
 			'date'						=> __( 'Last Update',				'reg-man-rc' ),
 			'author'					=> __( 'Author',					'reg-man-rc' ),
 		);
@@ -399,6 +459,16 @@ class Calendar_Admin_View {
 					$result = ! empty( $name_array ) ? esc_html( implode( ', ', $name_array ) ) : $em_dash;
 					break;
 
+				case 'durations':
+					$duration_id_array = $calendar->get_duration_ids_array();
+					$name_array = array();
+					foreach( $duration_id_array as $duration_id ) {
+						$duration = Calendar_Duration::get_duration_by_id( $duration_id );
+						$name_array[] = isset( $duration ) ? $duration->get_name() : $duration_id; // Defensive
+					} // endform
+					$result = ! empty( $name_array ) ? esc_html( implode( ', ', $name_array ) ) : $em_dash;
+					break;
+					
 				default:
 					$result = $em_dash;
 					break;

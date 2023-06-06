@@ -14,6 +14,8 @@ use Reg_Man_RC\Model\Error_Log;
  */
 class Visitor_Admin_Table_View {
 
+	private $is_event_column_hidden = FALSE;
+
 	private function __construct() { }
 
 	public static function create() {
@@ -21,17 +23,30 @@ class Visitor_Admin_Table_View {
 		return $result;
 	} // function
 
-// Full name | Event | Email | First Event? | Mail list? | Source | Event Date ISO 8601
+	private function get_is_event_column_hidden() {
+		return $this->is_event_column_hidden;
+	} // function
+	
+	/**
+	 * Set a flag to indicate whether the event column should be hidden
+	 * @param boolean $is_event_column_hidden
+	 */
+	public function set_is_event_column_hidden( $is_event_column_hidden ) {
+		$this->is_event_column_hidden = boolval( $is_event_column_hidden );
+	} // function
+
 	public function render() {
+		$event_col_class = $this->get_is_event_column_hidden() ? 'col-hidden' : '';
+		// Full name | Event | Event Date ISO 8601 | Email | First Event? | Mail list? | Source
 		$rowFormat =
 			'<tr>' .
-				'<%1$s class="full-name">%2$s</%1$s>' .
-				'<%1$s class="event">%3$s</%1$s>' .
-				'<%1$s class="email">%4$s</%1$s>' .
-				'<%1$s class="first-event">%5$s</%1$s>' .
-				'<%1$s class="mail-list">%6$s</%1$s>' .
-				'<%1$s class="source">%7$s</%1$s>' .
-				'<%1$s class="iso-8601-date">%8$s</%1$s>' .
+				'<%1$s class="visitor-full-name">%2$s</%1$s>' .
+				'<%1$s class="event-date-text ' . $event_col_class . '">%3$s</%1$s>' . // This column will be sorted by the next col's data
+				'<%1$s class="event-date-iso-8601 col-hidden always-hidden not-searchable">%4$s</%1$s>' . // Must be after date
+				'<%1$s class="visitor-email">%5$s</%1$s>' .
+				'<%1$s class="visitor-first-event">%6$s</%1$s>' .
+				'<%1$s class="visitor-is-join-mail-list">%7$s</%1$s>' .
+				'<%1$s class="visitor-source">%8$s</%1$s>' .
 			'</tr>';
 		$ajax_url = esc_url( admin_url( 'admin-ajax.php' ) );
 		$ajax_action = Table_View_Admin_Controller::AJAX_GET_DATA_ACTION;
@@ -54,16 +69,16 @@ class Visitor_Admin_Table_View {
 					" data-scope=\"\"" .
 					" data-dom-setting=\"$dom_setting\">";
 				echo '<thead>';
-// Full name | Event | Email | First Event? | Mail list? | Source | Event Date ISO 8601
-				printf( $rowFormat,
+
+					printf( $rowFormat,
 								'th',
 								esc_html__( 'Visitor Name',						'reg-man-rc' ),
 								esc_html__( 'Event',							'reg-man-rc' ),
+								esc_html__( 'Numeric Event Date & Time',		'reg-man-rc' ),
 								esc_html__( 'Email',							'reg-man-rc' ),
 								esc_html__( 'First Event?',						'reg-man-rc' ),
 								esc_html__( 'Join Mail List?',					'reg-man-rc' ),
 								esc_html__( 'Source',							'reg-man-rc' ),
-								'' // The ISO 8601 event date will be hidden and does not need column header
 						);
 					echo '</thead>';
 					echo '<tbody>';
@@ -82,6 +97,8 @@ class Visitor_Admin_Table_View {
 	 * Each element in the result represents one row and each row is an array of column values.
 	 */
 	public static function get_table_data_array_for_visitor_reg_descriptors( $visitor_reg_desc_array ) {
+		
+//		Error_Log::var_dump( $visitor_reg_desc_array ); 
 		$result = array();
 		$em_dash = __( '—', 'reg-man-rc' ); // an em-dash is used by Wordpress for empty fields
 		$source_unknown_text = __( '[source not specified]', 'reg-man-rc' );
@@ -110,7 +127,6 @@ class Visitor_Admin_Table_View {
 				} // endif
 			} // endif
 
-			$full_name_text = ! empty( $full_name ) ? $full_name : $em_dash;
 			$full_name = $visitor_desc->get_full_name();
 			$full_name_text = ! empty( $full_name ) ? $full_name : $em_dash;
 			$email = $visitor_desc->get_email();
@@ -133,15 +149,14 @@ class Visitor_Admin_Table_View {
 			$source = $visitor_desc->get_visitor_registration_descriptor_source();
 			$source_text = isset( $source ) ? $source : $source_unknown_text;
 
-// Full name | Event | Email | First Event? | Mail list? | Source | Event Date ISO 8601
 			$row = array();
 			$row[] = $full_name_text;
 			$row[] = $event_text;
+			$row[] = $event_date_iso_8601;
 			$row[] = $email_text;
 			$row[] = $first_event_text;
 			$row[] = $mail_list_text;
 			$row[] = $source_text;
-			$row[] = $event_date_iso_8601;
 			$result[] = $row;
 		} // endfor
 		return $result;

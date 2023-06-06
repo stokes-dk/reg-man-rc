@@ -60,7 +60,7 @@ class Chart_Dataset implements \JsonSerializable {
 	 * @return string[][]	An associative array of chart attributes including type, data and options.
 	 * @since v0.1.0
 	 */
-	public function jsonSerialize() {
+	public function jsonSerialize() : array {
 
 		$colours = $this->get_colours();
 		$data = $this->get_data();

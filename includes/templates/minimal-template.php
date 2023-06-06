@@ -83,7 +83,7 @@ wp_head();
 		<div class="banner-container">
 			<h1 id="form-title"><?php the_title()?></h1>
 <?php
-	$attachment_id = Settings::get_reg_form_logo_image_attachment_id();
+	$attachment_id = get_theme_mod( 'custom_logo' );
 	if ( ! empty( $attachment_id ) ) {
 		$size = 'medium';
 		$attr = array(

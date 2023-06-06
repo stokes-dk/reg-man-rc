@@ -3,9 +3,13 @@ namespace Reg_Man_RC\Model;
 
 use Reg_Man_RC\View\Admin\Admin_Menu_Page;
 use Reg_Man_RC\Control\User_Role_Controller;
+use Reg_Man_RC\Model\Stats\Visitor_Registration_Descriptor;
+use Reg_Man_RC\Model\Stats\Visitor_Registration_Descriptor_Factory;
 
 /**
- * An instance of this class represents a visitor.
+ * An instance of this class represents a single person who may attend multiple events and register items for repair.
+ * A visitor is identified by their email address when it is provided or by full name when no email is given.
+ * A Visitor Registration object represents a visitor who registered one or more items for an event.
  *
  * Some of the data associated with this class are personal information.
  * That personal information is stored in a separate table outside the usual Wordpress database tables so that
@@ -18,33 +22,25 @@ class Visitor {
 
 	const POST_TYPE						= 'reg-man-rc-visitor';
 
-	// An access key can be used to identify a visitor for things like getting their events feed
-	// The key is generated and stored in postmeta so that we can use it to retrieve a visitor from the db
-//	const ACCESS_KEY_META_KEY				= self::POST_TYPE . '-access-key';
-
 	// We use a side table to store personal info about the visitor include full name and email
 	const VISITOR_SIDE_TABLE_NAME		= 'reg_man_rc_visitor';
 
 	const FIRST_EVENT_KEY_META_KEY		= self::POST_TYPE . '-first-event-key';
 	const IS_JOIN_MAIL_LIST_META_KEY	= self::POST_TYPE . '-is-join-mail-list';
 
-//	const VISITOR_EMAIL_COOKIE_NAME	= 'reg-man-rc-visitor-email';
-
-//	private static $CURRENT_VISITOR_EMAIL; // The email for the current visitor
-//	private static $CURRENT_VISITOR; // The visitor object for the current visitor
-
 	private $post;
 	private $post_id;
 	private $public_name; // The name used for the visitor when shown in public places, e.g. "Dave S"
 	private $full_name; // The visitor's full name, e.g. "Dave Stokes"
 	private $email; // Optional, the visitor's email address
-//	private $access_key; // An identifier that can be used to access this visitor, e.g. to get their events feed
-//	private $has_public_profile; // A flag indicating whether this visitor has a public profile page
 	private $partially_obscured_email;
 	private $is_join_mail_list; // Set to TRUE if the visitor wants to join the mailing list for the repair cafe
 	private $first_event_key; // The key (string) for the first event attended by the visitor or NULL if the visitor's first event is not known
 //	private $age_group;
 //	private $geographic_zone;
+	private $visitor_registration_array;
+	private $event_count;
+	private $item_count;
 
 	/**
 	 * Private constructor for the class.  Users of the class must call one of the static factory methods.
@@ -108,72 +104,6 @@ class Visitor {
 		} // endif
 	} // function
 
-	/**
-	 * Get the visitor who made the current request.
-	 * The current visitor is stored in a cookie with the request.
-	 * If the cookie is not present or the visitor cannot be found based on the cookie value then NULL is returned.
-	 * @return	Visitor|NULL	The visitor making the current request or NULL if no visitor is identified in the request.
-	 */
-/*
-	public static function get_current_visitor() {
-		if ( ! isset( self::$CURRENT_VISITOR ) ) {
-			// Get the email from the cookie
-			$visitor_email = self::get_visitor_email_cookie();
-			if ( ! empty( $visitor_email ) ) {
-				// Get the visitor from the email
-				$is_login_required = self::get_is_login_required_for_email( $visitor_email );
-				if ( $is_login_required ) {
-					// If this visitor requires a login then make sure they are logged in
-					if ( is_user_logged_in() ) {
-						$user = wp_get_current_user();
-						$user_email = $user->user_email;
-						if ( $user_email == $visitor_email ) {
-							self::$CURRENT_VISITOR = self::get_visitor_by_email( $visitor_email );
-						} // endif
-					} // endif
-				} else {
-					// If no login is required then just return the visitor based on their email
-					self::$CURRENT_VISITOR = self::get_visitor_by_email( $visitor_email );
-				} // endif
-			} // endif
-		} // endif
-		return self::$CURRENT_VISITOR;
-	} // function
-*/
-
-	/**
-	 * Get the email address for the visitor who made the current request
-	 * @return	string		The email address for the visitor viewing this page
-	 */
-/*
-	public static function get_visitor_email_cookie() {
-		if ( ! isset( self::$CURRENT_VISITOR_EMAIL ) ) {
-			self::$CURRENT_VISITOR_EMAIL = Cookie::get_cookie( self::VISITOR_EMAIL_COOKIE_NAME );
-			if ( empty( self::$CURRENT_VISITOR_EMAIL ) ) {
-				// If there is no cookie stored then check if there is a user logged in
-				$user = wp_get_current_user();
-				if ( isset( $user ) && ( $user->ID !== 0 ) && ! empty( $user->user_email ) ) {
-					self::$CURRENT_VISITOR_EMAIL = $user->user_email;
-					self::set_visitor_email_cookie( $user->user_email );
-				} // endif
-			} // endif
-		} // endif
-		return self::$CURRENT_VISITOR_EMAIL;
-	} // function
-
-	public static function set_visitor_email_cookie( $email, $is_remember_me = FALSE ) {
-		if ( empty( $email ) ) {
-			// This means we need to remove the current visitor
-			$result = Cookie::remove_cookie( self::VISITOR_EMAIL_COOKIE_NAME );
-		} else {
-			$name = self::VISITOR_EMAIL_COOKIE_NAME;
-			$value = $email;
-			$expires = $is_remember_me ? YEAR_IN_SECONDS : 0;
-			$result = Cookie::set_cookie( $name, $value, $expires );
-		} // endif
-		return $result;
-	} // function
-*/
 
 	/**
 	 * Get all visitors
@@ -280,47 +210,6 @@ class Visitor {
 
 	} // function
 
-
-	/**
-	 * Get the visitor whose access key is the one specified.
-	 *
-	 * @param	int|string	$access_key		The access key of the visitor who acts as proxy
-	 * @return	Visitor	The visitors whose access key was specified
-	 */
-/*
-	private static function get_visitor_by_access_key( $access_key ) {
-		$result = array();
-		$statuses = self::get_visible_statuses();
-		if ( ! in_array( 'private', $statuses ) ) {
-			// A visitor may use their access key to access their own record which may be private and not public
-			// We need to be able to access that private record in this case and not restrict access to only public
-			$statuses[] = 'private';
-		} // function
-		$args = array(
-				'post_type'				=> self::POST_TYPE,
-				'post_status'			=> $statuses,
-				'posts_per_page'		=> -1, // get all
-				'ignore_sticky_posts'	=> 1, // TRUE here means do not move sticky posts to the start of the result set
-				'meta_query'			=> array(
-							array(
-									'key'		=> self::ACCESS_KEY_META_KEY,
-									'value'		=> $access_key,
-									'compare'	=> '=',
-							)
-				)
-		);
-		$query = new \WP_Query( $args );
-		$posts = $query->posts;
-		if ( is_array( $posts ) && isset( $posts[ 0 ] ) ) {
-			$result = self::instantiate_from_post( $posts[ 0 ] );
-		} // endif
-		wp_reset_postdata(); // Required after using WP_Query()
-		return $result;
-
-	} // function
-*/
-
-
 	/**
 	 * Get an array of post statuses that indicates what is visible to the current user.
 	 * @param boolean	$is_look_in_trash	A flag set to TRUE if posts in trash should be visible.
@@ -380,7 +269,7 @@ class Visitor {
 	 * @return	boolean		TRUE if the update was successful, FALSE otherwise
 	 * @since	v0.1.0
 	 */
- 	public static function update_visitor( $id,  $full_name, $email ) {
+ 	public static function update_visitor( $id, $full_name, $email ) {
 		global $wpdb;
 		$table = $wpdb->prefix . self::VISITOR_SIDE_TABLE_NAME;
 		$vals = array(
@@ -512,16 +401,14 @@ class Visitor {
 
 			$name_len = strlen( $name );
 			if ( $name_len == 0 ) {
-			    $masked_name = '';
+				$masked_name = '';
 			} elseif ( $name_len == 1 ) {
-			    $masked_name = '*';
+				$masked_name = '*';
 			} elseif ( $name_len == 2 ) {
-			    $masked_name = substr( $name, 0, 1 ) . '*';
+				$masked_name = substr( $name, 0, 1 ) . '*';
 			} else {
-	//		    $len  = ceil( $name_len / 2 ) - 1;
-	//		    $masked_name = substr( $name, 0, $len ) . str_repeat( '*', $name_len - $len - 1 ) . substr( $name, $name_len - 1, 1 );
 				$len  = floor( $name_len / 2 );
-			    $masked_name = substr( $name, 0, $len ) . str_repeat( '*', $name_len - $len ) . substr( $name, $name_len, 1 );
+				$masked_name = substr( $name, 0, $len ) . str_repeat( '*', $name_len - $len ) . substr( $name, $name_len, 1 );
 			} // endif
 
 			$result =  $masked_name . $domain;
@@ -598,46 +485,6 @@ class Visitor {
 
 
 	/**
-	 * Get the access key for the visitor
-	 * @return	string		The access key for this visitor.
-	 * The access key uniquely identifies a visitor in a way that is hard to guess and does not openly expose
-	 *  the visitor's email address.
-	 * @since	v0.1.0
-	 */
-/*
-	public function get_access_key() {
-		if ( ! isset( $this->access_key ) ) {
-			$val = get_post_meta( $this->get_post_id(), self::ACCESS_KEY_META_KEY, $single = TRUE );
-			if ( ( $val !== FALSE ) && ( $val !== NULL ) && ( $val !== '' ) ) {
-				$this->access_key = $val;
-			} else {
-				$this->access_key = wp_generate_uuid4();
-				update_post_meta( $this->get_post_id(), self::ACCESS_KEY_META_KEY, $this->access_key );
-			} // endif
-		} // endif
-		return $this->access_key;
-	} // function
-*/
-
-	/**
-	 * Get a flag indicating whether the visitor with the specified email address requires a login with password
-	 *  to access the visitor area.
-	 * The result is TRUE when there is a WP user with the same email address otherwise FALSE.
-	 * Note that this is not an instance method because the visitor's email is not always available inside the instance,
-	 *  for example when there is not logged in user or the user does not have sufficient admin authority.
-	 * @param	string	$email	The email address of the visitor to be checked
-	 * @return	boolean			A flag set to TRUE when the visitor must provide a password to acces the visitor area, FALSE otherwise
-	 * @since	v0.1.0
-	 */
-/*
-	public static function get_is_login_required_for_email( $email ) {
-		$wp_user = ! empty( $email ) ? get_user_by( 'email', $email ) : FALSE;
-		$result = ! empty( $wp_user );
-		return $result;
-	} // function
-*/
-
-	/**
 	 * Set the visitor's full name and email address, if supplied
 	 * @param	string|int	$id			The post ID for the visitor record
 	 * @param	string		$full_name	The visitor's full_name if it is known, NULL otherwise
@@ -707,7 +554,50 @@ class Visitor {
 
 		return $result;
 	} // function
+	
+	/**
+	 * Get the array of registrations for this visitor
+	 * @return	Visitor_Registration_Descriptor[]
+	 */
+	private function get_visitor_registration_array() {
+		if ( ! isset( $this->visitor_registration_array ) ) {
+			$this->visitor_registration_array = Visitor_Registration_Descriptor_Factory::get_visitor_registrations_for_visitor( $this );
+		} // endif
+		return $this->visitor_registration_array;
+	} // function
+	
+	/**
+	 * Get a count of events this visitor has attended
+	 * @return int
+	 */
+	public function get_event_count() {
+		if ( ! isset( $this->event_count ) ) {
+			$reg_array = $this->get_visitor_registration_array();
+			$this->event_count = is_array( $reg_array ) ? count( $reg_array ) : 0;
+		} // endif
+		return $this->event_count;
+	} // function
 
+	/**
+	 * Get a count of items this visitor has registered
+	 * @return int
+	 */
+	public function get_item_count() {
+		if ( ! isset( $this->item_count ) ) {
+			$this->item_count = 0;
+			$reg_array = $this->get_visitor_registration_array();
+			if ( is_array( $reg_array ) ) {
+				foreach( $reg_array as $visitor_reg ) {
+					$curr_item_count = $visitor_reg->get_item_count();
+					if ( isset( $curr_item_count ) ) {
+						$this->item_count += $curr_item_count;
+					} // endif
+				} // endfor
+			} // endif
+		} // endif
+		return $this->item_count;
+	} // function
+	
 	/**
 	 *  Register the Visitor custom post type during plugin init.
 	 *
@@ -752,8 +642,9 @@ class Visitor {
 				'exclude_from_search'	=> TRUE, // exclude from regular search results?
 				'publicly_queryable'	=> FALSE, // is it queryable? e.g. ?post_type=item
 				'show_ui'				=> TRUE, // is there a default UI for managing these in wp-admin?
-				'show_in_rest'			=> TRUE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
-				'show_in_nav_menus'		=> TRUE, // available for selection in navigation menus?
+				// There is no reason to allow these to be accessible via REST
+				'show_in_rest'			=> FALSE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
+				'show_in_nav_menus'		=> FALSE, // available for selection in navigation menus?
 				'show_in_menu'			=> Admin_Menu_Page::get_CPT_show_in_menu( $capability_plural ), // Where to show in admin menu? The main menu page will determine this
 				'show_in_admin_bar'		=> FALSE, // Whether to include this post type in the admin bar
 				'menu_position'			=> 5, // Menu order position.  5 is below Posts

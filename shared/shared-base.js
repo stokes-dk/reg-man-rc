@@ -145,7 +145,79 @@ jQuery(document).ready(function($) {
 		} // endif
 		public_name_input.val( pub_name );
 	});
+
+	/* Popup editable */	
+	$( 'body' ).on( 'init-popup-editable', '.reg-man-rc-popup-editable-container', function( evt ) {
+		var me = $( this );
+		var editable = me.find( '.reg-man-rc-popup-editable' );
+		var editor_form = me.find( '.reg-man-rc-popup-editor-form' );
+		var tooltipster_args = {
+				interactive		: true,
+				position		: 'top',
+				theme			: 'tooltipster-shadow',
+				trigger			: 'click',
+		};
+		editor_form.data( 'editable', editable ); // We need this in the form so it can signal events to us
+		tooltipster_args.content = editor_form;
+		editable.tooltipster( tooltipster_args );
+	});
 	
+	$( '.reg-man-rc-popup-editable-container' ).trigger( 'init-popup-editable' );
+	
+	$( 'body' ).on( 'input', '.reg-man-rc-popup-editor-form', function( evt ) {
+		var me = $( this ); // the input that was changed
+		var editable = me.data( 'editable' );
+		var method = me.attr( 'method' );
+		var settings = {
+				url		: me.attr( 'action' ),
+				type	: method,
+		};
+		settings.data = { action : me.data( 'ajax-action' ) };
+		settings.data.formData = me.serialize();
+		editable.trigger( 'edit-submit-start' );
+
+		$.ajax(
+			settings
+			).done( function( response, textStatus, jqXHR ) {
+				editable.trigger( 'edit-submit-response-returned', [ response, jqXHR, textStatus ] );
+//				console.log( response );
+			}).fail( function( jqXHR, textStatus, error ) {
+				editable.trigger( 'edit-submit-fail', [ jqXHR, textStatus, error ] );
+				console.log( 'Editable form submit failed, text status: ' + textStatus + ', error: ' + error );
+			}).always( function( ) {
+				editable.trigger( 'edit-submit-end' );
+		});
+	});
+	
+	$( 'body' ).on( 'edit-submit-start', '.reg-man-rc-popup-editable', function( evt ) {
+		var me = $( this );
+		me.tooltipster( 'close' );
+		me.addClass( 'editable-busy' );
+		me.text( __( 'updating...', 'reg-man-rc' ) );
+	});
+
+	$( 'body' ).on( 'edit-submit-end', '.reg-man-rc-popup-editable', function( evt ) {
+		var me = $( this );
+		me.removeClass( 'editable-busy' );
+	});
+
+	$( 'body' ).on( 'edit-submit-response-returned', '.reg-man-rc-popup-editable', function( evt, response, jqXHR, textStatus ) {
+		var me = $( this );
+		// Wordpress (on the front end) will filter and replace html chars like '-' and replace with '&#8211;'
+		// In order to change them back to regular characters I need to create a textarea
+		//	insert the data into it then ask for the text back
+		response = $('<textarea />').html( response ).text();
+		if ( response.length === 0 ) response = '{}';
+		var text = JSON.parse( response );
+		me.text( text );
+	});
+
+	$( 'body' ).on( 'edit-submit-failed', '.reg-man-rc-popup-editable', function( evt, jqXHR, textStatus, error ) {
+		var me = $( this );
+		me.text( __( '[ error ]', 'reg-man-rc' ) );
+	});
+
+	/* Show any initially hidden elements */
 	$('.initially-hidden').removeClass( 'initially-hidden' );
 
 });

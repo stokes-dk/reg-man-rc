@@ -4,6 +4,10 @@ namespace Reg_Man_RC\View\Admin;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Model\Visitor;
 use Reg_Man_RC\View\Form_Input_List;
+use Reg_Man_RC\Model\Calendar;
+use Reg_Man_RC\View\Event_View;
+use Reg_Man_RC\Model\Event;
+use Reg_Man_RC\Model\Stats\Visitor_Registration_Descriptor_Factory;
 
 /**
  * The administrative view for Visitor
@@ -64,8 +68,9 @@ class Visitor_Admin_View {
 					Visitor::POST_TYPE, 										// Post type for this meta box
 					'side', 													// Meta box position
 					'high'														// Meta box priority
-		    );
-/*
+			);
+
+/* FIXME - This is copied from Volunteer.  Visitors cannot be public, right?
 			add_meta_box(
 					'custom-metabox-visitor-is-public',						// Unique ID for the element
 					__( 'Public Profile', 'reg-man-rc' ),						// Box title
@@ -73,19 +78,18 @@ class Visitor_Admin_View {
 					Visitor::POST_TYPE, 										// Post type for this meta box
 					'side',														// Meta box position
 					'high'														// Meta box priority
-	        );
+			);
 */
 
-/* FIXME - is this useful? It shows a table with all the events for this visitor
 			add_meta_box(
-					'custom-metabox-visitor-reg-list',						// Unique ID for the element
+					'custom-metabox-visitor-reg-list',							// Unique ID for the element
 					__( 'Event Registrations', 'reg-man-rc' ),					// Box title
-					array( __CLASS__, 'render_visitor_reg_list_meta_box' ),	// Content callback, must be of type callable
+					array( __CLASS__, 'render_visitor_reg_list_meta_box' ),		// Content callback, must be of type callable
 					Visitor::POST_TYPE, 										// Post type for this meta box
 					'normal', 													// Meta box position
 					'default'													// Meta box priority
 			);
-*/
+
 		} // endif
 	} // function
 
@@ -128,16 +132,15 @@ class Visitor_Admin_View {
 	 * @return	void
 	 * @since 	v0.1.0
 	 */
-/*
 	public static function render_visitor_reg_list_meta_box( $post ) {
 		$visitor = Visitor::get_visitor_by_id( $post->ID );
 		if ( isset( $visitor ) ) {
-			$reg_array = $visitor->get_registration_descriptors();
+			$reg_array = Visitor_Registration_Descriptor_Factory::get_visitor_registrations_for_visitor( $visitor );
 			$list_view = Visitor_Registration_List_View::create( $reg_array );
 			$list_view->render();
 		} // endif
 	} // function
-*/
+
 	/**
 	 * Render the details metabox for the visitor
 	 * @param	\WP_Post	$post
@@ -169,6 +172,33 @@ class Visitor_Admin_View {
 			$val = isset( $visitor ) ? $visitor->get_email() : '';
 			$input_list->add_email_input( $label, $input_name, $val );
 
+			$label = __( 'Join Mailing List?', 'reg-man-rc' );
+			$input_name = 'visitor_join_mail_list';
+			$val = isset( $visitor ) ? $visitor->get_email() : '';
+			$options = array( __( 'Yes', 'reg-man-rc' ) => 1, __( 'No', 'reg-man-rc' ) => 0 );
+			$selected = isset( $visitor ) && $visitor->get_is_join_mail_list() ? 1 : 0;
+			$hint = NULL;
+			$classes = NULL;
+			$is_required = TRUE;
+			$custom_label = NULL;
+			$custom_value = NULL;
+			$is_compact = TRUE;
+			$input_list->add_radio_group( $label, $input_name, $options, $selected, $hint, $classes, $is_required, $custom_label, $custom_value, $is_compact );
+			
+			$label = __( 'First Event Attended', 'reg-man-rc' );
+			$input_name = 'visitor_first_event_key';
+			$selected_key = isset( $visitor ) ? $visitor->get_first_event_key() : NULL;
+			ob_start();
+				$classes = '';
+				$calendar = Calendar::get_admin_calendar();
+				$name = esc_html( __( '-- Please select --', 'reg-man-rc' ) );
+				$selected = ( empty( $selected_key ) ) ? 'selected="selected"' : '';
+				$first_option = "<option value=\"\" disabled=\"disabled\" $selected>$name</option>";
+				$is_required = TRUE;
+				Event_View::render_event_select( $input_name, $classes, $calendar, $selected_key, $first_option, $is_required );
+			$input_html = ob_get_clean();
+			$input_list->add_custom_html_input( $label, $input_name, $input_html );
+			
 		$input_list->render();
 
 	} // function
@@ -241,15 +271,17 @@ class Visitor_Admin_View {
 	public static function filter_admin_UI_columns( $columns ) {
 		$result = array(
 			'cb'						=> $columns[ 'cb' ],
-			'title'						=> __( 'Public Name',				'reg-man-rc' ),
-//			'is_public'					=> __( 'Public Profile',			'reg-man-rc' ),
-			'full_name'					=> __( 'Full Name',					'reg-man-rc' ),
-			'email'						=> __( 'Email',						'reg-man-rc' ),
-//			'access_key'				=> __( 'Key',						'reg-man-rc' ),
-//			'reg_count'					=> __( 'Events',					'reg-man-rc' ),
-			'is_join_mail_list'			=> __( 'Join Mailing List?',		'reg-man-rc' ),
-			'date'						=> __( 'Last Update',				'reg-man-rc' ),
-			'author'					=> __( 'Author',					'reg-man-rc' ),
+			'title'						=> __( 'Public Name',			'reg-man-rc' ),
+//			'is_public'					=> __( 'Public Profile',		'reg-man-rc' ),
+			'full_name'					=> __( 'Full Name',				'reg-man-rc' ),
+			'email'						=> __( 'Email',					'reg-man-rc' ),
+//			'reg_count'					=> __( 'Events',				'reg-man-rc' ),
+			'is_join_mail_list'			=> __( 'Join Mailing List?',	'reg-man-rc' ),
+			'first_event'				=> __( 'First Event',			'reg-man-rc' ),
+			'event_count'				=> __( 'Events',				'reg-man-rc' ),
+			'item_count'				=> __( 'Items',					'reg-man-rc' ),
+			'date'						=> __( 'Last Update',			'reg-man-rc' ),
+			'author'					=> __( 'Author',				'reg-man-rc' ),
 		);
 		return $result;
 	} // function
@@ -294,11 +326,6 @@ class Visitor_Admin_View {
 					break;
 
 /*
-				case 'access_key':
-					$access_key = $visitor->get_access_key();
-					$result = ! empty( $access_key ) ? esc_html( $access_key ) : $em_dash;
-					break;
-
 				case 'reg_count':
 					$reg_array = $visitor->get_registration_descriptors();
 					$result = ! empty( $reg_array ) ? esc_html( count( $reg_array ) ) : $em_dash;
@@ -309,6 +336,20 @@ class Visitor_Admin_View {
 					$result = $is_join ? __( 'Yes', 'reg-man-rc' ) : $em_dash;
 					break;
 
+				case 'first_event':
+					$first_event_key = $visitor->get_first_event_key();
+					$event = isset( $first_event_key ) ? Event::get_event_by_key( $first_event_key ) : NULL;
+					$result = isset( $event ) ? $event->get_label() : $em_dash;
+					break;
+					
+				case 'event_count':
+					$result = $visitor->get_event_count();
+					break;
+					
+				case 'item_count':
+					$result = $visitor->get_item_count();
+					break;
+					
 				default:
 					$result = $em_dash;
 					break;

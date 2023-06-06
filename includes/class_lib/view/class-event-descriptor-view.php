@@ -5,7 +5,6 @@ use Reg_Man_RC\Model\Event_Descriptor;
 use Reg_Man_RC\Model\Event_Status;
 use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Internal_Event_Descriptor;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Event_Key;
 use Reg_Man_RC\View\Object_View\Map_Section;
 use Reg_Man_RC\View\Object_View\List_Section;
@@ -13,6 +12,8 @@ use Reg_Man_RC\View\Object_View\Abstract_Object_View;
 use Reg_Man_RC\View\Object_View\Event_Descriptor_Item_Provider;
 use Reg_Man_RC\View\Object_View\List_Item;
 use Reg_Man_RC\View\Object_View\Object_View;
+use Reg_Man_RC\View\Object_View\Object_View_Section;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * An instance of this class provides rendering for an Internal_Event_Descriptor object.
@@ -27,9 +28,6 @@ class Event_Descriptor_View extends Abstract_Object_View {
 
 	private $event_descriptor;
 	private $item_provider;
-
-//	private $range_min_date_time; // When showing event dates this will be the earliest date shown
-//	private $range_max_date_time; // When showing event dates this will be the latest date shown
 
 	/**
 	 * A protected constructor forces users to use one of the factory methods
@@ -61,6 +59,7 @@ class Event_Descriptor_View extends Abstract_Object_View {
 	public static function create_for_map_info_window( $event_descriptor, $map_type ) {
 		$result = new self();
 		$result->event_descriptor = $event_descriptor;
+		$result->set_title( $event_descriptor->get_event_summary() );
 		$result->set_info_window_map_type( $map_type );
 		return $result;
 	} // function
@@ -73,6 +72,17 @@ class Event_Descriptor_View extends Abstract_Object_View {
 		return $this->event_descriptor;
 	} // funciton
 
+	/**
+	 * Set the array of events to be included in this view, for example when showing a calendar map info window
+	 * @param	Event[]
+	 * @since	v0.4.0
+	 */
+	public function set_events_array( $events_array ) {
+		$item_provider = $this->get_item_provider();
+		$item_provider->set_events_array( $events_array );
+	} // function
+
+	
 	/**
 	 * Get the event descriptor item provider for this view
 	 * @return Event_Descriptor_Item_Provider
@@ -146,10 +156,12 @@ class Event_Descriptor_View extends Abstract_Object_View {
 					List_Item::VENUE_DESCRIPTION,
 			);
 		} elseif( $this->get_is_map_info_window() ) {
+			
 			// We are rendering the info window for a map
 			$result = $this->get_details_item_names_array_for_map();
 
 		} else {
+			
 			// We are rendering the info window on a calendar
 			$result = array(); // you can't show an event descriptor on a calendar - there's no date!
 
@@ -165,19 +177,20 @@ class Event_Descriptor_View extends Abstract_Object_View {
 		switch( $map_type ) {
 
 			case Map_View::MAP_TYPE_OBJECT_PAGE:
-				// We're showing an info window on the object's page
+			default:
+				// We're showing an info window on a map in the object's page
 				$result = array(
 						List_Item::EVENT_CATEGORIES,
 						List_Item::LOCATION_NAME,
 						List_Item::LOCATION_ADDRESS,
-						List_Item::GET_DIRECTIONS_LINK,
 				);
 				break;
 
-			default:
+			case Map_View::MAP_TYPE_CALENDAR_EVENTS:
+				// We're showing an info window on a map in a public calendar
 				$result = array(
 						List_Item::EVENT_CATEGORIES,
-						List_Item::EVENT_UPCOMING_DATES,
+						List_item::EVENT_DATE,
 						List_Item::LOCATION_NAME,
 						List_Item::LOCATION_ADDRESS,
 						List_Item::GET_DIRECTIONS_LINK,
@@ -186,6 +199,52 @@ class Event_Descriptor_View extends Abstract_Object_View {
 				);
 				break;
 
+			case Map_View::MAP_TYPE_ADMIN_STATS:
+				// We're showing an info window on a map the stats page
+				$result = array(
+						List_Item::EVENT_CATEGORIES,
+						List_item::EVENT_DATE,
+						List_Item::LOCATION_NAME,
+						List_Item::LOCATION_ADDRESS,
+				);
+				break;
+
+			case Map_View::MAP_TYPE_CALENDAR_VISITOR_REG:
+				// We're showing an info window on a map in visitor registration calendar
+				$result = array(
+						List_Item::EVENT_CATEGORIES,
+						List_Item::EVENT_DATE,
+						List_Item::LOCATION_NAME,
+						List_Item::LOCATION_ADDRESS,
+						List_Item::EVENT_FIXER_STATIONS,
+				);
+				break;
+
+			case Map_View::MAP_TYPE_CALENDAR_VOLUNTEER_REG:
+				// We're showing an info window on a map in visitor registration calendar
+				$result = array(
+						List_Item::EVENT_CATEGORIES,
+						List_Item::EVENT_DATE,
+						List_Item::LOCATION_NAME,
+						List_Item::LOCATION_ADDRESS,
+						List_Item::EVENT_FIXER_STATIONS,
+				);
+				break;
+
+			case Map_View::MAP_TYPE_CALENDAR_ADMIN:
+				// We're showing an info window on the dashboard calendar map
+				$result = array(
+						List_Item::EVENT_CATEGORIES,
+						List_Item::EVENT_DATE,
+						List_Item::LOCATION_NAME,
+						List_Item::LOCATION_ADDRESS,
+						List_Item::EVENT_FIXER_STATIONS,
+						List_Item::ADMIN_EVENT_EDIT_LINK,
+						List_Item::ADMIN_EVENT_MORE_DETAILS_LINK,
+				);
+				break;
+
+				
 		} // endswitch
 
 		return $result;
@@ -451,11 +510,9 @@ class Event_Descriptor_View extends Abstract_Object_View {
 				} // endif
 
 				if ( isset( $date_label ) ) {
-					if ( count( $event_array ) > 1 ) {
-						/* Translators: %s is the date and time of the first event for a repeating event */
-						$format = __( '%s (and other dates)', 'reg-man-rc' );
-						$date_label = sprintf( $format, $date_label );
-					} // endif
+					/* Translators: %s is the date and time of the first event for a repeating event */
+					$format = __( '%s (and other dates)', 'reg-man-rc' );
+					$date_label = sprintf( $format, $date_label );
 					echo '<p>' . $date_label . '</p>';
 				} // endif
 			} // endif

@@ -42,15 +42,15 @@ class Internal_Event_Descriptor_Controller {
 
 	} // function
 
-    /**
-     * Filters the WHERE clause in the SQL for a next or previous post query.
-     *
-     * @since v0.1.0
-     *
-     * @param string	$where			The JOIN clause in the SQL.
-     * @param \WP_Post	$post			WP_Post object.
-     * @param bool		$is_next		Whether the link is for the next post or the previous one, TRUE for next.
-     */
+	/**
+	 * Filters the WHERE clause in the SQL for a next or previous post query.
+	 *
+	 * @since v0.1.0
+	 *
+	 * @param string	$where			The JOIN clause in the SQL.
+	 * @param \WP_Post	$post			WP_Post object.
+	 * @param bool		$is_next		Whether the link is for the next post or the previous one, TRUE for next.
+	 */
 	private static function modify_where_for_next_previous_links( $where, $post, $is_next ) {
 		global $wpdb;
 		$result = $where; // we'll return the original value by default
@@ -229,7 +229,7 @@ class Internal_Event_Descriptor_Controller {
 		if ( ! empty( $date_filter ) && is_string( $date_filter ) && ( strlen( $date_filter ) == 6 ) ) {
 			// The date filter values are 4-digit year and 2-digit month like this: "202108" for August 2021.
 			$year = substr( $date_filter, 0, 4 );
-            $month = substr( $date_filter, 4, 2 );
+			$month = substr( $date_filter, 4, 2 );
 			$new_wheres[] = "start_date_meta.meta_value LIKE '$year-$month-%'";
 			// NOTE that I also need to remove the 'm' setting in our pre_get_posts method so that WP does not filter by post date
 		} // endif
@@ -437,7 +437,7 @@ class Internal_Event_Descriptor_Controller {
 					remove_action( 'save_post_' . Internal_Event_Descriptor::POST_TYPE, array( __CLASS__, 'handle_post_save' ) );
 					// Set the post status to draft since it doesn't have a valid item type
 					$post_data = array(
-						'ID'          => $post_id,
+						'ID'		  => $post_id,
 						'post_status' => 'draft',
 					);
 					wp_update_post( $post_data );

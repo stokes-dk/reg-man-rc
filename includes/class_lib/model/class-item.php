@@ -20,7 +20,7 @@ class Item implements Item_Descriptor {
 	const VISITOR_META_KEY			= self::POST_TYPE . '-visitor';
 	const STATUS_META_KEY			= self::POST_TYPE . '-status';
 	const PRE_REG_META_KEY			= self::POST_TYPE . '-is-pre-registered';
-
+	
 	// FIXME - we need support for appointment times
 
 	private $post;
@@ -47,7 +47,8 @@ class Item implements Item_Descriptor {
 	private $fixer_station_name; // The name of this item's fixer station, like 'Appliances & Housewares'
 	private $fixer_station; // The fixer station this item has been assigned to
 	private $status_name; // The item's status as a string
-	private $status; // The Item_Status object for the item's status, e.g. fixed, repairable etc.
+	private $status; // The Item_Status object for the item's status, e.g. registered, fixed, repairable etc.
+	private $is_repair_outcome_reported; // TRUE when the item's repair outcome has been reported, FALSE otherwise
 	private $item_priority; // A relative priority of this item vs others the same visitor brought,
 		// e.g. A visitor may want to have their radio fixed first and jeans fixed second
 		// The default priority of items is simply the order they were registered but the visitor may
@@ -508,22 +509,9 @@ class Item implements Item_Descriptor {
 			// If the new station id is NULL then that means to unset or remove the fixer station
 			wp_delete_object_term_relationships( $item_id, Fixer_Station::TAXONOMY_NAME );
 		} else {
-/*
-			// If we are setting the fixer station to the default for this type then we will actually remove
-			//  the fixer station setting for this item and let the item acquire the station by the item type's default
-			$item_type = $this->get_item_type();
-			$default_station = isset( $item_type ) ? $item_type->get_fixer_station() : NULL;
-			$default_id = isset( $default_station ) ? $default_station->get_id() : NULL;
-			if ( $fixer_station_id == $default_id ) {
-				// If the new station id equals the default for the item type then we'll unset or remove the fixer station
-				wp_delete_object_term_relationships( $item_id, Fixer_Station::TAXONOMY_NAME );
-			} else {
-				// Otherwise we are assigning a specific station for this item other than the default for this type
-*/
-				$fixer_station_id = intval( $fixer_station_id );
-				$terms_array = array ( $fixer_station_id );
-				wp_set_post_terms( $item_id, $terms_array, Fixer_Station::TAXONOMY_NAME );
-//			} // endif
+			$fixer_station_id = intval( $fixer_station_id );
+			$terms_array = array ( $fixer_station_id );
+			wp_set_post_terms( $item_id, $terms_array, Fixer_Station::TAXONOMY_NAME );
 		} // endif
 		$this->fixer_station = NULL; // reset my internal var so it can be re-acquired
 		$this->fixer_station_name = NULL; // reset my internal var so it can be re-acquired
@@ -562,6 +550,14 @@ class Item implements Item_Descriptor {
 			} // endif
 		} // endif
 		return $this->status;
+	} // function
+	
+	public function get_is_repair_outcome_reported() {
+		if ( ! isset( $this->is_repair_outcome_reported ) ) {
+			$status = $this->get_status();
+			$this->is_repair_outcome_reported = $status->get_is_repair_outcome_status();
+		} // endif
+		return $this->is_repair_outcome_reported;
 	} // function
 
 	/**
@@ -620,10 +616,7 @@ class Item implements Item_Descriptor {
 		);
 
 		$icon = 'dashicons-clipboard';
-		$supports = array( 'title', 'editor', 'thumbnail' );
-		if ( Settings::get_is_allow_item_comments() ) {
-			$supports[] = 'comments';
-		} // endif
+		$supports = array( 'title', 'editor', 'thumbnail', 'comments' );
 		$capability_singular = User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_SINGULAR;
 		$capability_plural = User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
 		$args = array(
@@ -633,6 +626,7 @@ class Item implements Item_Descriptor {
 				'exclude_from_search'	=> FALSE, // exclude from regular search results?
 				'publicly_queryable'	=> TRUE, // is it queryable? e.g. ?post_type=item
 				'show_ui'				=> TRUE, // is there a default UI for managing these in wp-admin?
+				// There is no reason to make these available in REST or to use Block editor
 				'show_in_rest'			=> FALSE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
 				'show_in_nav_menus'		=> FALSE, // available for selection in navigation menus?
 				'show_in_menu'			=> Admin_Menu_Page::get_CPT_show_in_menu( $capability_plural ), // Where to show in admin menu? The main menu page will determine this

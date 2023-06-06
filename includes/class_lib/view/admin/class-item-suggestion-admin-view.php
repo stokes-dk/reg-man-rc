@@ -5,7 +5,6 @@ use Reg_Man_RC\Model\Item_Suggestion;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\View\Form_Input_List;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Control\Admin\Item_Suggestion_Admin_Controller;
@@ -349,7 +348,7 @@ class Item_Suggestion_Admin_View {
 					Item_Suggestion::POST_TYPE, 			// Post type for this meta box
 					'normal',								// Meta box position
 					'high'									// Meta box priority
-	        );
+			);
 
 			// Fixer Station
 			$view = Fixer_Station_Admin_View::create();
@@ -362,7 +361,7 @@ class Item_Suggestion_Admin_View {
 					Item_Suggestion::POST_TYPE, 			// Post type for this meta box
 					'side',									// Meta box position
 					'high'									// Meta box priority
-	        );
+			);
 
 			// Item Type
 			$view = Item_Type_Admin_View::create();
@@ -375,7 +374,7 @@ class Item_Suggestion_Admin_View {
 					Item_Suggestion::POST_TYPE, 			// Post type for this meta box
 					'side',									// Meta box position
 					'high'									// Meta box priority
-	        );
+			);
 
 		} // endif
 	} // function
@@ -577,12 +576,12 @@ class Item_Suggestion_Admin_View {
 //					'option_none_value'	=> -1,
 					'class'				=> 'reg-man-rc-filter postform',
 					'taxonomy'			=> $tax_name,
-		            'name'				=> $tax_name,
-		            'orderby'			=> 'count',
+					'name'				=> $tax_name,
+					'orderby'			=> 'count',
 					'order'				=> 'DESC',
-		            'value_field'		=> 'slug',
-		            'selected'			=> $curr_id,
-		            'hierarchical'		=> $taxonomy->hierarchical,
+					'value_field'		=> 'slug',
+					'selected'			=> $curr_id,
+					'hierarchical'		=> $taxonomy->hierarchical,
 					'show_count'		=> FALSE,
 					'hide_if_empty'		=> TRUE,
 				) );

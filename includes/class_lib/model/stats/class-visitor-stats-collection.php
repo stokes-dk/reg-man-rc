@@ -1,18 +1,18 @@
 <?php
 namespace Reg_Man_RC\Model\Stats;
 
-use Reg_Man_RC\Model\Visitor;
 use Reg_Man_RC\Model\Item;
 use Reg_Man_RC\Model\Event_Key;
+use Reg_Man_RC\Model\Visitor;
 use Reg_Man_RC\Model\Error_Log;
 
 /**
- * An instance of this class represents stats about how many visitors attended events.
+ * An instance of this class provides sets of Visitor_Stats objects based on a set of event keys.
  *
  * @since	v0.1.0
  *
  */
-class Visitor_Statistics {
+class Visitor_Stats_Collection {
 
 	const GROUP_BY_EVENT		= 'event'; // group by event
 	const GROUP_BY_TOTAL		= 'total'; // group all visitors together so we can count the totals
@@ -22,10 +22,10 @@ class Visitor_Statistics {
 
 	private $event_count;
 
-	private $total_stats_array;
+	private $all_stats_array;
 	private $internal_stats_array;
 	private $external_stats_array;
-	private $registered_stats_array;
+	private $all_registered_stats_array;
 	private $supplemental_stats_array;
 
 	private function __construct() { }
@@ -62,42 +62,42 @@ class Visitor_Statistics {
 
 	/**
 	 * Get the stats for all visitors including registered and supplemental for the specified events and grouped in the specified way
-	 * @return Visitor_Group_Stats[]	An array of instances of Visitor_Group_Stats describing the numbers of visitors.
+	 * @return Visitor_Stats[]	An array of instances of Visitor_Stats describing the numbers of visitors.
 	 */
-	public function get_total_stats_array() {
-		if ( ! isset( $this->total_stats_array ) ) {
+	public function get_all_stats_array() {
+		if ( ! isset( $this->all_stats_array ) ) {
 			// Merge the registered and supplemental stats arrays
-			$reg_stats_array = $this->get_registered_stats_array();
+			$reg_stats_array = $this->get_all_registered_stats_array();
 			$sup_stats_array = $this->get_supplemental_stats_array();
 
-			$this->total_stats_array = self::merge_stats_arrays( $reg_stats_array, $sup_stats_array );
-	// Error_Log::var_dump( $this->registered_stats_array, $this->supplemental_stats_array );
+			$this->all_stats_array = self::merge_stats_arrays( $reg_stats_array, $sup_stats_array );
+	// Error_Log::var_dump( $this->all_registered_stats_array, $this->supplemental_stats_array );
 		} // endif
-		return $this->total_stats_array;
+		return $this->all_stats_array;
 	} // function
 
 	/**
 	 * Get the visitor stats based on all registered items for the specified events and grouped in the specified way
-	 * @return Visitor_Group_Stats[]	An array of instances of Visitor_Group_Stats describing the numbers of visitors.
+	 * @return Visitor_Stats[]	An array of instances of Visitor_Stats describing the numbers of visitors.
 	 */
-	public function get_registered_stats_array() {
-		if ( ! isset( $this->registered_stats_array ) ) {
+	public function get_all_registered_stats_array() {
+		if ( ! isset( $this->all_registered_stats_array ) ) {
 
 			// Merge the internal and external stats arrays
-			$int_stats_array = $this->get_internal_stats_array();
-			$ext_stats_array = $this->get_external_stats_array();
+			$int_stats_array = $this->get_internal_registered_stats_array();
+			$ext_stats_array = $this->get_external_registered_stats_array();
 
-			$this->registered_stats_array = self::merge_stats_arrays( $int_stats_array, $ext_stats_array );
+			$this->all_registered_stats_array = self::merge_stats_arrays( $int_stats_array, $ext_stats_array );
 // Error_Log::var_dump( $this->internal_stats_array, $this->external_stats_array );
 		} // endif
 
-		return $this->registered_stats_array;
+		return $this->all_registered_stats_array;
 	} // function
 
 
 	/**
 	 * Get the supplemental stats for visitors not registered to the system
-	 * @return Visitor_Group_Stats[]
+	 * @return Visitor_Stats[]
 	 */
 	public function get_supplemental_stats_array() {
 		if ( ! isset( $this->supplemental_stats_array ) ) {
@@ -113,9 +113,9 @@ class Visitor_Statistics {
 	 *  for the specified events and grouped in the specified way.
 	 * Note that the results represent Visitor Registrations rather than individual Visitors.
 	 * If a single visitor registers items at two separate events then that counts as two Visitor Registrations.
-	 * @return Visitor_Group_Stats[]	An array of instances of Visitor_Group_Stats describing the visitors and their related data.
+	 * @return Visitor_Stats[]	An array of instances of Visitor_Stats describing the visitors and their related data.
 	 */
-	private function get_internal_stats_array() {
+	public function get_internal_registered_stats_array() {
 		if ( ! isset( $this->internal_stats_array ) ) {
 
 			$event_key_array = $this->get_event_key_array();
@@ -131,9 +131,11 @@ class Visitor_Statistics {
 
 				$posts_table = $wpdb->posts;
 				$meta_table = $wpdb->postmeta;
-				$visitor_table = $wpdb->prefix . Visitor::VISITOR_TABLE_NAME;
+				$visitor_table = $wpdb->prefix . Visitor::VISITOR_SIDE_TABLE_NAME;
 				$event_meta_key = Item::EVENT_META_KEY;
 				$visitor_meta_key = Item::VISITOR_META_KEY;
+				$is_join_meta_key = Visitor::IS_JOIN_MAIL_LIST_META_KEY;
+				$first_event_meta_key = Visitor::FIRST_EVENT_KEY_META_KEY;
 				$item_post_type = Item::POST_TYPE;
 
 				switch ( $group_by ) {
@@ -148,15 +150,17 @@ class Visitor_Statistics {
 
 				$subquery_select =
 							"event_meta.meta_value as event_key, " .
-							' CASE WHEN event_meta.meta_value = first_event_key THEN 1 ELSE 0 END AS is_first_time,' .
-							' CASE WHEN visitor.email IS NOT NULL THEN 1 ELSE 0 END AS provided_email, ' .
-							" CASE WHEN visitor.is_join_mail_list = 1 THEN 1 ELSE 0 END as join_mail_list ";
+							' CASE WHEN ( first_event_meta.meta_value IS NOT NULL AND first_event_meta.meta_value = event_meta.meta_value ) THEN 1 ELSE 0 END AS is_first_time,' .
+							' CASE WHEN ( visitor_side_table.email IS NOT NULL AND visitor_side_table.email != \'\' ) THEN 1 ELSE 0 END AS provided_email, ' .
+							" CASE WHEN ( is_join_meta.meta_value IS NOT NULL AND is_join_meta.meta_value != '' ) THEN 1 ELSE 0 END AS join_mail_list ";
 				$subquery_from =
 						" $posts_table AS p " .
 						" LEFT JOIN $meta_table AS visitor_meta ON p.ID = visitor_meta.post_id AND visitor_meta.meta_key = '$visitor_meta_key' " .
 						" LEFT JOIN $meta_table AS event_meta ON p.ID = event_meta.post_id AND event_meta.meta_key = '$event_meta_key' " .
-						" LEFT JOIN $visitor_table AS visitor ON visitor_meta.meta_value = visitor.id ";
-				$subquery_where = " ( post_type = '$item_post_type' ) ";
+						" LEFT JOIN $meta_table AS is_join_meta ON is_join_meta.post_id = visitor_meta.meta_value AND is_join_meta.meta_key = '$is_join_meta_key' " .
+						" LEFT JOIN $meta_table AS first_event_meta ON first_event_meta.post_id = visitor_meta.meta_value AND first_event_meta.meta_key = '$first_event_meta_key' " .
+						" LEFT JOIN $visitor_table AS visitor_side_table ON visitor_meta.meta_value = visitor_side_table.post_id ";
+				$subquery_where = " ( post_type = '$item_post_type' ) AND ( p.post_status = 'publish' ) ";
 
 				// Create the where clause for searching by event
 				if ( ! empty( $event_key_array ) ) {
@@ -165,7 +169,7 @@ class Visitor_Statistics {
 					$subquery_where .= " AND ( event_meta.meta_value IN ( $placeholders ) ) ";
 				} // endif
 
-				$subquery = "SELECT $subquery_select FROM $subquery_from WHERE $subquery_where GROUP BY visitor.id, event_key";
+				$subquery = "SELECT $subquery_select FROM $subquery_from WHERE $subquery_where GROUP BY visitor_side_table.post_id, event_key";
 
 				// Now create the main query using the subquer
 				$select = "$name_col AS name, count(*) AS visitor_count, " .
@@ -195,7 +199,7 @@ class Visitor_Statistics {
 						$email_count	= isset( $data[ 'provided_email_count' ] )	? $data[ 'provided_email_count' ]	: 0;
 						$join_count		= isset( $data[ 'join_mail_list_count' ] )	? $data[ 'join_mail_list_count' ]	: 0;
 						$return_count = $visitor_count - $first_count;
-						$instance = Visitor_Group_Stats::create( $name, $first_count, $return_count, $unknown_count, $email_count, $join_count );
+						$instance = Visitor_Stats::create( $name, $first_count, $return_count, $unknown_count, $email_count, $join_count );
 						$this->internal_stats_array[ $name ] = $instance;
 					} // endfor
 				} // endif
@@ -207,9 +211,9 @@ class Visitor_Statistics {
 	/**
 	 * Get the external items fixed stats (stats for items registered using an registration source other than this plugin)
 	 *  for the specified events and grouped in the specified way
-	 * @return Item_Group_Stats[]	An array of instances of Item_Group_Stats describing the items and their related data.
+	 * @return Visitor_Stats[]	An array of instances of Visitor_Stats describing the items and their related data.
 	 */
-	private function get_external_stats_array() {
+	public function get_external_registered_stats_array() {
 		if ( ! isset( $this->external_stats_array ) ) {
 			$this->external_stats_array = array();
 
@@ -236,7 +240,7 @@ class Visitor_Statistics {
 				$unknown_count	= isset( $ext_data_row[ 'unknown_count' ] )			? intval( $ext_data_row[ 'unknown_count' ] )		: 0;
 				$email_count	= isset( $ext_data_row[ 'provided_email_count' ] )	? intval( $ext_data_row[ 'provided_email_count' ] )	: 0;
 				$join_count		= isset( $ext_data_row[ 'join_mail_list_count' ] )	? intval( $ext_data_row[ 'join_mail_list_count' ] )	: 0;
-				$instance = Visitor_Group_Stats::create(
+				$instance = Visitor_Stats::create(
 						$name, $first_count, $return_count, $unknown_count, $email_count, $join_count );
 				$this->external_stats_array[ $name ] = $instance;
 			} // endfor
@@ -248,10 +252,10 @@ class Visitor_Statistics {
 
 
 	/**
-	 * Merge two arrays of Visitor_Group_Stats objects
-	 * @param	Visitor_Group_Stats[]	$array_1
-	 * @param	Visitor_Group_Stats[]	$array_2
-	 * @return	Visitor_Group_Stats[]	An array with with the two inputs merged and their values summed for overlapping keys
+	 * Merge two arrays of Visitor_Stats objects
+	 * @param	Visitor_Stats[]	$array_1
+	 * @param	Visitor_Stats[]	$array_2
+	 * @return	Visitor_Stats[]	An array with with the two inputs merged and their values summed for overlapping keys
 	 */
 	private static function merge_stats_arrays( $array_1, $array_2 ) {
 		$result = $array_1 + $array_2; // union of the two arrays bassed on keys
@@ -263,7 +267,7 @@ class Visitor_Statistics {
 				$stats_1 = $array_1[ $name ];
 				$stats_2 = $array_2[ $name ];
 				// Add the two matching rows together
-				$result[ $name ] = Visitor_Group_Stats::create(
+				$result[ $name ] = Visitor_Stats::create(
 						$name,
 						$stats_1->get_first_time_count()			+ $stats_2->get_first_time_count(),
 						$stats_1->get_returning_count()				+ $stats_2->get_returning_count(),

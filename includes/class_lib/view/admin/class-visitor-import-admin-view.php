@@ -6,8 +6,7 @@ use Reg_Man_RC\Control\Admin\Visitor_Import_Admin_Controller;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\View\Ajax_Form;
 use Reg_Man_RC\View\Form_Input_List;
-use Reg_Man_RC\Model\Event_Filter;
-use Reg_Man_RC\Model\Event;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The administrative view for Visitor importing
@@ -94,7 +93,7 @@ class Visitor_Import_Admin_View {
 				$input_list->add_information( $label, $desc );
 
 				$label = '';
-				$desc = __( 'Valid values for the "Join Mail List?" column are "yes" and "no".', 'reg-man-rc' );
+				$desc = __( 'For the "Join Mail List?" column use "true", "yes" or "1" for TRUE and "false", "no" or "0" for FALSE.', 'reg-man-rc' );
 				$input_list->add_information( $label, $desc );
 
 				$label = __( 'Visitor CSV import file', 'reg-man-rc' );
@@ -138,42 +137,6 @@ class Visitor_Import_Admin_View {
 			$form->render();
 
 	} // function
-
-
-	private static function get_event_select( $input_name ) {
-		ob_start();
-
-			$input_id = $input_name;
-
-			$event_filter = Event_Filter::create();
-			$event_filter->set_sort_order( Event_Filter::SORT_BY_DATE_DESCENDING );
-			$events = Event::get_all_events_by_filter( $event_filter );
-
-			// Disabled to start with until it is initialized on the client side
-			echo "<select required=\"required\" class=\"combobox\" name=\"$input_name\" id=\"$input_id\" autocomplete=\"off\"  disabled=\"disabled\" >";
-
-				// The empty valued selection MUST be first to make HTML5 required attribute work correctly
-				if ( empty( $selected_key ) ) {
-					$label = __( '-- Please select --', 'reg-man-rc' );
-					$html_name= esc_html( $label );
-					echo "<option value=\"\" disabled=\"disabled\">$html_name</option>";
-				} // endif
-
-				if ( ! empty( $events ) ) {
-					foreach ( $events as $event ) {
-						$key = $event->get_key();
-						$event_label = $event->get_label();
-						$html_label = esc_html( $event_label );
-						$key_attr = esc_attr( $key );
-						echo "<option value=\"$key_attr\">$html_label</option>";
-					} // endfor
-				} // endif
-
-			echo '</select>';
-		$result = ob_get_clean();
-		return $result;
-	} // function
-
 
 
 	/**

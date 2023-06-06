@@ -5,7 +5,6 @@ use Reg_Man_RC\Model\Calendar;
 use const Reg_Man_RC\PLUGIN_VERSION;
 use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Calendar_Entry;
-use Reg_Man_RC\Model\Volunteer;
 
 /**
  * The calendar controller
@@ -50,6 +49,13 @@ class Calendar_Controller {
 	} // function
 
 	public static function get_rest_namespace() {
+		// FIXME: This should maybe be a REST API version, not the PLUGIN Version ?
+		// This API should be completely contained in one server, I mean the calendar 
+		// is served by one server then then the client gets data from the same server
+		// It's not used to communicate event info to other servers
+		// The JSON data includes html markup (the info window) which requires css files from the server
+		// So maybe PLUGIN Version is actually ok here
+		// Also, this REST API provides events rather than event descriptors which I will need on the satellite server
 		return 'reg-man-rc/' . PLUGIN_VERSION;
 	} // function
 
@@ -84,14 +90,16 @@ class Calendar_Controller {
 	 */
 	public static function handle_events_feed_request( $request ) {
 
+//	$capability = 'read_private_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL;
+//	Error_Log::var_dump( get_current_user(), $capability, current_user_can( $capability ) );
+		
 		$calendar_id 				= isset( $request[ 'calendar_id' ] )			? $request[ 'calendar_id' ]			: NULL;
-		$range_start_date_string	= isset( $request[ 'start' ] )					? $request[ 'start' ]				: NULL;
-		$range_end_date_string		= isset( $request[ 'end' ] )					? $request[ 'end' ]					: NULL;
-		$show_past_events_string	= isset( $request[ 'is_show_past_events' ] )	? $request[ 'is_show_past_events' ]	: NULL;
+		$range_start_date_string	= isset( $request[ 'start' ] )					? $request[ 'start' ]				: '';
+		$range_end_date_string		= isset( $request[ 'end' ] )					? $request[ 'end' ]					: '';
+		$show_past_events_string	= isset( $request[ 'is_show_past_events' ] )	? $request[ 'is_show_past_events' ]	: 'false';
 
 //Error_Log::var_dump( $calendar_id, $range_start_date_string, $range_end_date_string, $show_past_events_string );
 		$calendar = isset( $calendar_id ) ? Calendar::get_calendar_by_id( $calendar_id ) : NULL;
-//Error_Log::var_dump( $calendar );
 
 		$is_show_past_events = ( strtolower( $show_past_events_string ) !== 'false' );
 //Error_Log::var_dump( $show_past_events_string, $is_show_past_events );
@@ -149,7 +157,7 @@ class Calendar_Controller {
 				$msg = __( 'Missing start date in events feed request.', 'reg-man-rc' );
 				Error_Log::log_msg( $msg );
 			} // endif
-			if ( ! isset( $calendar ) ) {
+			if ( ! isset( $range_end_date_string ) ) {
 				/* translators: %1$s is an invalid date value supplied for an event */
 				$msg = __( 'Missing end date in events feed request.', 'reg-man-rc' );
 				Error_Log::log_msg( $msg );

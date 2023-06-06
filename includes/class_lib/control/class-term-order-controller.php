@@ -5,8 +5,6 @@ use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Event_Category;
 use Reg_Man_RC\Model\Volunteer_Role;
 use Reg_Man_RC\Model\Fixer_Station;
-use Reg_Man_RC\Model\Error_Log;
-use Reg_Man_RC\View\Ajax_Form;
 use Reg_Man_RC\Model\Ajax_Form_Response;
 
 /**

@@ -2,10 +2,10 @@
 namespace Reg_Man_RC\Control\Admin;
 
 use Reg_Man_RC\Model\Visitor;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Ajax_Form_Response;
 use Reg_Man_RC\View\Admin\Visitor_Import_Admin_View;
 use Reg_Man_RC\Model\Event;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The administrative controller for importing Visitors
@@ -19,8 +19,9 @@ class Visitor_Import_Admin_Controller {
 
 	const AJAX_ACTION = Visitor::POST_TYPE . '-import';
 
-	private static $CLEANUP_ACTION = 'reg_man_rc_item_importer_scheduled_cleanup';
+	private static $CLEANUP_ACTION = 'reg_man_rc_visitor_importer_scheduled_cleanup';
 
+	// Should be Full Name, Public Name, Email, Join Mail List?, First Event Key
 	private static $REQUIRED_CSV_COLUMNS = array(
 		'Email', 'First Name', 'Last Name', 'Join Mail List?', 'First Event Key'
 	);
@@ -63,35 +64,29 @@ class Visitor_Import_Admin_Controller {
 			$err_msg = __( 'Your security token has expired.  Please refresh the page and try again.', 'reg-man-rc' );
 			$form_response->add_error( '_wpnonce', '', $err_msg );
 		} else {
-			$attachment_id = isset( $_REQUEST[ 'item-import-attachment-id' ] ) ? $_REQUEST[ 'item-import-attachment-id' ] : NULL;
+//			Error_Log::var_dump( $_REQUEST );
+			$attachment_id = isset( $_REQUEST[ 'visitor-import-attachment-id' ] ) ? $_REQUEST[ 'visitor-import-attachment-id' ] : NULL;
 			if ( isset( $attachment_id ) ) {
 				// This is the second step, so do the import here
-				$event_key = isset( $_REQUEST[ 'item-import-event' ] ) ? wp_unslash( $_REQUEST[ 'item-import-event' ] ) : NULL;
-				$event = Event::get_event_by_key( $event_key );
-				if ( empty( $event ) ) {
-					$err_msg = __( 'The event could not be found.', 'reg-man-rc' );
-					$form_response->add_error( 'item-import-event', '', $err_msg );
-				} else {
-					$attachment_file = get_attached_file( $attachment_id );
-					$result = self::process_file( $attachment_file, $event, $form_response );
-				} // endif
+				$attachment_file = get_attached_file( $attachment_id );
+				$result = self::process_file( $attachment_file, $form_response );
 			} else {
 				// This is the first step, make sure the file is valid etc.
-				$file_upload_desc = isset( $_FILES[ 'item-import-file-name' ] ) ? $_FILES[ 'item-import-file-name' ] : NULL;
+				$file_upload_desc = isset( $_FILES[ 'visitor-import-file-name' ] ) ? $_FILES[ 'visitor-import-file-name' ] : NULL;
 				if ( ! isset( $file_upload_desc ) ) {
 					$err_msg = __( 'Please select a file for importing.', 'reg-man-rc' );
-					$form_response->add_error( 'item-import-file-name', '', $err_msg );
+					$form_response->add_error( 'visitor-import-file-name', '', $err_msg );
 				} else {
 					if ( ! is_array( $file_upload_desc ) || ! isset( $file_upload_desc[ 'type' ] ) || ! isset( $file_upload_desc[ 'tmp_name' ] ) ) {
 						$err_msg = __( 'The file could not be uploaded to the server.', 'reg-man-rc' );
-						$form_response->add_error( 'item-import-file-name', '', $err_msg );
+						$form_response->add_error( 'visitor-import-file-name', '', $err_msg );
 						$result = FALSE;
 					} else {
 						$file_type = $file_upload_desc[ 'type' ];
 						$valid_types = array( 'text/csv', 'text/plain' );
 						if ( ! in_array( $file_type, $valid_types ) ) {
 							$err_msg = __( 'The file is not a CSV file.', 'reg-man-rc' );
-							$form_response->add_error( 'item-import-file-name', '', $err_msg );
+							$form_response->add_error( 'visitor-import-file-name', '', $err_msg );
 							$result = FALSE;
 						} else {
 							$file_name = $file_upload_desc[ 'tmp_name' ];
@@ -133,7 +128,7 @@ class Visitor_Import_Admin_Controller {
 			$header_array = fgetcsv( $handle );
 			if ( ! is_array( $header_array ) ) {
 				$err_msg = __( 'The file does not contain valid CSV data.', 'reg-man-rc' );
-				$form_response->add_error( 'item-import-file-name', '', $err_msg );
+				$form_response->add_error( 'visitor-import-file-name', '', $err_msg );
 				$result = FALSE;
 			} else {
 				$result = TRUE; // Assume it's ok then look for a problem
@@ -141,16 +136,16 @@ class Visitor_Import_Admin_Controller {
 				foreach ( $required_columns as $col ) {
 					if ( ! in_array( $col, $header_array ) ) {
 						/* translators: %s is the name of a CSV column for visitor import data like 'Email' or 'Last Name' */
-						$err_msg = sprintf( __( 'The CSV file does not contain the required item data for "%s".', 'reg-man-rc' ), $col );
-						$form_response->add_error( 'item-import-file-name[' . $col . ']', '', $err_msg );
+						$err_msg = sprintf( __( 'The CSV file does not contain the required visitor data for "%s".', 'reg-man-rc' ), $col );
+						$form_response->add_error( 'visitor-import-file-name[' . $col . ']', '', $err_msg );
 						$result = FALSE;
 					} // endif
 				} // endfor
 				if ( $result === TRUE ) {
 					$data_array = fgetcsv( $handle );
 					if ( ! is_array( $data_array ) ) {
-						$err_msg = __( 'The CSV file contains no item data records.', 'reg-man-rc' );
-						$form_response->add_error( 'item-import-file-name', '', $err_msg );
+						$err_msg = __( 'The CSV file contains no visitor data records.', 'reg-man-rc' );
+						$form_response->add_error( 'visitor-import-file-name', '', $err_msg );
 						$result = FALSE;
 					} else {
 						$result = TRUE;
@@ -180,18 +175,18 @@ class Visitor_Import_Admin_Controller {
 		if ( is_array( $upload_result ) && isset( $upload_result['error'] ) ) {
 			/* translators: %s is an error message returned from Wordpress function wp_handle_upload */
 			$err_msg = sprintf( __( 'The file could not be uploaded to the server. Error message: %s.', 'reg-man-rc' ), $upload_result['error'] );
-			$form_response->add_error( 'item-import-file-name', '', $err_msg );
+			$form_response->add_error( 'visitor-import-file-name', '', $err_msg );
 			$result = FALSE;
 		} else {
 			// We have moved the uploaded file to the uploads directory.
 			// Now we'll create an attachment record so that the file can be seen in the media library
 			$attach_args = array(
-				'post_title'     => basename( $upload_result[ 'file' ] ),
-				'post_content'   => $upload_result[ 'url' ],
-				'post_mime_type' => $upload_result[ 'type' ],
-				'guid'           => $upload_result[ 'url' ],
-				'context'        => 'import',
-				'post_status'    => 'private',
+				'post_title'		=> basename( $upload_result[ 'file' ] ),
+				'post_content'		=> $upload_result[ 'url' ],
+				'post_mime_type'	=> $upload_result[ 'type' ],
+				'guid'				=> $upload_result[ 'url' ],
+				'context'			=> 'import',
+				'post_status'		=> 'private',
 			);
 
 			// Save the data.
@@ -208,23 +203,22 @@ class Visitor_Import_Admin_Controller {
 
 	/**
 	 * Move the file to the upload directory
-	 * @param	string				$file_path			The path to the CSV file with the items to be imported
-	 * @param	Event				$event				The event to import the items into
+	 * @param	string				$file_path			The path to the CSV file with the visitors to be imported
 	 * @param	Ajax_Form_Response	$form_response		The response from the current request used to log errors
-	 * @return	int|FALSE			The count of items imported into the event or FALSE on major error
+	 * @return	int|FALSE			The count of visitors imported into the event or FALSE on major error
 	 */
-	private static function process_file( $file_path, $event, $form_response ) {
+	private static function process_file( $file_path, $form_response ) {
 		$handle = fopen( $file_path, 'r' );
 		if ( $handle == FALSE ) {
 			/* translators: %s is the a file name */
 			$err_msg = sprintf( __( 'Unable to open the file $s.', 'reg-man-rc' ), $file_path );
-			$form_response->add_error( 'item-import-attachment-id', '', $err_msg );
+			$form_response->add_error( 'visitor-import-attachment-id', '', $err_msg );
 			$result = FALSE;
 		} else {
 			$header_array = fgetcsv( $handle );
 			if ( ! is_array( $header_array ) ) {
 				$err_msg = __( 'The file does not contain valid CSV data.', 'reg-man-rc' );
-				$form_response->add_error( 'item-import-attachment-id', '', $err_msg );
+				$form_response->add_error( 'visitor-import-attachment-id', '', $err_msg );
 				$result = FALSE;
 			} else {
 				$result = TRUE; // Assume it's ok then look for a problem
@@ -232,113 +226,92 @@ class Visitor_Import_Admin_Controller {
 				foreach ( $required_columns as $col ) {
 					if ( ! in_array( $col, $header_array ) ) {
 						/* translators: %s is the name of a CSV column for visitor import data like 'Email' or 'Last Name' */
-						$err_msg = sprintf( __( 'The CSV file does not contain the required item data for "%s".', 'reg-man-rc' ), $col );
-						$form_response->add_error( 'item-import-file-name[' . $col . ']', '', $err_msg );
+						$err_msg = sprintf( __( 'The CSV file does not contain the required visitor data for "%s".', 'reg-man-rc' ), $col );
+						$form_response->add_error( 'visitor-import-file-name[' . $col . ']', '', $err_msg );
 						$result = FALSE;
 					} // endif
 				} // endfor
-				$event_key = $event->get_key();
 
 				$email_index = array_search( 'Email', $header_array );
 				$first_name_index = array_search( 'First Name', $header_array );
 				$last_name_index = array_search( 'Last Name', $header_array );
 				$join_mail_list_index = array_search( 'Join Mail List?', $header_array );
-				$is_first_time_index = array_search( 'First Event Key', $header_array );
+				$first_event_key_index = array_search( 'First Event Key', $header_array );
 				if ( $result === TRUE ) {
 					$record_count = 0;
+					$skipped_count = 0;
 					$line_number = 2; // line 2 is the first row of data after the header
-					$statuses = Item_Status::get_all_item_statuses(); // an associative array of status constants and objects
 
-					// For visitors who do not provide an email address I do not want to create multiple records
-					//  with the same full name.
-					// So I will save an array of new visitor records keyed by full name for visitors at this event with no email
-					//  and I will re-use those records rather than create new ones
-					$visitor_cache = array();
+					// We want to make sure that the first event key refers to a valid event so we will get the Event object.
+					// Rather than constructing a new Event object every time, we will keep a cache of keys and events.
+					$event_cache = array();
 
+					$false_values = array(
+							__( 'false', 'reg-man-rc' ),
+							__( 'no','reg-man-rc' ),
+					);
 					while ( ( $data_array = fgetcsv( $handle ) ) !== FALSE ) {
-						// First, get or create the visitor record
+						
 						$visitor = NULL; // Make sure we get a new visitor record each time
-						$email = $data_array[ $email_index ];
+						$email = trim( $data_array[ $email_index ] );
 						$first_name = $data_array[ $first_name_index ];
 						$last_name = $data_array[ $last_name_index ];
 						$join_mail_list_text = trim( strtolower( $data_array[ $join_mail_list_index ] ) );
-						$is_first_time_text = trim( strtolower( $data_array[ $is_first_time_index ] ) );
+						$first_event_key_string = trim( $data_array[ $first_event_key_index ] );
 
-						$full_name = trim( "$first_name $last_name" );
-						$last_initial = ! empty( $last_name ) ? substr( $last_name, 0, 1 ) : '';
-						$public_name = trim( "$first_name $last_initial" );
-						$is_join =( $join_mail_list_text === 'yes' );
-						$is_first_time =( $is_first_time_text === 'yes' );
-						$first_event_key = $is_first_time ? $event_key : NULL;
+						if ( empty( $email ) && empty( $first_name ) && empty( $last_name ) ) {
+							/* translators: %s is a line number in a file */
+							$err_msg = sprintf( __( 'Unable to create visitor record for line number %s because no email or name was provided.', 'reg-man-rc' ), $file_path );
+							$form_response->add_error( "visitor-import-attachment-id[$line_number]" , '', $err_msg );
+							
+						} else {
+							$full_name = trim( "$first_name $last_name" );
+							$public_name = Visitor::get_default_public_name( $full_name );
+							$is_join = ( in_array( $join_mail_list_text , $false_values ) ) ? FALSE : boolval( $join_mail_list_text );
 
-						if ( ! empty( $email ) ) {
-							// Try to find the visitor record with the specified email address
-							$visitor = Visitor::get_visitor_by_email( $email );
-						} // endif
-						if ( ! isset( $visitor ) ) {
-							// There is no email address or we don't have an existing record for this visitor
-							// Check if we have cached this visitor from a previous import record
-							if ( ! empty( $last_name ) && isset( $visitor_cache[ $full_name ] ) ) {
-								// Get the visitor record from the cache
-								$visitor = $visitor_cache[ $full_name ];
+							// Find the event for the visitor's first event key
+							if ( empty( $first_event_key_string ) ) {
+								$first_event = NULL;
+							} elseif ( isset( $event_cache[ $first_event_key_string ] ) ) {
+								$first_event = $event_cache[ $first_event_key_string ];
 							} else {
-								// Create the new visitor record
-								$visitor = Visitor::create_visitor( $public_name, $full_name, $email, $first_event_key, $is_join );
+								$first_event = Event::get_event_by_key( $first_event_key_string );
+								if ( isset( $first_event ) ) {
+									$event_cache[ $first_event_key_string ] = $first_event;
+								} // endif
+							} // endif
+
+							// Create the new visitor record
+							$visitor = Visitor::get_visitor_by_email_or_full_name( $email, $full_name );
+							if ( isset( $visitor ) ) {
+								// In this case we already have a record for the visitor, we'll just bypass this record
+								// TODO: We could have a setting allowing the user to update existing visitor records
+								$skipped_count++;
+							} else {
+								$visitor = Visitor::create_visitor( $public_name, $full_name, $email );
 								if ( ! isset( $visitor ) ) {
 									/* translators: %s is a line number in a file */
 									$err_msg = sprintf( __( 'Unable to create visitor record for line number %s.', 'reg-man-rc' ), $file_path );
-									$form_response->add_error( "visitor-import-attachment-id[$line_number]" , '', $error_msg );
-								} elseif ( empty( $email ) && ! empty( $last_name ) ) {
-									// If there's no email but we have a full name then save this record for later
-									$visitor_cache[ $full_name ] = $visitor;
+									$form_response->add_error( "visitor-import-attachment-id[$line_number]" , '', $err_msg );
+								} else {
+									$visitor->set_is_join_mail_list( $is_join );
+									$visitor->set_first_event_key( $first_event_key_string );
 								} // endif
 							} // endif
 						} // endif
 
-						if ( isset( $visitor ) ) {
-							// We can only create item if we have the visitor record
-							$item_desc = $data_array[ $item_desc_index ];
-							$fixer_station_text = trim( $data_array[ $fixer_station_index ] );
-							$item_type_text = trim( $data_array[ $item_type_index ] );
-							$is_fixed_text = trim( strtolower( $data_array[ $is_fixed_index ] ) );
-
-							switch ( $is_fixed_text ) {
-								case 'fixed':
-								case 'yes':
-								case 'yes!':
-									$status = $statuses[ Item_Status::FIXED ];
-									break;
-								case 'end of life':
-								case 'no':
-									$status = $statuses[ Item_Status::END_OF_LIFE ];
-									break;
-								case 'repairable':
-								case 'not quite but made progress':
-									$status = $statuses[ Item_Status::REPAIRABLE ];
-									break;
-								default:
-									$status = NULL;
-									break;
-							} // endswitch
-
-							$fixer_station = Fixer_Station::get_fixer_station_by_name( $fixer_station_text );
-
-							$item_type = Item_Type::get_item_type_by_name( $item_type_text );
-
-							$insert_result = Item::create_new_item( $item_desc, $fixer_station, $item_type, $event_key, $visitor, $status );
-							if ( empty( $insert_result ) ) {
-								/* translators: %s is a line number in a file */
-								$err_msg = sprintf( __( 'Unable to import the item record at line number %s.', 'reg-man-rc' ), $file_path );
-								$form_response->add_error( "item-import-attachment-id[$line_number]" , '', $error_msg);
-							} else {
-								$record_count++;
-							} // endif
-						} // endif
 						$line_number++;
 					} // endwhile
-					$head = __( 'Item import complete', 'reg-man-rc' );
-					/* translators: %1$s is the number of lines in a file, %2$s is the number of successfully created items */
-					$details = sprintf( __( '%1$s lines read from the file.  %2$s new items created.', 'reg-man-rc' ), ( $line_number - 2 ), $record_count );
+					$head = __( 'Visitor import complete', 'reg-man-rc' );
+					/* translators:
+						%1$s is the number of lines in a file,
+						%2$s is the number of successfully created visitors
+					 	%3$s is the number skipped because they already exist
+					*/
+					$details = sprintf(
+								__( '%1$s lines read from the file.  %2$s new visitors created, %3$s existing visitors skipped.', 'reg-man-rc' ),
+								( $line_number - 2 ), $record_count, $skipped_count
+							);
 					ob_start();
 						echo '<div>';
 							echo "<h3>$head</h3>";

@@ -3,7 +3,7 @@ namespace Reg_Man_RC\Model;
 
 class Error_Log {
 
-	private static final function get_caller_location() {
+	private static function get_caller_location() {
 		$backtrace = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 3 );
 		// The backtrace contains the call stack as an array of associative arrays.
 		// It can be read like: "File X at line Y called function F in class C"
@@ -84,7 +84,7 @@ class Error_Log {
 		ob_start();
 			debug_print_backtrace();
 		$dump = ob_get_clean();
-		error_log( "$prefix\n$dump" );
+		error_log( $prefix . PHP_EOL . $dump );
 	} // function
 
 } // class

@@ -2,56 +2,62 @@
  * This is the style sheet for the stats view
  */
  
- .reg-man-rc-stats-view-container .reg-man-rc-stats-view-filter-container {
+ .reg-man-rc-admin-stats-view-container .reg-man-rc-stats-view-filter-container {
  	font-size: 125%;
  }
   
+.reg-man-rc-admin-stats-view-container .reg-man-rc-stats-view-filter-container .form-input-list {
+	margin: 0;
+	padding: 0;
+}
  .reg-man-rc-chart-group-container {
 	display: flex;
 	flex-wrap: wrap;
 	justify-content: flex-start;
 }
-.reg-man-rc-chart-view, .reg-man-rc-stats-table-view {
+.reg-man-rc-ajax-chart-view, .reg-man-rc-stats-table-view {
 	border: 1px solid #ccc;
+	background: #fcfcfc;
 	padding: 0;
-	margin: 0.5em;
 	position: relative;
+}
+.reg-man-rc-chart-group-container .reg-man-rc-ajax-chart-view {
+	margin: 0.5em;
 }
 .reg-man-rc-stats-table-view {
 	width: 100%;
 }
-.reg-man-rc-chart-view .heading-container, .reg-man-rc-stats-table-view .heading-container {
+.reg-man-rc-ajax-chart-view .heading-container, .reg-man-rc-stats-table-view .heading-container {
 	padding: 0.25em;
 	margin: 0;
 	color: #333;
-	background: #eee;
+	background: #f0f0f0;
 	border-bottom: 1px solid #ccc;
 	display: flex;
 	justify-content: space-between;
 }
-.reg-man-rc-chart-view .heading-container h4, .reg-man-rc-stats-table-view .heading-container h4 {
+.reg-man-rc-ajax-chart-view .heading-container h4, .reg-man-rc-stats-table-view .heading-container h4 {
 	padding: 0;
 	margin: 0.5em;
 }
-.reg-man-rc-chart-view .heading-container .toolbar-container select,
+.reg-man-rc-ajax-chart-view .heading-container .toolbar-container select,
 .reg-man-rc-stats-table-view .heading-container .toolbar-container select {
 	margin: 0.25em;
 }
 
 .reg-man-rc-stats-table-view .datatable-container {
 	padding: 0.5em;
+	overflow: auto;
 }
 
-.reg-man-rc-chart-view .reg-man-rc-chart-canvas-container {
+.reg-man-rc-ajax-chart-view .reg-man-rc-chart-canvas-container {
 	position: relative;
-	width: 22em;
-	height: 22em;
-	margin: 1em;
+	width: 24em;
+	height: 24em;
+	padding: 0.5em;
 }
 
-.reg-man-rc-chart-view canvas {
-}
-.reg-man-rc-chart-view .reg-man-rc-chart-loading-indicator,
+.reg-man-rc-ajax-chart-view .reg-man-rc-chart-loading-indicator,
 .reg-man-rc-stats-table-view .reg-man-rc-table-loading-indicator {
 	z-index: 20000;
 	height: 100%;
@@ -62,15 +68,44 @@
 	position: absolute;
 	margin: 0;
 	padding: 0;
+	visibility: hidden;
 }
 
-.reg-man-rc-chart-view.reg-man-rc-chart-loading .reg-man-rc-chart-loading-indicator,
+.reg-man-rc-ajax-chart-view.reg-man-rc-chart-loading .reg-man-rc-chart-loading-indicator,
 .reg-man-rc-stats-table-view.reg-man-rc-table-loading .reg-man-rc-table-loading-indicator {
 	visibility: visible;
+}
+
+.reg-man-rc-shortcode-container.items-fixed {
+	border-radius: 0.5em;
+	border: 1px solid #ccc;
+	background: #eee;
+	color: #000;
+	padding: 0.25em;
+	font-size: 1.2rem;
+	font-weight: bold;
+}
+.reg-man-rc-shortcode-container.items-fixed .heading-container {
+	text-align: center;
+}
+.reg-man-rc-shortcode-container.items-fixed .heading-container .heading {
+	padding: 0;
+	margin: 0;
+	font-size: inherit;
+}
+.reg-man-rc-shortcode-container.items-fixed .reg-man-rc-chart-canvas-container {
+	width: auto;
+	height: 5rem;
+	padding: 0;
 }
 
 .reg-man-rc-admin-events-map-container {
 	height: 67vh;
 }
 
-.datatable .iso-8601-date { display: none; }
+.datatable-container .dataTables_wrapper .dt-buttons {
+	margin: 0 1em;
+}
+.datatable th.text-align-right {
+  text-align: right;
+}

@@ -59,4 +59,38 @@ jQuery( document ).ready( function( $ ) {
 		var form = me.closest( '.reg-man-rc-volunteer-registration-form' );
 		form.trigger( 'ajax-submit' );
 	});
+	$( '.reg-man-rc-volunteer-registration-form' ).on( 'input', 'textarea[ name = "volunteer-comments" ]', function( evt ) {
+		var me = $( this );
+		var fieldset = me.closest( '.volunteer-comments-fieldset' );
+		var save_button = fieldset.find( '.reg-man-rc-volunteer-reg-comments-save-button' );
+		save_button.attr( 'disabled', false );
+	});
+	$( '.reg-man-rc-volunteer-registration-form' ).on( 'click', '.reg-man-rc-volunteer-reg-comments-save-button', function( evt ) {
+		var me = $( this );
+		var form = me.closest( '.reg-man-rc-volunteer-registration-form' );
+		form.trigger( 'ajax-submit' );
+	});
+	$( '.reg-man-rc-volunteer-registration-form' ).on( 'submit-end', function( evt ) {
+		var me = $( this );
+		me.tooltipster( 'open' );
+	});
+	$( '.reg-man-rc-volunteer-registration-form' ).on( 'initialize-tooltip', function( evt ) {
+		var me = $( this );
+		var content = __( 'Updated', 'reg-man-rc' );
+		me.tooltipster({
+					zIndex			: 10000,
+					interactive		: true,
+					content			: content,
+					position		: 'top',
+					theme			: 'tooltipster-shadow',
+					trigger			: 'custom',
+					functionReady: function() {
+						setTimeout( function() {
+							me.tooltipster( 'close' );
+						}, 3000 );
+					}
+		});
+	});
+	$( '.reg-man-rc-volunteer-registration-form' ).trigger( 'initialize-tooltip' );
+
 });

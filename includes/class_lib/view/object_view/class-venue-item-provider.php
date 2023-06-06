@@ -1,8 +1,6 @@
 <?php
 namespace Reg_Man_RC\View\Object_View;
 
-use Reg_Man_RC\Model\Event;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Venue;
 
 /**

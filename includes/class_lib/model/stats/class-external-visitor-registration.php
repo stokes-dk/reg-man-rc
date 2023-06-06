@@ -4,7 +4,6 @@ namespace Reg_Man_RC\Model\Stats;
 use Reg_Man_RC\Model\Event_Key;
 use Reg_Man_RC\Model\Visitor;
 use Reg_Man_RC\Control\User_Role_Controller;
-use Reg_Man_RC\Model\Error_Log;
 
 /**
  * Describes a visitor who registered (using an external system and not this plugin) one or more items at an event
@@ -23,19 +22,27 @@ class External_Visitor_Registration implements Visitor_Registration_Descriptor {
 	private $partially_obscured_email;
 	private $is_first_event;
 	private $is_join_mail_list;
+	private $item_count;
 	private $source;
 
 	/**
-	 * Get the visitors defined by external visitor providers, e.g. Legacy data visitors, that are registered to the specified set of events
+	 * Get the external visitor registrations for the specified set of events and the specified visitor.
+	 * These are visitor registrations stored in an external provider like Legacy data.
+	 * Note that when retrieving registrations for a specific visitor you must provide either the email address or
+	 *  full name for that visitor.  If neither is provided then registrations for all visitors will be returned.
 	 *
 	 * This method will return an array of instances of this class describing all visitors registered to the specified events supplied by
 	 * active add-on plugins for external visitor providers like Registration Manager for Repair Cafe Legacy data
 	 *
-	 * @param	NULL|string[]	$event_key_array	An array of event keys whose external visitors are to be retrieved
-	 *   OR NULL if all external visitors should be retrieved.
-	 * @return	\Reg_Man_RC\Model\External_Visitor_Registration[]
+	 * @param	string[]|NULL	$event_key_array	An array of event keys whose external visitor registrations are to be retrieved
+	 *   OR NULL if visitor registrations for all events should be retrieved.
+	 * @param	string|NULL		$email				The email address for the visitor whose external registrations are to be retrieved
+	 *   OR NULL if the email address is not known or registrations for all visitors should be retrieved
+	 * @param	string|NULL		$full_name			The full name of the visitor whose external registrations are to be retrieved
+	 *   OR NULL if the full name is not known or registrations for all visitors should be retrieved
+	 * @return	\Reg_Man_RC\Model\Stats\External_Visitor_Registration[]
 	 */
-	public static function get_external_visitor_registrations( $event_key_array ) {
+	public static function get_external_visitor_registrations( $event_key_array, $email = NULL, $full_name = NULL ) {
 		/**
 		 * Add all visitors defined under the external visitor data providers for the specified events
 		 *
@@ -59,7 +66,7 @@ class External_Visitor_Registration implements Visitor_Registration_Descriptor {
 				$key_data_array[] = $key_obj->get_as_associative_array();
 			} // endfor
 		} // endif
-		$desc_data_arrays = apply_filters( 'reg_man_rc_get_visitor_registrations', array(), $key_data_array );
+		$desc_data_arrays = apply_filters( 'reg_man_rc_get_visitor_registrations', array(), $key_data_array, $email, $full_name );
 		$result = array();
 //	Error_Log::var_dump( $desc_data_arrays[ 0 ] );
 		foreach ( $desc_data_arrays as $data_array ) {
@@ -129,6 +136,8 @@ class External_Visitor_Registration implements Visitor_Registration_Descriptor {
 		} else {
 			$result->is_join_mail_list = FALSE;
 		} // endif
+
+		$result->item_count	= isset( $data_array[ 'item_count' ] )	? $data_array[ 'item_count' ] : NULL;
 
 		$result->source		= isset( $data_array[ 'source' ] )		? $data_array[ 'source' ] : __( 'external', 'reg-man-rc' );
 
@@ -208,6 +217,15 @@ class External_Visitor_Registration implements Visitor_Registration_Descriptor {
 	 */
 	public function get_is_join_mail_list() {
 		return $this->is_join_mail_list;
+	} // function
+
+	/**
+	 * Get a count of the number of items registered by this visitor, if known.
+	 * @return	int|NULL	A count of the number of items registered by this visitor or NULL if we don't know.
+	 * @since	v0.1.0
+	 */
+	public function get_item_count() {
+		return $this->item_count;
 	} // function
 
 	/**

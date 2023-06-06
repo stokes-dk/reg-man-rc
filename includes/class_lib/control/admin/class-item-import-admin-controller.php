@@ -2,7 +2,6 @@
 namespace Reg_Man_RC\Control\Admin;
 
 use Reg_Man_RC\Model\Item;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Ajax_Form_Response;
 use Reg_Man_RC\View\Admin\Item_Import_Admin_View;
 use Reg_Man_RC\Model\Event;
@@ -190,12 +189,12 @@ class Item_Import_Admin_Controller {
 			// We have moved the uploaded file to the uploads directory.
 			// Now we'll create an attachment record so that the file can be seen in the media library
 			$attach_args = array(
-				'post_title'     => basename( $upload_result[ 'file' ] ),
-				'post_content'   => $upload_result[ 'url' ],
-				'post_mime_type' => $upload_result[ 'type' ],
-				'guid'           => $upload_result[ 'url' ],
-				'context'        => 'import',
-				'post_status'    => 'private',
+				'post_title'		=> basename( $upload_result[ 'file' ] ),
+				'post_content'		=> $upload_result[ 'url' ],
+				'post_mime_type'	=> $upload_result[ 'type' ],
+				'guid'				=> $upload_result[ 'url' ],
+				'context'			=> 'import',
+				'post_status'		=> 'private',
 			);
 
 			// Save the data.
@@ -295,7 +294,7 @@ class Item_Import_Admin_Controller {
 								if ( ! isset( $visitor ) ) {
 									/* translators: %s is a line number in a file */
 									$err_msg = sprintf( __( 'Unable to create visitor record for the item at line number %s.', 'reg-man-rc' ), $file_path );
-									$form_response->add_error( "item-import-attachment-id[$line_number]" , '', $error_msg );
+									$form_response->add_error( "item-import-attachment-id[$line_number]" , '', $err_msg );
 								} elseif ( empty( $email ) && ! empty( $last_name ) ) {
 									// If there's no email but we have a full name then save this record for later
 									$visitor_cache[ $full_name ] = $visitor;
@@ -337,7 +336,7 @@ class Item_Import_Admin_Controller {
 							if ( empty( $insert_result ) ) {
 								/* translators: %s is a line number in a file */
 								$err_msg = sprintf( __( 'Unable to import the item record at line number %s.', 'reg-man-rc' ), $file_path );
-								$form_response->add_error( "item-import-attachment-id[$line_number]" , '', $error_msg);
+								$form_response->add_error( "item-import-attachment-id[$line_number]" , '', $err_msg);
 							} else {
 								$record_count++;
 							} // endif

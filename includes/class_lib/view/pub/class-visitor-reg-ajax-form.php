@@ -6,9 +6,7 @@ use Reg_Man_RC\View\Form_Input_List;
 use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Visitor;
-use Reg_Man_RC\Control\Admin\Visitor_Registration_Admin_Controller;
-use Reg_Man_RC\Model\Error_Log;
-use Reg_Man_RC\Model\Item;
+use Reg_Man_RC\Control\Visitor_Registration_Controller;
 use Reg_Man_RC\Model\Fixer_Station;
 
 class Visitor_Reg_Ajax_Form {
@@ -52,7 +50,7 @@ class Visitor_Reg_Ajax_Form {
 		} else { // User is logged in so show the page content
 			$form_action = self::get_form_action();
 //			$nonce = self::get_nonce();
-			$ajax_action = Visitor_Registration_Admin_Controller::AJAX_NEW_VISITOR_REG_ACTION;
+			$ajax_action = Visitor_Registration_Controller::AJAX_NEW_VISITOR_REG_ACTION;
 			echo '<div class="visitor-reg-form-container autocomplete-item-desc-container autocomplete-visitor-name-container">';
 				echo "<form action=\"$form_action\" method=\"POST\" data-ajax-action=\"$ajax_action\"" .
 						' class="visitor-reg-form reg-man-rc-ajax-form reg-man-rc-js-validation">';
@@ -95,6 +93,7 @@ class Visitor_Reg_Ajax_Form {
 		// Note that the autocomplete data must be rendered by the main page
 
 		$item_input_list = Form_Input_List::create();
+//		$item_input_list->set_style_compact();
 		$item_input_list->set_required_inputs_flagged( FALSE );
 		ob_start();
 			echo '<ol class="visitor-reg-item-list">';
@@ -122,7 +121,7 @@ class Visitor_Reg_Ajax_Form {
 			$data_array = array();
 			foreach( $visitor_array as $visitor ) {
 				$id = ($visitor instanceof Visitor) ? $visitor->get_id() : 0;
-				$email = $visitor->get_email();
+//				$email = $visitor->get_email();
 				$obscured_email = $visitor->get_partially_obscured_email();
 				$full_name = $visitor->get_full_name();
 				$public_name = $visitor->get_public_name();
@@ -140,14 +139,13 @@ class Visitor_Reg_Ajax_Form {
 
 		$label = __('Is this your first time?', 'reg-man-rc');
 		$options = array(__('Yes', 'reg-man-rc') => 'YES', __('No', 'reg-man-rc') => 'NO');
-		$input_list->add_radio_group($label, 'first-time', $options, $selected = NULL, $hint = '', $classes = 'required',
-													$custom_label = NULL, $custom_value = NULL, $is_compact = TRUE);
+		$input_list->add_radio_group( $label, 'first-time', $options, $selected = NULL, $hint = '', $classes = 'required',
+										$is_required = TRUE, $custom_label = NULL, $custom_value = NULL, $is_compact = TRUE );
 
 		// Add a hidden input for the visitor's ID when a returning visitor is selected
 		$name = 'visitor-id';
 		$val = '';
 		$input_list->add_hidden_input( $name, $val );
-//		$input_list->add_text_input( 'ID', $name, $val, $hint = '', $classes = '', $is_req = FALSE, $addn_attrs = 'readonly="readonly"' );
 
 		$button_label = __( 'Choose a different visitor', 'reg-man-rc' );
 		$button = "<button type=\"button\" class=\"visitor-name-reset reg-man-rc-button\">$button_label</button>";
@@ -214,18 +212,23 @@ class Visitor_Reg_Ajax_Form {
 		$input_list = Form_Input_List::create();
 
 		echo '<div class="house-rules">';
-			$page_path = Settings::get_house_rules_page_path();
-			$post = get_page_by_path( $page_path );
-			if ($post === NULL) { // failure to get the rules page
-				echo '<h2>' . __('Please see the intake volunteer for a copy of the house rules', 'reg-man-rc') . '</h2>';
+			$post_id = Settings::get_house_rules_post_id();
+			$post = ! empty( $post_id ) ? get_post( $post_id ) : NULL;
+			if ( $post === NULL ) { // failure to get the rules page
+				$msg = __( 'Please see the intake volunteer for a copy of the house rules', 'reg-man-rc' );
+				echo "<h2>$msg</h2>";
 			} else {
-				echo do_shortcode( $post->post_content );
+				echo do_shortcode( $post->post_content ); // run any shortcodes on the page
 			} // endif
 		echo '</div>';
 		echo '<div class="text-fadeout"></div>'; // used to put a fade at the bottom so it's obvious that it must be scrolled
-		$rulesLabel = __('I have read and understood the house rules and safety procedures', 'reg-man-rc');
-		$input_list->add_checkbox_input( $rulesLabel, 'rules-ack', $val = 'rules-ack', $is_checked = FALSE,
-				$hint = '', $classes = 'required check-list' );
+		$rules_label = __( 'I have read and understood the house rules and safety procedures', 'reg-man-rc' );
+		$name = 'rules-ack';
+		$val = $name; // it's just a checkbox, the value could be anything
+		$is_checked = FALSE;
+		$hint = '';
+		$classes = 'required check-list';
+		$input_list->add_checkbox_input( $rules_label, $name, $val, $is_checked, $hint, $classes );
 		$input_list->render();
 		$this->render_accordion_buttons(TRUE, TRUE);
 	} // function
@@ -241,7 +244,7 @@ class Visitor_Reg_Ajax_Form {
 
 			echo '<ul class="form-input-list item-list-input-group">';
 				// Item description
-				echo '<li class="input-item required">';
+				echo '<li class="input-item required item-desc-input">';
 					echo '<div class="item-list-input input-container-container">';
 						echo '<label><span class="label-container">' . __( 'Item', 'reg-man-rc' ) . '</span>';
 							echo "<input type=\"text\" name=\"item-desc[]\" required=\"required\">";
@@ -251,7 +254,7 @@ class Visitor_Reg_Ajax_Form {
 				echo '</li>';
 
 				// Item Type
-				echo '<li class="input-item required">';
+				echo '<li class="input-item required item-type-input">';
 					echo '<div class="item-list-input input-container">';
 						self::render_item_type_input();
 					echo '</div>';
@@ -259,7 +262,7 @@ class Visitor_Reg_Ajax_Form {
 				echo '</li>';
 
 				// Fixer Station
-				echo '<li class="input-item required">';
+				echo '<li class="input-item required fixer-station-input">';
 					echo '<div class="item-list-input input-container">';
 						self::render_fixer_station_input();
 					echo '</div>';

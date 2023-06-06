@@ -12,6 +12,10 @@ body .dialog-container { display: none; }
 /* A special user message dialog may be on the page but should be hidden until it's needed */ 
 .form-user-message-dialog { display: none; }
 
+.wp-core-ui .dataTables_wrapper .dataTables_length select {
+	padding: 0 24px 0 8px; /* Fix for css for datatables 1.13.4 */
+}
+
 .reg-man-rc-application-busy {
 	z-index: 20000;
 	background-image: url('../../../../wp-includes/images/spinner-2x.gif');
@@ -29,6 +33,11 @@ body .dialog-container { display: none; }
 .reg-man-rc-application-busy.is-active {
 	visibility: visible;
 }
+
+.reg-man-rc-icon-text-container .icon, .reg-man-rc-icon-text-container .text {
+	vertical-align: middle;
+}
+
 .event-date-time-part {
 	display: inline-block;
 }
@@ -45,30 +54,28 @@ body .dialog-container { display: none; }
 .reg-man-rc-button:DISABLED, .ui-dialog .ui-dialog-buttonpane button:DISABLED { opacity: 0.65; cursor: not-allowed; }
 
 
-.form-input-list .full-width input { 
+.form-input-list .full-width input, .form-input-list .full-width textarea { 
 	width: 100%;
 }
 
 .form-input-list.registration-helper-urls { margin-top: 4em; border-top: 1px solid #ccc; }
-.form-input-buttons {	}
 .form-input-buttons .form-button { margin-right: 1em; }
 .form-input-list {
 	list-style: none;
 	padding: 0;
 	margin: 0 1em;
-	xxxmargin-top: 0;
 }
 .form-input-list .input-item { padding: 0.5em 0; box-sizing: border-box; }
 .form-input-list .input-item.hidden-input { display: none !important; } 
 .form-input-list .label-container { margin-bottom: 0.1em; position: relative; }
-.form-input-list .input-container fieldset legend { padding: 0; margin: 0; }
+.form-input-list .input-container fieldset legend { padding: 0 0.25em; margin: 0 0.25em; }
 .form-input-list .input-container fieldset, .form-input-list .input-container details { border: 1px solid #ccc; padding: 0; }
-.form-input-list .input-container fieldset .form-input-list,
+.form-input-list .input-container fieldset .form-input-list { padding: 0; }
+.form-input-list .input-container fieldset .form-input-list.item-list-input-group { margin: 0; }
 .form-input-list .input-container details .form-input-list { padding: 0 1em; }
 .form-input-list .input-container details summary { padding: 0.25em 0.5em; background: #eee; }
 .form-input-list .error-container:EMPTY { display: none; }
 .form-input-list .error-container { margin-top: 0.25em; color: blue; }
-xxx.form-input-list .input-hint { opacity: 0.75; font-size: inherit; vertical-align: middle; }
 .form-input-list .hint-container { margin-top: 0.1em; color: #777; font-style: italic; }
 
 .form-input-list.flag-required .input-item.required > .label-container > label:before,
@@ -107,7 +114,7 @@ xxx.form-input-list .input-hint { opacity: 0.75; font-size: inherit; vertical-al
 .form-input-list.horizontal .input-item .error-container { display: table-cell; padding: 0.25em 0.5em; }
 .form-input-list.horizontal .input-item .error-container:EMPTY { display: none; }
 
-.form-input-list.compact .input-item { display: inline-block; padding: 0.25em; vertical-align: top; margin: 0 0.25em; }
+.form-input-list.compact .input-item { display: inline-block; vertical-align: top; margin: 0 0.25em; }
 .form-input-list.compact .input-container { width: initial; }
 .form-input-list.compact .input-container select { margin: 0; }
 
@@ -274,7 +281,7 @@ div.message-container ul > li { padding: 0; margin: 1em 0 1em 2em;; }
 	padding: 0.25em;
 }
 .object-view-details-fixer-station-list li img {
-	max-width: 4.5em;
+	max-width: 4em;
 	height: auto;
 }
 .reg-man-rc-object-view-details-list .object-view-details-fixer-station-list li figure figcaption {
@@ -324,3 +331,60 @@ div.message-container ul > li { padding: 0; margin: 1em 0 1em 2em;; }
 .reg-man-rc-object-view-container .reg-man-rc-object-view-details-description-item p {
 	margin: 0 0 0.5em 0;
 }
+
+.reg-man-rc-event-descriptor-group-view-descriptor-container {
+  margin: 0.5em 0;
+  padding: 0.5em;
+  border: 1px solid #ccc;
+}
+
+.reg-man-rc-event-descriptor-group-view-descriptor-container .reg-man-rc-object-view-details-location-name,
+.reg-man-rc-event-descriptor-group-view-descriptor-container .reg-man-rc-object-view-details-location-address,
+.reg-man-rc-event-descriptor-group-view-descriptor-container .reg-man-rc-object-view-details-get-directions {
+	display: none;
+}
+
+/* Forms */
+.reg-man-rc-form-field {
+	padding: 0.5em 0;
+}
+
+.reg-man-rc-form-field.reg-man-rc-radio-input {
+	margin: 0 0.25em 0 0;
+}
+
+.reg-man-rc-radio-group-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+.reg-man-rc-radio-group-list .reg-man-rc-radio-group-item {
+	padding: 0.25em 0;
+}
+
+
+/* Popup Editors */
+.reg-man-rc-popup-editable {
+  cursor: pointer;
+  border: 1px solid #ccc;
+  background: #fff;
+  padding: 0.25em;
+  line-height: 1.4em;
+  min-height: 2.1em; /* to keep it from collapsing when empty */
+}
+.reg-man-rc-popup-editor {
+	display: none; /* hidden until shown by the popup */
+}
+.reg-man-rc-popup-editable.editable-busy {
+	opacity: 0.5;
+}
+
+.reg-man-rc-popup-editor-form {
+	margin: 0;
+	padding: 0;
+}
+
+.reg-man-rc-popup-editor-form .reg-man-rc-radio-group-list .reg-man-rc-radio-group-item {
+	padding: 0.4em 0;
+}
+

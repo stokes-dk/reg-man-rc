@@ -162,11 +162,9 @@ class Item_Import_Admin_View {
 			echo "<select required=\"required\" class=\"combobox\" name=\"$input_name\" id=\"$input_id\" autocomplete=\"off\"  disabled=\"disabled\" >";
 
 				// The empty valued selection MUST be first to make HTML5 required attribute work correctly
-				if ( empty( $selected_key ) ) {
-					$label = __( '-- Please select --', 'reg-man-rc' );
-					$html_name= esc_html( $label );
-					echo "<option value=\"\" disabled=\"disabled\">$html_name</option>";
-				} // endif
+				$label = __( '-- Please select --', 'reg-man-rc' );
+				$html_name= esc_html( $label );
+				echo "<option value=\"\" disabled=\"disabled\">$html_name</option>";
 
 				if ( ! empty( $events ) ) {
 					foreach ( $events as $event ) {

@@ -1,7 +1,6 @@
 <?php
 namespace Reg_Man_RC\View\Object_View;
 
-use Reg_Man_RC\Model\Error_Log;
 
 /**
  * Provides a foundation for implementing the Object_View interface.
@@ -16,9 +15,15 @@ abstract class Abstract_Object_View implements Object_View {
 
 	/**
 	 * This provides a convenience for getting the contents of an object view already rendered by the template.
+	 * @param	Object_View_Template	$template	The template used to render the content or NULL to use default template
+	 * @param	string					$classes	Any classes to be added to the outermost element of the content
+	 * @return	string	The content of the view as a string
 	 */
-	public function get_object_view_content() {
-		$template = Object_View_Template::create( $this );
+	public function get_object_view_content( $template = NULL, $classes = NULL ) {
+		if ( ! $template instanceof Object_View_Template ) {
+			$template = Basic_Object_View_Template::create( $this );
+			$template->set_classes( $classes );
+		} // endif
 		$result = $template->get_content();
 		return $result;
 	} // function

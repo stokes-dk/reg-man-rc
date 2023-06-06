@@ -1,9 +1,9 @@
 <?php
 namespace Reg_Man_RC\Model;
 
-use Reg_Man_RC\Model\Recurrence_Rule;
 use Reg_Man_RC\View\Event_View;
 use Reg_Man_RC\View\Volunteer_Registration_View;
+use Reg_Man_RC\View\Map_View;
 
 /**
  * Describes an instance of an event.
@@ -353,7 +353,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * 	representing all instances of a recurring event keyed by event key
 	 * @since v0.1.0
 	 */
-	private static final function get_recurring_events( $event_descriptor ) {
+	private static function get_recurring_events( $event_descriptor ) {
 		$result = array();
 		$start_date = $event_descriptor->get_event_start_date_time();
 		$end_date = $event_descriptor->get_event_end_date_time();
@@ -582,7 +582,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 
 	/**
 	 * Get the event's class represented as an instance of Event_Class.
-	 * @return	string		The event's class.
+	 * @return	Event_Class		The event's class.
 	 * @since v0.1.0
 	 */
 	public function get_class() {
@@ -1039,22 +1039,19 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * @since v0.1.0
 	 */
 	public function get_calendar_entry_title( $calendar_type ) {
-		$event_label = $this->get_summary();
+		
+		$result = $this->get_summary(); // start with just the summary
 
 		// Mark events if they are cancelled or tentative
 		$status = $this->get_status();
-		if ( $status === NULL ) { // Make sure we have a valid object
-			$status = Event_Status::get_event_status_by_id( Event_Status::CONFIRMED );
-		} // endif
-		$status_id = $status->get_id();
+		$status_id = isset( $status ) ? $status->get_id() : Event_Status::CONFIRMED; // Defensive
 		if ( ( $status_id == Event_Status::CANCELLED ) || ( $status_id == Event_Status::TENTATIVE ) ) {
-//			$label_with_status_format = _x( '%1$s — %2$s ', 'A calendar label for an event using its status and details, e.g. (Tentative) Reference Library Repair Cafe', 'reg-man-rc' );
 			$label_with_status_format = _x( '(%1$s) %2$s ', 'A calendar label for an event using its status and details, e.g. (Tentative) Reference Library Repair Cafe', 'reg-man-rc' );
-			$result = sprintf( $label_with_status_format, $status->get_name(), $event_label );
-		} else {
-			$result = $event_label;
+			$result = sprintf( $label_with_status_format, $status->get_name(), $result );
 		} // endif
+		
 		return $result;
+		
 	} // function
 
 	/**
@@ -1159,6 +1156,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 				$view = Volunteer_Registration_View::create_for_calendar_info_window( $this, $calendar_type );
 				break;
 
+			case Calendar::CALENDAR_TYPE_ADMIN_EVENTS:
 			default:
 				$view = Event_View::create_for_calendar_info_window( $this, $calendar_type );
 				break;
@@ -1191,9 +1189,51 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * @since v0.1.0
 	 */
 	public function get_map_marker_label( $map_type ) {
-		$event_descriptor = $this->get_event_descriptor();
-		$result = $event_descriptor->get_map_marker_label( $map_type );
-		return $result;
+
+		switch( $map_type ) {
+			
+			case Map_View::MAP_TYPE_ADMIN_STATS:
+			case Map_View::MAP_TYPE_OBJECT_PAGE:
+				$result = NULL;
+				break;
+				
+			case Map_View::MAP_TYPE_CALENDAR_ADMIN:
+			case Map_View::MAP_TYPE_CALENDAR_EVENTS:
+			case Map_View::MAP_TYPE_CALENDAR_VISITOR_REG:
+			case Map_View::MAP_TYPE_CALENDAR_VOLUNTEER_REG:
+				
+				$calendar_type = Calendar::CALENDAR_TYPE_EVENTS; // This won't matter but is required arg
+				$classes = $this->get_calendar_entry_class_names( $calendar_type );
+				
+				$text = $this->get_start_date(); // start with just the date
+				
+				// Mark events if they are cancelled or tentative
+				$status = $this->get_status();
+				$status_id = isset( $status ) ? $status->get_id() : Event_Status::CONFIRMED; // Defensive
+				if ( ( $status_id == Event_Status::CANCELLED ) || ( $status_id == Event_Status::TENTATIVE ) ) {
+					/* Translators: %1$s is a status like "Cancelled", %2$s is an event date */
+					$label_with_status_format = _x( '(%1$s) %2$s ', 'A map marker label for an event using its status and date, e.g. (Tentative) Sat Jun 24, 2023', 'reg-man-rc' );
+					$text = sprintf( $label_with_status_format, $status->get_name(), $text );
+				} // endif
+		
+				if ( $map_type === Map_View::MAP_TYPE_CALENDAR_VOLUNTEER_REG ) {
+
+					$vol_reg = $this->get_volunteer_registration();
+					$is_registered = isset( $vol_reg );
+					if ( $is_registered ) {
+						$classes .= ' vol-reg-registered';
+					} // endif
+
+				} // endif
+
+				$result = Map_Marker_Label::create( $text, $classes );
+				
+				break;
+				
+		} // endswitch
+
+		return $result;		
+
 	} // function
 
 	/**
@@ -1277,9 +1317,23 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * @since v0.1.0
 	 */
 	public function get_map_marker_info( $map_type ) {
-		$view = Event_View::create_for_map_info_window( $this, $map_type );
-		$result = $view->get_object_view_content();
+
+		switch( $map_type ) {
+
+			case Map_View::MAP_TYPE_CALENDAR_VOLUNTEER_REG:
+				$view = Volunteer_Registration_View::create_for_map_info_window( $this, $map_type );
+				$result = $view->get_object_view_content();
+				break;
+
+			default:
+				$view = Event_View::create_for_map_info_window( $this, $map_type );
+				$result = $view->get_object_view_content();
+				break;
+
+		} // endswitch
+		
 		return $result;
+		
 	} // function
 
 
@@ -1288,7 +1342,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * @return string[][]	An associative array of event attributes including key, event name, start date and time etc.
 	 * @since v0.1.0
 	 */
-	public function jsonSerialize() {
+	public function jsonSerialize() : array {
 		$descriptor = $this->get_event_descriptor();
 		$status = $this->get_status();
 		$status_id = isset( $status ) ? $status->get_id() : Event_Status::CONFIRMED;
@@ -1309,6 +1363,16 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 			'uid'				=> $descriptor->get_event_uid(),
 			'categories'		=> $descriptor->get_event_categories(),
 		);
+		return $result;
+	} // function
+	
+	/**
+	 * Get a string to represent this event.
+	 * Note that this is used to compare events for equality, array_diff() and so on.
+	 * @return string	The event's key as a string
+	 */
+	public function __toString() {
+		$result = $this->get_key();
 		return $result;
 	} // function
 

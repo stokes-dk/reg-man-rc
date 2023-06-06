@@ -2,9 +2,7 @@
 namespace Reg_Man_RC\View\Pub;
 
 use Reg_Man_RC\Model\Volunteer;
-use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\Control\Scripts_And_Styles;
-use Reg_Man_RC\Model\Error_Log;
 
 /**
  * An instance of this class provides a user interface for a Volunteer that appears on the public-facing (frontend) side of the website.

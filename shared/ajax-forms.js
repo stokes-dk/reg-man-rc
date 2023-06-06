@@ -83,26 +83,6 @@ jQuery(document).ready(function($) {
 					dataType: 'json'
 			};
 			
-			// FIXME - TESTING PROGRESS!!!
-/*
-			settings.xhr = function() {
-				var xhr = new XMLHttpRequest();
-				xhr.upload.addEventListener( 'progress', function( evt ) {
-					if ( evt.lengthComputable ) {
-						var uploadpercent = evt.loaded / evt.total; 
-						uploadpercent = (uploadpercent * 100); //optional Math.round(uploadpercent * 100)
-						console.log( 'Percent complete: ' + uploadpercent );
-//						$('.progress-bar').text(uploadpercent + '%');
-//						$('.progress-bar').width(uploadpercent + '%');
-//						if (uploadpercent == 100) {
-//							$('.progress-bar').text('Completed');
-//						} // endif
-					} // endif
-				}, false );
-				return xhr;
-			} // function
-*/
-	
 			if ( form.attr('encType') == 'multipart/form-data' ) {
 				settings.cache = false;
 				settings.contentType = false;
@@ -147,9 +127,9 @@ jQuery(document).ready(function($) {
 		var me = $(this);
 		if ( ! me.hasClass( 'no-busy' ) ) { // sometimes I don't want to do this, those classes are marked
 			if ( reg_man_rc_ajax_form_timeout ) clearTimeout( reg_man_rc_ajax_form_timeout );
-			reg_man_rc_ajax_form_timeout = setTimeout( function() {
+//			reg_man_rc_ajax_form_timeout = setTimeout( function() {
 				$( '.reg-man-rc-application-busy' ).addClass( 'is-active' ); // shrowd the entire UI while we're busy, no clicks anywhere
-			}, 250); // but wait a tick so that we only show it on longer requests
+//			}, 250); // but wait a tick so that we only show it on longer requests
 		} // endif
 		me.find( '.error' ).removeClass( 'error' ); // hide old errors before submit
 		me.find( '.input-item .error-container' ).text( '' ); // remove old error text before submit

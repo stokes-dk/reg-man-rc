@@ -2,11 +2,11 @@
 namespace Reg_Man_RC\Control\Admin;
 
 use Reg_Man_RC\Model\Volunteer;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Ajax_Form_Response;
 use Reg_Man_RC\Model\Volunteer_Role;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\View\Admin\Volunteer_Import_Admin_View;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The administrative controller for importing Volunteers
@@ -181,12 +181,12 @@ class Volunteer_Import_Admin_Controller {
 			// We have moved the uploaded file to the uploads directory.
 			// Now we'll create an attachment record so that the file can be seen in the media library
 			$attach_args = array(
-				'post_title'     => basename( $upload_result[ 'file' ] ),
-				'post_content'   => $upload_result[ 'url' ],
-				'post_mime_type' => $upload_result[ 'type' ],
-				'guid'           => $upload_result[ 'url' ],
-				'context'        => 'import',
-				'post_status'    => 'private',
+				'post_title'		=> basename( $upload_result[ 'file' ] ),
+				'post_content'		=> $upload_result[ 'url' ],
+				'post_mime_type'	=> $upload_result[ 'type' ],
+				'guid'				=> $upload_result[ 'url' ],
+				'context'			=> 'import',
+				'post_status'		=> 'private',
 			);
 
 			// Save the data.
@@ -268,6 +268,10 @@ class Volunteer_Import_Admin_Controller {
 
 						// Try to find the visitor record with the specified email address
 						$volunteer = ! empty( $email ) ? Volunteer::get_volunteer_by_email( $email ) : NULL;
+						if ( !isset( $volunteer ) ) {
+							// We could not find the volunteer using their email address. try full name
+							$volunteer = ! empty( $full_name ) ? Volunteer::get_volunteer_by_full_name( $full_name ) : NULL;
+						} // endif
 
 						if ( isset( $volunteer ) ) {
 							// In this case we already have a record for the volunteer, we'll just bypass this record
@@ -280,7 +284,7 @@ class Volunteer_Import_Admin_Controller {
 							if ( ! isset( $volunteer ) ) {
 								/* translators: %s is a line number in a file */
 								$err_msg = sprintf( __( 'Unable to import volunteer record for line number %s.', 'reg-man-rc' ), $file_path );
-								$form_response->add_error( "volunteer-import-attachment-id[$line_number]" , '', $error_msg );
+								$form_response->add_error( "volunteer-import-attachment-id[$line_number]" , '', $err_msg );
 							} else {
 								$record_count++;
 								// Assign the fixer station

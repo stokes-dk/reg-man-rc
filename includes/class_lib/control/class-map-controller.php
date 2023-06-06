@@ -90,7 +90,7 @@ class Map_Controller {
 		$map_type					= isset( $form_data[ self::MAP_TYPE_INPUT_FIELD_NAME ] )	? $form_data[ self::MAP_TYPE_INPUT_FIELD_NAME ]	: NULL;
 
 		$calendar = isset( $calendar_id ) ? Calendar::get_calendar_by_id( $calendar_id ) : NULL;
-		$cal_type = isset( $calendar ) ? $calendar->get_calendar_type() : NULL;
+//		$cal_type = isset( $calendar ) ? $calendar->get_calendar_type() : NULL;
 //		Error_Log::var_dump( $cal_type, $map_type );
 
 		$is_show_past_events = ( strtolower( $show_past_events_string ) !== 'false' );
@@ -133,7 +133,7 @@ class Map_Controller {
 				} // endif
 			} // endif
 
-			$marker_array = $calendar->get_map_markers_in_date_range( $map_type, $start_date_time, $end_date_time );
+			$marker_array = $calendar->get_map_markers_in_date_range( $start_date_time, $end_date_time );
 
 		} else {
 

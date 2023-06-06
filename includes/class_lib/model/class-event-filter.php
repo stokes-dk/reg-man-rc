@@ -17,6 +17,7 @@ class Event_Filter {
 	private $accept_statuses; // The array of event statuses to be accepted by the filter
 	private $accept_category_names; // The array of event category names (strings) to be accepted by the filter
 // FIXME - there are no uncategorized events any more
+// But wait, there are no uncategorized events INTERNALLY but what about external events, can't they be uncategorized????
 //	private $is_accept_uncategorized; // A flag indicating whether uncategorized events will be accepted by the filter
 	private $accept_minimum_date_time; // Accept only events on or after the minimum date and time
 	private $accept_maximum_date_time; // Accept only events on or before the maximum date and time
@@ -242,7 +243,7 @@ class Event_Filter {
 	/**
 	 * Set the string to be searched in the event list.
 	 * Events whose label contains the specified search string will be returned, others will be excluded by the filter.
-	 * @param	$search_string		Any string to be used to search event labels
+	 * @param	string	$search_string		Any string to be used to search event labels
 	 * @return	void
 	 * @since v0.1.0
 	 */
@@ -262,7 +263,7 @@ class Event_Filter {
 
 	/**
 	 * Set the Event_Filter constant (defined in this class) indicating how the list is to be sorted.
-	 * @param	$sort_order		The order used to sort this list.  The value must be one of the SORT_BY_* constants defined in this class.
+	 * @param	string	$sort_order		The order used to sort this list.  The value must be one of the SORT_BY_* constants defined in this class.
 	 * @return	void
 	 * @since v0.1.0
 	 */

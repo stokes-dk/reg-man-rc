@@ -43,7 +43,6 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 			$result = new self();
 			$result->post				= $post;
 			$result->post_id			= $post->ID;
-//			$result->name				= $post->post_title; // Should we use post_title
 			$result->comments			= $post->post_content;
 		} // endif
 		return $result;
@@ -57,14 +56,16 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	 * @param	Volunteer_Role[]	$roles			The roles that the volunteer will perform at the event, may be empty
 	 * @param	Fixer_Station|NULL	$fixer_station	The fixer station the volunteer will work, or NULL if the volunteer is not a fixer
 	 * @param	boolean				$is_apprentice	(optional) TRUE if the volunteer wants to work as a fixer apprentice, FALSE otherwise
+	 * @param	string|NULL			$comments		(optional) Private registration comment provided by volunteer
 	 * @return	Volunteer_Registration|NULL
 	 */
-	public static function create_new_registration( $volunteer, $event, $roles, $fixer_station, $is_apprentice = FALSE ) {
+	public static function create_new_registration( $volunteer, $event, $roles, $fixer_station, $is_apprentice = FALSE, $comments = '' ) {
+
+		$comments = is_string( $comments ) && ! empty( $comments ) ? trim( $comments ) : '';
 
 		$args = array(
-//				'post_title'	=> ???, // Should we use post_title?
 				'post_status'	=> 'publish',
-//				'post_content'	=> $comments, // Should we allow comments?
+				'post_content'	=> $comments,
 				'post_type'		=> self::POST_TYPE,
 		);
 
@@ -690,6 +691,19 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	} // function
 
 	/**
+	 * Set the comments supplied by the fixer or volunteer for this registration.
+	 * 	The comments are the post content.
+	 * @param	string	$comments	Comments supplied by the volunteer during registration
+	 * @since	v0.3.0
+	 */
+	public function set_volunteer_registration_comments( $comments ) {
+		$comments = is_string( $comments ) && ! empty( $comments ) ? trim( $comments ) : '';
+		$post = $this->get_post();
+		$post->post_content = $comments;
+		wp_update_post( $post );
+	} // function
+	
+	/**
 	 * Get the array of roles the volunteer is offering to perform at the event.
 	 * @return	Volunteer_Role[]	An array of Volunteer_Role objects describing the roles this volunteer is offering to perform.
 	 * @since	v0.1.0
@@ -958,14 +972,15 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 				'exclude_from_search'	=> TRUE, // exclude from regular search results?
 				'publicly_queryable'	=> FALSE, // is it queryable? e.g. ?post_type=item
 				'show_ui'				=> TRUE, // is there a default UI for managing these in wp-admin?
-				'show_in_rest'			=> TRUE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
+				// There is no reason to show these in the REST API
+				'show_in_rest'			=> FALSE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
 				'show_in_nav_menus'		=> FALSE, // available for selection in navigation menus?
 				'show_in_menu'			=> Admin_Menu_Page::get_CPT_show_in_menu( $capability_plural ), // Where to show in admin menu? The main menu page will determine this
-				'show_in_admin_bar'		=> FALSE, // Whether to include this post type in the admin bar
+				'show_in_admin_bar'		=> TRUE, // Whether to include this post type in the admin bar
 				'menu_position'			=> 5, // Menu order position.
 				'menu_icon'				=> $icon,
 				'hierarchical'			=> FALSE, // Can each post have a parent?
-				'supports'				=> array( /* 'title', */ 'editor' ),
+				'supports'				=> array( '' ), // I want nothing but my metaboxes
 				'taxonomies'			=> array(
 												Fixer_Station::TAXONOMY_NAME,
 												Volunteer_Role::TAXONOMY_NAME,

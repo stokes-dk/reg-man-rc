@@ -2,11 +2,9 @@
 namespace Reg_Man_RC\View;
 
 use Reg_Man_RC\Model\Event;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\View\Object_View\List_Item;
 use Reg_Man_RC\View\Object_View\List_Section;
 use Reg_Man_RC\View\Object_View\Map_Section;
-use Reg_Man_RC\Model\Event_Descriptor;
 use Reg_Man_RC\Model\Calendar;
 use Reg_Man_RC\View\Object_View\Abstract_Object_View;
 use Reg_Man_RC\View\Object_View\Event_Item_Provider;
@@ -14,6 +12,10 @@ use Reg_Man_RC\View\Object_View\Object_View;
 use Reg_Man_RC\View\Pub\Volunteer_Area;
 use Reg_Man_RC\View\Object_View\Event_Descriptor_Item_Provider;
 use Reg_Man_RC\Model\Event_Filter;
+use Reg_Man_RC\View\Object_View\Object_View_Section;
+use Reg_Man_RC\View\Admin\Admin_Dashboard_Page;
+use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\View\Pub\Visitor_Reg_Manager;
 
 /**
  * An instance of this class provides rendering for an Event object.
@@ -25,6 +27,7 @@ class Event_View extends Abstract_Object_View {
 
 	private $event;
 	private $item_provider;
+	private $is_calendar_agenda_entry = FALSE;
 
 	/**
 	 * A private constructor forces users to use one of the factory methods
@@ -34,14 +37,15 @@ class Event_View extends Abstract_Object_View {
 
 	/**
 	 * A factory method to create an instance of this class to display the page content for an event.
-	 * @param	Event	$event	The event object shown in this view.
-	 * @return	Event_View		An instance of this class which can be rendered to the page.
+	 * @param	Event	$event				The event object shown in this view.
+	 * @param	string	$object_page_type	The type of page we're showing. One of the Object_View::OBJECT_PAGE_TYPE_* constants.
+	 * @return	Event_View					An instance of this class which can be rendered to the page.
 	 * @since	v0.1.0
 	 */
-	public static function create_for_page_content( $event ) {
+	public static function create_for_page_content( $event, $object_page_type = Object_View::OBJECT_PAGE_TYPE_EVENT ) {
 		$result = new self();
 		$result->event = $event;
-		$result->set_object_page_type( Object_View::OBJECT_PAGE_TYPE_EVENT );
+		$result->set_object_page_type( $object_page_type );
 		return $result;
 	} // function
 
@@ -73,7 +77,25 @@ class Event_View extends Abstract_Object_View {
 		return $result;
 	} // function
 
+	/**
+	 * A factory method to create an instance of this class to display the calendar info window content for an event.
+	 * @param	Event	$event	The event object shown in this view.
+	 * @return	Event_View
+	 * @since	v0.1.0
+	 */
+	public static function create_for_calendar_agenda_entry( $event ) {
+		$result = new self();
+		$result->event = $event;
+		$result->set_title( $event->get_summary() );
+//		$result->set_info_window_calendar_type( $calendar_type );
+		$result->is_calendar_agenda_entry = TRUE;
+		return $result;
+	} // function
 
+	protected function get_is_calendar_agenda_entry() {
+		return $this->is_calendar_agenda_entry;
+	} // function
+	
 	/**
 	 * Render a select element for events
 	 *
@@ -138,9 +160,6 @@ class Event_View extends Abstract_Object_View {
 	} // function
 
 
-
-
-
 	/**
 	 * Get the event object for this view
 	 * @return	Event		The event object shown in this view
@@ -198,10 +217,20 @@ class Event_View extends Abstract_Object_View {
 	 * Get the item names array for the details section
 	 */
 	private function get_after_title_item_names_array() {
-		$result = array(
-				List_Item::EVENT_STATUS,
-				List_Item::EVENT_VISIBILITY,
-		);
+		if ( $this->get_is_calendar_agenda_entry() ) {
+			$result = array(
+					List_Item::EVENT_STATUS,
+					List_Item::EVENT_VISIBILITY,
+					List_Item::EVENT_CATEGORIES,
+					List_Item::EVENT_DATE,
+					List_Item::LOCATION_NAME,
+			);
+		} else {
+			$result = array(
+					List_Item::EVENT_STATUS,
+					List_Item::EVENT_VISIBILITY,
+			);
+		} // endif
 		return $result;
 	} // function
 
@@ -211,20 +240,53 @@ class Event_View extends Abstract_Object_View {
 	private function get_details_item_names_array() {
 
 		if ( $this->get_is_object_page() ) {
-			$result = array(
-					List_Item::EVENT_CATEGORIES,
-					List_Item::EVENT_DATE,
-					List_Item::LOCATION_NAME,
-					List_Item::LOCATION_ADDRESS,
-					List_Item::GET_DIRECTIONS_LINK,
-					List_Item::EVENT_FIXER_STATIONS,
-					List_Item::EVENT_DESCRIPTION,
-					List_Item::VENUE_DESCRIPTION,
-			);
+			$object_page_type = $this->get_object_page_type();
+			
+			switch( $object_page_type ) {
+				
+				case Object_View::OBJECT_PAGE_TYPE_EVENT:
+				default:
+					$result = array(
+							List_Item::EVENT_CATEGORIES,
+							List_Item::EVENT_DATE,
+							List_Item::LOCATION_NAME,
+							List_Item::LOCATION_ADDRESS,
+							List_Item::GET_DIRECTIONS_LINK,
+							List_Item::EVENT_FIXER_STATIONS,
+							List_Item::EVENT_DESCRIPTION,
+							List_Item::VENUE_DESCRIPTION,
+					);
+					break;
+
+				case Object_View::OBJECT_PAGE_TYPE_ADMIN_DASHBOARD_EVENT_DETAILS:
+					$result = array(
+							List_Item::EVENT_CATEGORIES,
+							List_Item::EVENT_DATE,
+							List_Item::LOCATION_NAME,
+							List_Item::LOCATION_ADDRESS,
+							List_Item::EVENT_FIXER_STATIONS,
+							List_Item::ADMIN_EVENT_VIEW_LINK,
+							List_Item::ADMIN_EVENT_EDIT_LINK,
+							List_Item::ADMIN_EVENT_ITEMS_ITEMIZED,
+							List_Item::ADMIN_EVENT_VOLUNTEERS_ITEMIZED,
+							List_Item::ADMIN_EVENT_VOL_AREA_LINK,
+							List_Item::EVENT_DESCRIPTION,
+							List_Item::VENUE_DESCRIPTION,
+							);
+					break;
+					
+			} // endswitch
+			
 		} elseif ( $this->get_is_calendar_info_window() ) {
+			
 			$result = $this->get_details_item_names_array_for_calendar();
 
+		} elseif ( $this->get_is_calendar_agenda_entry() ) {
+			
+			$result = $this->get_details_item_names_array_for_calendar_agenda();
+
 		} else {
+			
 			$result = $this->get_details_item_names_array_for_map();
 
 		} // endif
@@ -235,24 +297,23 @@ class Event_View extends Abstract_Object_View {
 	/**
 	 * Get the item names array for the details section in a calendar info window
 	 */
+	private function get_details_item_names_array_for_calendar_agenda() {
+		$result = array(
+				List_Item::LOCATION_ADDRESS,
+				List_Item::GET_DIRECTIONS_LINK,
+				List_Item::EVENT_FIXER_STATIONS,
+				List_Item::MORE_DETAILS_LINK,
+		);
+		return $result;
+	} // function
+
+
+	/**
+	 * Get the item names array for the details section in a calendar info window
+	 */
 	private function get_details_item_names_array_for_calendar() {
 		$calendar_type = $this->get_info_window_calendar_type();
 		switch( $calendar_type ) {
-
-			case Calendar::CALENDAR_TYPE_ADMIN_EVENTS:
-				$result = array(
-						List_Item::EVENT_CATEGORIES,
-						List_Item::EVENT_DATE,
-						List_Item::LOCATION_NAME,
-						List_Item::LOCATION_ADDRESS,
-						List_Item::EVENT_FIXER_STATIONS,
-						List_Item::ADMIN_EVENT_VIEW_LINK,
-						List_Item::ADMIN_EVENT_EDIT_LINK,
-						List_Item::ADMIN_EVENT_VOLUNTEERS_LINK,
-						List_Item::ADMIN_EVENT_ITEMS_LINK,
-						List_Item::ADMIN_EVENT_VOL_AREA_LINK,
-					);
-				break;
 
 			case Calendar::CALENDAR_TYPE_VISITOR_REG:
 				$result = array(
@@ -265,6 +326,21 @@ class Event_View extends Abstract_Object_View {
 				);
 				break;
 
+			case Calendar::CALENDAR_TYPE_ADMIN_EVENTS:
+				$result = array(
+						List_Item::EVENT_CATEGORIES,
+						List_Item::EVENT_DATE,
+						List_Item::LOCATION_NAME,
+						List_Item::LOCATION_ADDRESS,
+						List_Item::EVENT_FIXER_STATIONS,
+						List_Item::ADMIN_EVENT_EDIT_LINK,
+						List_Item::ADMIN_EVENT_ITEMS,
+						List_Item::ADMIN_EVENT_VOLUNTEERS,
+						List_Item::ADMIN_EVENT_VOL_AREA_LINK,
+						List_Item::ADMIN_EVENT_MORE_DETAILS_LINK,
+				);
+				break;
+				
 			default:
 				$result = array(
 						List_Item::EVENT_CATEGORIES,
@@ -291,14 +367,58 @@ class Event_View extends Abstract_Object_View {
 		$map_type = $this->get_info_window_map_type();
 		switch( $map_type ) {
 
+			// Note that we use Volunteer_Registration_View and not this class in the volunteer area calendar map
+			
 			case Map_View::MAP_TYPE_OBJECT_PAGE:
+			case Map_View::MAP_TYPE_ADMIN_STATS:
 			default:
-				// We're showing an info window on the object's page
+				// We're showing an info window on the object's page, the stats page, or visitor reg map
 				$result = array(
 						List_Item::EVENT_CATEGORIES,
+						List_item::EVENT_DATE,
+						List_Item::LOCATION_NAME,
+						List_Item::LOCATION_ADDRESS,
+				);
+				break;
+				
+			case Map_View::MAP_TYPE_CALENDAR_VISITOR_REG:
+				// We're showing an info window on the object's page, the stats page, or visitor reg map
+				$result = array(
+						List_Item::EVENT_CATEGORIES,
+						List_Item::EVENT_DATE,
+						List_Item::LOCATION_NAME,
+						List_Item::LOCATION_ADDRESS,
+						List_Item::EVENT_FIXER_STATIONS,
+						List_Item::VISITOR_REG_LAUNCH_LINK,
+					);
+				break;
+
+			case Map_View::MAP_TYPE_CALENDAR_EVENTS:
+				// We're showing an info window on a public calendar map
+				$result = array(
+						List_Item::EVENT_CATEGORIES,
+						List_item::EVENT_DATE,
 						List_Item::LOCATION_NAME,
 						List_Item::LOCATION_ADDRESS,
 						List_Item::GET_DIRECTIONS_LINK,
+						List_Item::EVENT_FIXER_STATIONS,
+						List_Item::MORE_DETAILS_LINK,
+				);
+				break;
+
+			case Map_View::MAP_TYPE_CALENDAR_ADMIN:
+				// We're showing an info window on the admin map
+				$result = array(
+						List_Item::EVENT_CATEGORIES,
+						List_Item::EVENT_DATE,
+						List_Item::LOCATION_NAME,
+						List_Item::LOCATION_ADDRESS,
+						List_Item::EVENT_FIXER_STATIONS,
+						List_Item::ADMIN_EVENT_EDIT_LINK,
+						List_Item::ADMIN_EVENT_ITEMS,
+						List_Item::ADMIN_EVENT_VOLUNTEERS,
+						List_Item::ADMIN_EVENT_VOL_AREA_LINK,
+						List_Item::ADMIN_EVENT_MORE_DETAILS_LINK,
 				);
 				break;
 
@@ -388,10 +508,19 @@ class Event_View extends Abstract_Object_View {
 									if ( ! empty( $link_type ) ) {
 										switch( $link_type ) {
 
-											case Object_View::OBJECT_PAGE_TYPE_VOLUNTEER_REG:
+											case Object_View::OBJECT_PAGE_TYPE_VOLUNTEER_REGISTRATION:
 												$link_url = Volunteer_Area::get_href_for_event_page( $event );
 												break;
 
+											case Object_View::OBJECT_PAGE_TYPE_VISITOR_REGISTRATION:
+												$event_key = $event->get_key();
+												$link_url = Visitor_Reg_Manager::get_event_registration_href( $event_key );
+												break;
+
+											case Object_View::OBJECT_PAGE_TYPE_ADMIN_DASHBOARD_EVENT_DETAILS:
+												$link_url = Admin_Dashboard_Page::get_href_for_event_page( $event );
+												break;
+												
 											case Object_View::OBJECT_PAGE_TYPE_EVENT:
 											default:
 												$link_url = $event->get_event_page_url();
@@ -501,6 +630,7 @@ class Event_View extends Abstract_Object_View {
 	 * @return	List_Item
 	 * @since	v0.1.0
 	 */
+/* FIXME - I don't think this is used
 	public function create_event_date_item( $event, $href ) {
 
 		$result = NULL; // Assume there's no item to return
@@ -548,7 +678,8 @@ class Event_View extends Abstract_Object_View {
 		return $result;
 
 	} // function
-
+*/
+	
 	/**
 	 * Get the event status item.
 	 * @return	List_Item|NULL	The list item for the event status or NULL if the status should not be display
@@ -574,9 +705,6 @@ class Event_View extends Abstract_Object_View {
 		$result = List_Item::create_more_details_link_item( $href );
 		return $result;
 	} // function
-
-
-
 
 
 } // class

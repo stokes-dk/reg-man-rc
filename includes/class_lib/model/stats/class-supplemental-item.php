@@ -1,12 +1,12 @@
 <?php
 namespace Reg_Man_RC\Model\Stats;
 
-use Reg_Man_RC\Model\Stats\Item_Descriptor;
-use Reg_Man_RC\Model\Stats\Item_Statistics;
 use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Item_Status;
 use Reg_Man_RC\Model\Event;
+use Reg_Man_RC\Model\Event_Key;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * Describes an item that was brought to an event and seen by a fixer but not registered to the system.
@@ -18,6 +18,7 @@ class Supplemental_Item implements Item_Descriptor {
 
 	const SUPPLEMENTAL_ITEMS_TABLE_NAME		= 'reg_man_rc_sup_items';
 
+	private $event;
 	private $event_key;
 	private $item_type_name;
 	private $fixer_station_name;
@@ -30,7 +31,7 @@ class Supplemental_Item implements Item_Descriptor {
 	 *  the supplemental records stored in the database.
 	 *
 	 * @param	Event_Key[]		$event_keys_array	An array of Event_Key objects whose item descriptors are to be returned.
-	 * @return \Reg_Man_RC\Model\Item_Descriptor[]
+	 * @return	Item_Descriptor[]
 	 */
 	public static function get_all_supplemental_item_descriptors( $event_keys_array ) {
 
@@ -166,8 +167,8 @@ class Supplemental_Item implements Item_Descriptor {
 	/**
 	 * Get the supplemental item stats for the specified events and grouped in the specified way
 	 * @param	Event_Key[]		$event_key_array	An array of event keys whose group stats are to be returned
-	 * @param	string			$group_by			One of the "GROUP_BY" constants from Item_Statistics
-	 * @return Item_Group_Stats[]	An array of instances of Item_Group_Stats describing the items and their related data.
+	 * @param	string			$group_by			One of the "GROUP_BY" constants from Item_Stats_Collection
+	 * @return Item_Stats[]	An array of instances of Item_Stats describing the items and their related data.
 	 */
 	public static function get_supplemental_group_stats_array( $event_key_array, $group_by ) {
 
@@ -178,23 +179,27 @@ class Supplemental_Item implements Item_Descriptor {
 			$table = $wpdb->prefix . self::SUPPLEMENTAL_ITEMS_TABLE_NAME;
 			switch( $group_by ) {
 
-				case Item_Statistics::GROUP_BY_EVENT:
+				case Item_Stats_Collection::GROUP_BY_EVENT:
 					$name_col = 'event_key';
 					break;
 
-				case Item_Statistics::GROUP_BY_FIXER_STATION:
+				case Item_Stats_Collection::GROUP_BY_FIXER_STATION:
 					$name_col = 'fixer_station_id';
 					break;
 
-				case Item_Statistics::GROUP_BY_ITEM_TYPE:
+				case Item_Stats_Collection::GROUP_BY_ITEM_TYPE:
 					$name_col = 'item_type_id';
 					break;
 
-				case Item_Statistics::GROUP_BY_ITEM_DESC:
+				case Item_Stats_Collection::GROUP_BY_STATION_AND_TYPE:
+					$name_col = "CONCAT( fixer_station_id, '|', item_type_id )";
+					break;
+
+				case Item_Stats_Collection::GROUP_BY_ITEM_DESC:
 					$name_col = "''"; // must be a quoted string for SQL otherwise illegal column name
 					break;
 
-				case Item_Statistics::GROUP_BY_TOTAL:
+				case Item_Stats_Collection::GROUP_BY_TOTAL:
 				default:
 					$name_col = "''"; // must be a quoted string for SQL otherwise illegal column name
 					break;
@@ -212,9 +217,9 @@ class Supplemental_Item implements Item_Descriptor {
 			$query = "SELECT $cols FROM $table WHERE event_key IN ( $placehold_string ) GROUP BY name";
 			$stmt = $wpdb->prepare( $query, $event_key_array );
 			$data_array = $wpdb->get_results( $stmt, OBJECT_K );
-	//Error_Log::var_dump( $query, $data_array );
+//	Error_Log::var_dump( $query, $data_array );
 			foreach( $data_array as $name => $obj ) {
-				$result[ $name ] = Item_Group_Stats::create(
+				$result[ $name ] = Item_Stats::create(
 						$name, $obj->total_count, $obj->fixed_count, $obj->repairable_count, $obj->eol_count
 					);
 			} // endfor
@@ -380,6 +385,15 @@ class Supplemental_Item implements Item_Descriptor {
 		return '';
 	} // function
 
+	/**
+	 * Get the key for the event for which this item was registered
+	 * @return	string	The event key for the event for which this item was registered.
+	 * @since	v0.1.0
+	 */
+	public function get_event_key() {
+		return $this->event_key;
+	} // function
+	
 	/**
 	 * Get the event for which this item was registered
 	 * @return	Event	The event for which this item was registered.

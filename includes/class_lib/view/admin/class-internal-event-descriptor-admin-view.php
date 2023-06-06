@@ -9,12 +9,13 @@ use Reg_Man_RC\View\Form_Input_List;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Model\Event_Category;
 use Reg_Man_RC\Model\Venue;
-use Reg_Man_RC\Model\Item;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\View\Map_View;
-use Reg_Man_RC\Model\Event_Key;
 use Reg_Man_RC\Model\Event_Class;
+use Reg_Man_RC\Model\Event_Key;
+use Reg_Man_RC\Model\Stats\Item_Stats_Collection;
+use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Model\Stats\Volunteer_Stats_Collection;
 
 /**
  * The administrative view for internal event descriptors
@@ -429,16 +430,16 @@ class Internal_Event_Descriptor_Admin_View {
 			'is_recurring'		=> __( 'Repeats', 'reg-man-rc' ),
 			$venue_key			=> __( 'Venue', 'reg-man-rc' ),
 			$event_category_key	=> $category_heading,
-//			$fixer_station_key	=> __( 'Fixer Stations', 'reg-man-rc' ),
 			'fixer_stations'	=> __( 'Fixer Stations', 'reg-man-rc' ),
+			'item_count'		=> __( 'Items', 'reg-man-rc' ),
+			'fixer_count'		=> __( 'Fixers', 'reg-man-rc' ),
+			'non_fixer_count'	=> __( 'Non-fixers', 'reg-man-rc' ),
+			'comments'			=> $columns[ 'comments' ],
 			'date'				=> __( 'Last Update', 'reg-man-rc' ),
 			'author'			=> __( 'Author', 'reg-man-rc' ),
 		);
 		if ( ! Settings::get_is_allow_recurring_events() ) {
 			unset( $result[ 'is_recurring' ] );
-		} // endif
-		if ( Settings::get_is_allow_event_comments() ) {
-			$result[ 'comments' ]	= $columns[ 'comments' ];
 		} // endif
 		return $result;
 	} // function
@@ -490,6 +491,54 @@ class Internal_Event_Descriptor_Admin_View {
 					$result = ! empty( $stations_array ) ? self::get_station_list( $stations_array ) : $em_dash;
 					break;
 
+				case 'item_count':
+					$is_recurring = $event_desc->get_event_is_recurring();
+					if ( $is_recurring ) {
+						$result = $em_dash;
+					} else {
+						$event_key_obj = Event_Key::create( $event_desc->get_event_descriptor_id() );
+						$event_keys_array = array( $event_key_obj->get_as_string() );
+						$group_by = Item_Stats_Collection::GROUP_BY_TOTAL;
+						$stats_collection = Item_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
+						$totals_array = array_values( $stats_collection->get_all_stats_array() );
+						$total_stats = isset( $totals_array[ 0 ] ) ? $totals_array[ 0 ] : NULL;
+						$total = isset( $total_stats ) ? $total_stats->get_item_count() : NULL;
+						$result = ! empty( $total ) ? $total : $em_dash;
+					} // endif
+					break;
+
+				case 'fixer_count':
+					$is_recurring = $event_desc->get_event_is_recurring();
+					if ( $is_recurring ) {
+						$result = $em_dash;
+					} else {
+						$event_key_obj = Event_Key::create( $event_desc->get_event_descriptor_id() );
+						$event_keys_array = array( $event_key_obj->get_as_string() );
+						$group_by = Volunteer_Stats_Collection::GROUP_BY_TOTAL_FIXERS;
+						$stats_collection = Volunteer_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
+						$totals_array = array_values( $stats_collection->get_all_stats_array() );
+						$total_stats = isset( $totals_array[ 0 ] ) ? $totals_array[ 0 ] : NULL;
+						$total = isset( $total_stats ) ? $total_stats->get_head_count() : NULL;
+						$result = ! empty( $total ) ? $total : $em_dash;
+					} // endif
+					break;
+					
+				case 'non_fixer_count':
+					$is_recurring = $event_desc->get_event_is_recurring();
+					if ( $is_recurring ) {
+						$result = $em_dash;
+					} else {
+						$event_key_obj = Event_Key::create( $event_desc->get_event_descriptor_id() );
+						$event_keys_array = array( $event_key_obj->get_as_string() );
+						$group_by = Volunteer_Stats_Collection::GROUP_BY_TOTAL_NON_FIXERS;
+						$stats_collection = Volunteer_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
+						$totals_array = array_values( $stats_collection->get_all_stats_array() );
+						$total_stats = isset( $totals_array[ 0 ] ) ? $totals_array[ 0 ] : NULL;
+						$total = isset( $total_stats ) ? $total_stats->get_head_count() : NULL;
+						$result = ! empty( $total ) ? $total : $em_dash;
+					} // endif
+					break;
+					
 			} // endswitch
 		} // endif
 		echo $result;
@@ -597,12 +646,12 @@ class Internal_Event_Descriptor_Admin_View {
 //					'option_none_value'	=> '',
 					'class'				=> 'reg-man-rc-filter postform',
 					'taxonomy'			=> $tax_name,
-		            'name'				=> $tax_name,
-		            'orderby'			=> 'count',
+					'name'				=> $tax_name,
+					'orderby'			=> 'count',
 					'order'				=> 'DESC',
-		            'value_field'		=> 'slug',
-		            'selected'			=> $curr_id,
-		            'hierarchical'		=> $taxonomy->hierarchical,
+					'value_field'		=> 'slug',
+					'selected'			=> $curr_id,
+					'hierarchical'		=> $taxonomy->hierarchical,
 					'show_count'		=> FALSE,
 					'hide_if_empty'		=> TRUE,
 				) );

@@ -105,7 +105,7 @@ class Ajax_Form_Response implements \JsonSerializable {
 	 * @return string[][]	An associative array describing this object
 	 * @since v0.1.0
 	 */
-	public function jsonSerialize() {
+	public function jsonSerialize() : array {
 		$result = array();
 
 		if ( isset( $this->error_array ) ) {

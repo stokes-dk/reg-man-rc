@@ -10,8 +10,12 @@
 .reg-man-rc-calendar-container .fc-daygrid a, .reg-man-rc-calendar-container .fc-list a {
 	color: #2C3E50;
 }
+.reg-man-rc-calendar-view.fc a {
+  text-decoration: none;
+}
 .object-view-event-list-date-time-item.completed,
 .reg-man-rc-calendar-view .fc-event.completed,
+.reg-man-rc-calendar-map-container .reg-man-rc-map-marker-label.completed,
 .reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item.completed {
     text-decoration: line-through;
     opacity: 0.5;
@@ -23,6 +27,7 @@
 }
 .object-view-event-list-date-time-item.cancelled,
 .reg-man-rc-calendar-view .fc-event.cancelled-status,
+.reg-man-rc-calendar-map-container .reg-man-rc-map-marker-label.cancelled-status,
 .reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item.cancelled {
 	text-decoration: line-through double #c00 1px;
 }

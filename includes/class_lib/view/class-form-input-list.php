@@ -1,5 +1,7 @@
 <?php
 namespace Reg_Man_RC\View;
+
+
 use Reg_Man_RC\Model\Error_Log;
 
 /**
@@ -27,6 +29,7 @@ class Form_Input_List {
 	 * It is static rather than an instance variable because a page may contain multiple forms but the IDs must be unique on the page.
 	 */
 	private static $CURR_ID_NUM = 0;
+
 	/**
 	 * Generate an input ID
 	 *
@@ -42,13 +45,13 @@ class Form_Input_List {
 	 * The form inputs
 	 *
 	 * Inputs are defined by an aassociative array:
-	 *    name => array(
-	 *      'id' => input id -- each input must have an id so we can label
-	 *      'label' => input label, e.g. 'Email Address'
-	 *      'input' => input html '<input .../>'
-	 *      'classes' => optional space-separated list of classes to apply to the input item
-	 *      'hint' => optional hint text for the input, e.g. 'Please enter...'
-	 *    );
+	 *		name => array(
+	 *		'id' => input id -- each input must have an id so we can label
+	 *		'label' => input label, e.g. 'Email Address'
+	 *		'input' => input html '<input .../>'
+	 *		'classes' => optional space-separated list of classes to apply to the input item
+	 *		'hint' => optional hint text for the input, e.g. 'Please enter...'
+	 *	);
 	 */
 	private $input_array = array();
 
@@ -196,6 +199,7 @@ class Form_Input_List {
 	} // function
 
 	private function add_input( $label, $name, $type, $val = '', $hint = '', $classes = '', $is_required = FALSE, $addn_attrs = '' ) {
+
 		$id = self::get_input_id( $name ) ; // gen an input id using the name
 /* TODO - do we need to allow error setting on the server side?
 		$error_array = $this->get_error_array();
@@ -212,22 +216,29 @@ class Form_Input_List {
 		if ( $is_required ) {
 			$addn_attrs .= ' required="required"';
 		} // endif
+		
 		switch ( strtolower( $type ) ) {
+			
 			case 'textarea':
 				$input_html = "<textarea name=\"$name\" id=\"$id\" $addn_attrs>$val</textarea>";
 				$classes .= ' textarea';
 				break;
+
 			case 'checkbox':
 				$input_html = "<label for=\"$id\">" .
 								"<input name=\"$name\" type=\"$type\" id=\"$id\" value=\"$val\" $addn_attrs/>" .
 								"<span>$label</span></label>";
 				$label = '';
 				break;
+
 			default:
 				$input_html = "<input name=\"$name\" type=\"$type\" id=\"$id\" value=\"$val\" $addn_attrs/>";
 				break;
+				
 		} // endswitch
+		
 		$this->add_custom_html_input( $label, $name, $input_html, $hint, $classes, $is_required, $id );
+	
 	} // function
 
 	public function add_text_input( $label, $name, $val = '', $hint = '', $classes = '', $is_required = FALSE, $addn_attrs = '' ) {
@@ -268,9 +279,10 @@ class Form_Input_List {
 		$this->add_input( $label, $name, 'checkbox', $val, $hint, $classes, $is_required, $addn_attrs );
 	} // function
 
-	public function add_text_area_input( $label, $name, $rows, $val = '', $hint = '', $classes = '', $is_required = FALSE ) {
+	public function add_text_area_input( $label, $name, $rows, $val = '', $hint = '', $classes = '', $is_required = FALSE, $addn_attrs = '' ) {
 		$rows = "rows=\"$rows\"";
-		$this->add_input( $label, $name, 'textarea', $val, $hint, $classes, $is_required, $rows );
+		$addn_attrs ="$addn_attrs $rows";
+		$this->add_input( $label, $name, 'textarea', $val, $hint, $classes, $is_required, $addn_attrs );
 	} // function
 
 	public function add_hidden_input( $name, $value ) {
@@ -355,7 +367,7 @@ class Form_Input_List {
 	public function add_radio_group( $label, $name, $options, $selected = NULL, $hint = '',
 					$classes = '', $is_required = FALSE, $custom_label = NULL, $custom_value = NULL, $is_compact = FALSE ) {
 		// $options - an associative array of options labels and values, e.g. array( "Yes" => 1 );
-		$id = self::get_input_id($name); // gen an input id usingu the name
+		$id = self::get_input_id($name); // gen an input id using the name
 		$classes .= ' fieldset radio-group';
 /* TODO - do I need to support errors on the server side?
 		$error_array = $this->get_error_array();

@@ -2,17 +2,16 @@
 namespace Reg_Man_RC\View\Admin;
 
 use Reg_Man_RC\Control\Scripts_And_Styles;
-use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Internal_Event_Descriptor;
 use Reg_Man_RC\Model\Event_Key;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Fixer_Station;
-use Reg_Man_RC\Model\Stats\Item_Statistics;
-use Reg_Man_RC\Model\Stats\Visitor_Statistics;
-use Reg_Man_RC\Model\Stats\Volunteer_Statistics;
+use Reg_Man_RC\Model\Stats\Item_Stats_Collection;
+use Reg_Man_RC\Model\Stats\Visitor_Stats_Collection;
+use Reg_Man_RC\Model\Stats\Volunteer_Stats_Collection;
 use Reg_Man_RC\Model\Volunteer_Role;
-use Reg_Man_RC\Model\Stats\Supplemental_Item;
+use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Model\Stats\Item_Stats;
 
 /**
  * The administrative view for Supplemental Event Data
@@ -106,39 +105,45 @@ class Supplemental_Event_Data_Admin_View {
 		$valid_post_types = self::get_supported_post_types();
 		if ( in_array( $post_type, $valid_post_types ) ) {
 			$view = self::create_for_post( $post );
+			
+			// We need a single valid event key in order to show these metaboxes
+			// If there is no event, e.g. it's a repeating event, then don't add them
+			$event_key = $view->get_event_key();
 
-			$new_id = 'reg-man-rc-sup-data-visitors-metabox';
-			$render_fn = array( $view, 'render_visitor_data_meta_box' );
-			add_meta_box(
-					$new_id,							// Unique ID for the element
-					__( 'Visitors', 'reg-man-rc' ),		// Box title
-					$render_fn,							// Content callback, must be of type callable
-					$post_type,							// Post type for this meta box
-					'normal', 							// Meta box position
-					'high'								// Meta box priority
-	        );
-
-			$new_id = 'reg-man-rc-sup-data-items-metabox';
-			$render_fn = array( $view, 'render_item_data_meta_box' );
-			add_meta_box(
-					$new_id,							// Unique ID for the element
-					__( 'Items', 'reg-man-rc' ),		// Box title
-					$render_fn,							// Content callback, must be of type callable
-					$post_type,							// Post type for this meta box
-					'normal', 							// Meta box position
-					'high'								// Meta box priority
-	        );
-
-			$new_id = 'reg-man-rc-sup-data-volunteers-metabox';
-			$render_fn = array( $view, 'render_volunteer_data_meta_box' );
-			add_meta_box(
-					$new_id,							// Unique ID for the element
-					__( 'Volunteers', 'reg-man-rc' ),	// Box title
-					$render_fn,							// Content callback, must be of type callable
-					$post_type,							// Post type for this meta box
-					'normal', 							// Meta box position
-					'high'								// Meta box priority
-	        );
+			if ( ! empty( $event_key ) ) {
+				$new_id = 'reg-man-rc-sup-data-items-metabox';
+				$render_fn = array( $view, 'render_item_data_meta_box' );
+				add_meta_box(
+						$new_id,							// Unique ID for the element
+						__( 'Items', 'reg-man-rc' ),		// Box title
+						$render_fn,							// Content callback, must be of type callable
+						$post_type,							// Post type for this meta box
+						'normal', 							// Meta box position
+						'high'								// Meta box priority
+				);
+	
+				$new_id = 'reg-man-rc-sup-data-visitors-metabox';
+				$render_fn = array( $view, 'render_visitor_data_meta_box' );
+				add_meta_box(
+						$new_id,							// Unique ID for the element
+						__( 'Visitors', 'reg-man-rc' ),		// Box title
+						$render_fn,							// Content callback, must be of type callable
+						$post_type,							// Post type for this meta box
+						'normal', 							// Meta box position
+						'high'								// Meta box priority
+				);
+	
+				$new_id = 'reg-man-rc-sup-data-volunteers-metabox';
+				$render_fn = array( $view, 'render_volunteer_data_meta_box' );
+				add_meta_box(
+						$new_id,							// Unique ID for the element
+						__( 'Volunteers', 'reg-man-rc' ),	// Box title
+						$render_fn,							// Content callback, must be of type callable
+						$post_type,							// Post type for this meta box
+						'normal', 							// Meta box position
+						'high'								// Meta box priority
+				);
+			} // endif
 
 		} // endif
 
@@ -154,11 +159,8 @@ class Supplemental_Event_Data_Admin_View {
 
 		$event_key = $this->get_event_key();
 		if ( ! empty( $event_key ) ) {
-			echo '<input type="hidden" name="sup_data_visitor_event_key" value="' . $event_key . '">';
 			echo '<div class="reg-man-rc-sup-item-data">';
-				$title = __( 'Supplemental Visitor Data', 'reg-man-rc' );
-				echo '<h3>' . $title . '</h3>';
-				$this->render_supplemental_visitor_data_table();
+				self::render_supplemental_visitor_data_table( $event_key );
 			echo '</div>';
 
 		} // endif
@@ -172,13 +174,11 @@ class Supplemental_Event_Data_Admin_View {
 	 * @since 	v0.1.0
 	 */
 	public function render_item_data_meta_box( $post ) {
+
 		$event_key = $this->get_event_key();
 		if ( ! empty( $event_key ) ) {
-			echo '<input type="hidden" name="sup_data_item_event_key" value="' . $event_key . '">';
 			echo '<div class="reg-man-rc-sup-visitor-data">';
-				$title = __( 'Supplemental Item Data', 'reg-man-rc' );
-				echo '<h3>' . $title . '</h3>';
-				$this->render_supplemental_item_data_table();
+				$this->render_supplemental_item_data_table( $event_key );
 			echo '</div>';
 
 		} // endif
@@ -193,20 +193,7 @@ class Supplemental_Event_Data_Admin_View {
 	public function render_volunteer_data_meta_box( $post ) {
 		$event_key = $this->get_event_key();
 		if ( ! empty( $event_key ) ) {
-			echo '<input type="hidden" name="sup_data_volunteer_event_key" value="' . $event_key . '">';
-
-			echo '<div class="reg-man-rc-sup-fixer-data">';
-				$title = __( 'Supplemental Fixer Data', 'reg-man-rc' );
-				echo '<h3>' . $title . '</h3>';
-				$this->render_supplemental_fixer_data_table();
-			echo '</div>';
-
-			echo '<div class="reg-man-rc-sup-non-fixer-data">';
-				$title = __( 'Supplemental Non-Fixer Data', 'reg-man-rc' );
-				echo '<h3>' . $title . '</h3>';
-				$this->render_supplemental_non_fixer_data_table();
-			echo '</div>';
-
+			$this->render_supplemental_volunteer_data_table( $event_key );
 		} // endif
 	} // function
 
@@ -215,48 +202,86 @@ class Supplemental_Event_Data_Admin_View {
 	 * @return	void
 	 * @since 	v0.1.0
 	 */
-	private function render_supplemental_visitor_data_table() {
+	public static function render_supplemental_visitor_data_table( $event_key ) {
 
-		$event_key = $this->get_event_key();
-		$group_by = Visitor_Statistics::GROUP_BY_TOTAL;
-		$statistics = Visitor_Statistics::create_for_event_key_array( array( $event_key->get_as_string() ), $group_by );
-		$stats_array = array_values( $statistics->get_supplemental_stats_array() ); // there should be just one
-		$stats_obj = isset( $stats_array[ 0 ] ) ? $stats_array[ 0 ] : NULL; // all we need is the first element
+		echo '<input type="hidden" name="sup_data_visitor_event_key" value="' . $event_key . '">';
 
+		$group_by = Visitor_Stats_Collection::GROUP_BY_TOTAL;
+		$stats_collection = Visitor_Stats_Collection::create_for_event_key_array( array( $event_key->get_as_string() ), $group_by );
+		$reg_stats_array = array_values( $stats_collection->get_all_registered_stats_array() ); // there should be just one
+		$sup_stats_array = array_values( $stats_collection->get_supplemental_stats_array() ); // there should be just one
+		$reg_stats_obj = isset( $reg_stats_array[ 0 ] ) ? $reg_stats_array[ 0 ] : NULL; // all we need is the first element
+		$sup_stats_obj = isset( $sup_stats_array[ 0 ] ) ? $sup_stats_array[ 0 ] : NULL; // all we need is the first element
+		
 		$head_format = '<th>%1$s</th>';
-		$row_name_format = '<td>%1$s</td>';
-		$input_format = '<td class="reg-man-rc-input-cell"><input autocomplete="off" type="number" name="%1$s" value="%2$s" min="0" size="4"></td>';
+		$data_format = '<td class="reg-man-rc-sup-data-table-cell">%1$s</td>';
+		$input_format = '<td class="reg-man-rc-sup-data-table-cell"><input autocomplete="off" type="number" name="%1$s" value="%2$s" min="0" size="4"></td>';
 		$caption = __( 'Use this table to record additional visitors who attended the event but were not registered to the system', 'reg-man-rc' );
 		echo '<table class="reg-man-rc-input-group-table">';
 			echo '<caption>' . $caption . '</caption>';
 			echo '<thead>';
-				$heading = __( 'First Time Visitors', 'reg-man-rc' );
-				printf( $head_format, $heading );
+			
+				echo '<tr>';
+					$heading = __( 'Visitor Type', 'reg-man-rc' );
+					printf( $head_format, $heading );
+	
+					$heading = __( 'Registered', 'reg-man-rc' );
+					printf( $head_format, $heading );
 
-				$heading = __( 'Returning Visitors', 'reg-man-rc' );
-				printf( $head_format, $heading );
+					$heading = __( 'Supplemental', 'reg-man-rc' );
+					printf( $head_format, $heading );
 
-				$heading = __( 'Visitors whose return status is not known', 'reg-man-rc' );
-				printf( $head_format, $heading );
-
+				echo '</tr>';
+					
 			echo '</thead>';
+
 			echo '<tbody>';
 
+				// First Time
 				echo '<tr>';
 
+					$heading = __( 'First Time Visitors', 'reg-man-rc' );
+					printf( $head_format, $heading );
+	
 					$name = "first_time_visitors";
-					$val = isset( $stats_obj ) ? $stats_obj->get_first_time_count() : 0;
-					printf( $input_format, $name, $val );
+					$val = isset( $reg_stats_obj ) ? $reg_stats_obj->get_first_time_count() : 0;
+					printf( $data_format, $val );
 
-					$name = "returning_visitors";
-					$val = isset( $stats_obj ) ? $stats_obj->get_returning_count() : 0;
-					printf( $input_format, $name, $val );
-
-					$name = "unknown_visitors";
-					$val = isset( $stats_obj ) ? $stats_obj->get_return_status_unknown_count() : 0;
+					$name = "first_time_visitors";
+					$val = isset( $sup_stats_obj ) ? $sup_stats_obj->get_first_time_count() : 0;
 					printf( $input_format, $name, $val );
 
 				echo '</tr>';
+
+				// Returning
+				echo '<tr>';
+
+					$heading = __( 'Returning Visitors', 'reg-man-rc' );
+					printf( $head_format, $heading );
+	
+					$name = "returning_visitors";
+					$val = isset( $reg_stats_obj ) ? $reg_stats_obj->get_returning_count() : 0;
+					printf( $data_format, $val );
+					
+					$name = "returning_visitors";
+					$val = isset( $sup_stats_obj ) ? $sup_stats_obj->get_returning_count() : 0;
+					printf( $input_format, $name, $val );
+
+				echo '</tr>';
+
+				// Return status not known
+				echo '<tr>';
+
+					$heading = __( 'Visitors whose return status was not reported', 'reg-man-rc' );
+					printf( $head_format, $heading );
+				
+					$name = "unknown_visitors";
+					$val = isset( $reg_stats_obj ) ? $reg_stats_obj->get_return_status_unknown_count() : 0;
+					printf( $data_format, $val );
+					
+					$name = "unknown_visitors";
+					$val = isset( $sup_stats_obj ) ? $sup_stats_obj->get_return_status_unknown_count() : 0;
+					printf( $input_format, $name, $val );
 
 			echo '</tbody>';
 		echo '</table>';
@@ -268,45 +293,264 @@ class Supplemental_Event_Data_Admin_View {
 	 * @return	void
 	 * @since 	v0.1.0
 	 */
-	private function render_supplemental_item_data_table() {
+	public static function render_supplemental_item_data_table( $event_key ) {
+		echo '<input type="hidden" name="sup_data_item_event_key" value="' . $event_key . '">';
+		
+		$group_by = Item_Stats_Collection::GROUP_BY_STATION_AND_TYPE;
+		$stats_collection = Item_Stats_Collection::create_for_event_key_array( array( $event_key->get_as_string() ), $group_by );
+		$reg_stats_array = $stats_collection->get_all_registered_stats_array();
+		$sup_stats_array = $stats_collection->get_supplemental_stats_array();
+//		Error_Log::var_dump( $reg_stats_array );
+		
+		$format =
+				'<li class="reg-man-rc-tab-list-item">' . 
+					'<a href="#tab-%1$s" class="reg-man-rc-icon-text-container">' . 
+						'</i><span class="text">%2$s</span>' . 
+					'</a>' . 
+				'</li>';
 
-		$event_key = $this->get_event_key();
+		$all_fixer_stations = Fixer_Station::get_all_fixer_stations();
+		$unspecified_station_id = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
+		$unspecified_station_name = __( 'Fixer station not reported', 'reg-man-rc' );
+		
+		echo '<div class="reg-man-rc-tabs-container">';
+			echo '<ul>';
+
+				// All fixer stations
+				foreach( $all_fixer_stations as $fixer_station ) {
+					$id = $fixer_station->get_id();
+					$name = $fixer_station->get_name();
+					printf( $format, $id, $name );
+				} // endfor
+				
+				// Unspecified station
+				printf( $format, $unspecified_station_id, $unspecified_station_name );
+				
+			echo '</ul>';
+			
+			// All fixer stations
+			foreach( $all_fixer_stations as $fixer_station ) {
+				$id = $fixer_station->get_id();
+				$name = $fixer_station->get_name();
+				echo "<div id=\"tab-$id\" class=\"tab-panel\" data-name=\"$id\">";
+					self::render_supplemental_fixer_station_item_data_table( $id, $name, $reg_stats_array, $sup_stats_array );
+				echo '</div>';
+			} // endfor
+
+			// Unspecified station
+			$id = $unspecified_station_id;
+			$name = $unspecified_station_name;
+			echo "<div id=\"tab-$id\" class=\"tab-panel\" data-name=\"$id\">";
+				self::render_supplemental_fixer_station_item_data_table( $id, $name, $reg_stats_array, $sup_stats_array );
+			echo '</div>';
+			
+		echo '</div>';
+		
+	} // function
+
+	/**
+	 * Render the table for the item data
+	 * @param	int				$station_id
+	 * @param	string			$station_name
+	 * @param	Item_Stats[]	$reg_stats_array
+	 * @param	Item_Stats[]	$sup_stats_array
+	 * @return	void
+	 * @since 	v0.3.0
+	 */
+	public static function render_supplemental_fixer_station_item_data_table( $station_id, $station_name, $reg_stats_array, $sup_stats_array ) {
+		
+		$repair_status_head_format = '<th class="reg-man-rc-sup-data-table-head-repair-status" title="%1$s">%1$s</th>';
+		$item_type_head_format = '<th class="reg-man-rc-sup-data-table-head-item-type" title="%1$s">%1$s</th>';
+		$head_format = '<th>%1$s</th>';
+		$data_format = '<td class="reg-man-rc-sup-data-table-cell">%1$s</td>';
+		$input_format = '<td class="reg-man-rc-sup-data-table-cell"><input autocomplete="off" type="number" name="%1$s" value="%2$s" min="0" size="4"></td>';
+
+		if ( $station_id !== Fixer_Station::UNSPECIFIED_FIXER_STATION_ID ) {
+			/* Translators: %1$s is the name of a fixer station */
+			$caption_format = __( 'Use this table to record additional items brought to the <b>%1$s</b> fixer station but not registered to the system', 'reg-man-rc' );
+			$caption = sprintf( $caption_format, $station_name );
+		} else {
+			$caption = __( 'Use this table to record additional items brought to the event and not registered to the system, and whose fixer station was not reported', 'reg-man-rc' );
+		} // endif
+		
+		$all_item_types = Item_Type::get_all_item_types();
+		
+		echo '<table class="reg-man-rc-input-group-table">';
+			echo '<caption>' . $caption . '</caption>';
+			echo '<thead>';
+			
+				echo '<tr>';
+
+					$heading = __( 'Item Type', 'reg-man-rc' );
+					echo "<th rowspan=\"2\">$heading</th>";
+					
+					$heading = __( 'Registered', 'reg-man-rc' );
+					echo "<th colspan=\"4\">$heading</th>";
+					
+					$heading = __( 'Supplemental', 'reg-man-rc' );
+					echo "<th colspan=\"4\">$heading</th>";
+					
+				echo '</tr>';
+				
+				echo '<tr>';
+
+					$fixed_head			= __( 'Fixed', 'reg-man-rc' );
+					$repairable_head	= __( 'Repairable', 'reg-man-rc' );
+					$eol_head			= __( 'End of Life', 'reg-man-rc' );
+					$unknown_head		= __( 'Outcome not Reported', 'reg-man-rc' );
+
+					// Registered
+					printf( $repair_status_head_format, $fixed_head );
+					printf( $repair_status_head_format, $repairable_head );
+					printf( $repair_status_head_format, $eol_head );
+					printf( $repair_status_head_format, $unknown_head );
+					
+					// Supplemental
+					printf( $repair_status_head_format, $fixed_head );
+					printf( $repair_status_head_format, $repairable_head );
+					printf( $repair_status_head_format, $eol_head );
+					printf( $repair_status_head_format, $unknown_head );
+					
+				echo '</tr>';
+				
+			echo '</thead>';
+
+			echo '<tbody>';
+
+				// All item types
+				foreach( $all_item_types as $item_type ) {
+					$type_name = $item_type->get_name();
+					$type_id = $item_type->get_id();
+					$stats_index = "$station_id|$type_id";
+					$reg_data = isset( $reg_stats_array[ $stats_index ] ) ? $reg_stats_array[ $stats_index ] : NULL;
+					$sup_data = isset( $sup_stats_array[ $stats_index ] ) ? $sup_stats_array[ $stats_index ] : NULL;
+//					Error_Log::var_dump( $station_id, $type_id, $reg_data );
+					echo '<tr>';
+						
+						printf( $item_type_head_format, $type_name );
+						
+						$fixed_count = isset( $reg_data ) ? $reg_data->get_fixed_count() : 0;
+						printf( $data_format, $fixed_count );
+						
+						$repairable_count = isset( $reg_data ) ? $reg_data->get_repairable_count() : 0;;
+						printf( $data_format, $repairable_count );
+						
+						$eol_count = isset( $reg_data ) ? $reg_data->get_end_of_life_count() : 0;
+						printf( $data_format, $eol_count );
+						
+						$unknown_count = isset( $reg_data ) ? ( $reg_data->get_item_count() - $fixed_count - $repairable_count - $eol_count ) : 0;
+						printf( $data_format, $unknown_count );
+						
+						$fixed_count = isset( $sup_data ) ? $sup_data->get_fixed_count() : 0;
+						$name = "fixed_count[$station_id][$type_id]";
+						printf( $input_format, $name, $fixed_count );
+						
+						$repairable_count = isset( $sup_data ) ? $sup_data->get_repairable_count() : 0;
+						$name = "repairable_count[$station_id][$type_id]";
+						printf( $input_format, $name, $repairable_count );
+						
+						$eol_count = isset( $sup_data ) ? $sup_data->get_end_of_life_count() : 0;
+						$name = "eol_count[$station_id][$type_id]";
+						printf( $input_format, $name, $eol_count );
+						
+						$unknown_count = isset( $sup_data ) ? ( $sup_data->get_item_count() - $fixed_count - $repairable_count - $eol_count ) : 0;
+						$name = "unknown_count[$station_id][$type_id]";
+						printf( $input_format, $name, $unknown_count );
+						
+					echo '</tr>';
+				} // endfor
+				
+				// Unknown Item Type
+				echo '<tr>';
+					$type_name = __( 'Item type not reported', 'reg-man-rc' );
+					$type_id = Item_Type::UNSPECIFIED_ITEM_TYPE_ID;
+					$stats_index = "$station_id|$type_id";
+					$reg_data = isset( $reg_stats_array[ $stats_index ] ) ? $reg_stats_array[ $stats_index ] : NULL;
+					$sup_data = isset( $sup_stats_array[ $stats_index ] ) ? $sup_stats_array[ $stats_index ] : NULL;
+					
+					printf( $item_type_head_format, $type_name );
+					
+					$fixed_count = isset( $reg_data ) ? $reg_data->get_fixed_count() : 0;
+					printf( $data_format, $fixed_count );
+					
+					$repairable_count = isset( $reg_data ) ? $reg_data->get_repairable_count() : 0;;
+					printf( $data_format, $repairable_count );
+					
+					$eol_count = isset( $reg_data ) ? $reg_data->get_end_of_life_count() : 0;
+					printf( $data_format, $eol_count );
+					
+					$unknown_count = isset( $reg_data ) ? ( $reg_data->get_item_count() - $fixed_count - $repairable_count - $eol_count ) : 0;
+					printf( $data_format, $unknown_count );
+					
+					$fixed_count = isset( $sup_data ) ? $sup_data->get_fixed_count() : 0;
+					$name = "fixed_count[$station_id][$type_id]";
+					printf( $input_format, $name, $fixed_count );
+					
+					$repairable_count = isset( $sup_data ) ? $sup_data->get_repairable_count() : 0;
+					$name = "repairable_count[$station_id][$type_id]";
+					printf( $input_format, $name, $repairable_count );
+					
+					$eol_count = isset( $sup_data ) ? $sup_data->get_end_of_life_count() : 0;
+					$name = "eol_count[$station_id][$type_id]";
+					printf( $input_format, $name, $eol_count );
+					
+					$unknown_count = isset( $sup_data ) ? ( $sup_data->get_item_count() - $fixed_count - $repairable_count - $eol_count ) : 0;
+					$name = "unknown_count[$station_id][$type_id]";
+					printf( $input_format, $name, $unknown_count );
+						
+				echo '</tr>';
+					
+			echo '</tbody>';
+
+		echo '</table>';
+
+	} // function
+
+	/**
+	 * Render the table for the item data
+	 * @return	void
+	 * @since 	v0.1.0
+	 */
+/*
+	public static function render_supplemental_item_data_table( $event_key ) {
+
 		$event_key_string = isset( $event_key ) ? $event_key->get_as_string() : NULL;
-		$event_key_array = array( $event_key_string );
-		$group_by = Item_Statistics::GROUP_BY_ITEM_TYPE;
-		$statistics = Item_Statistics::create_for_event_key_array( $event_key_array, $group_by );
-		$item_group_data = $statistics->get_supplemental_stats_array();
+//		$event_key_array = array( $event_key_string );
+//		$group_by = Item_Stats_Collection::GROUP_BY_ITEM_TYPE;
+//		$stats_collection = Item_Stats_Collection::create_for_event_key_array( $event_key_array, $group_by );
+//		$item_group_data = $stats_collection->get_supplemental_stats_array();
 
 //		Error_Log::var_dump( $item_group_data );
 
 		$col_count = 6; // number of columns in the table, needed for colspan later
 		$head_format = '<th class="%2$s">%1$s</th>';
-//		$row_name_format = '<td>%1$s</td>';
-//		$input_format = '<td class="reg-man-rc-input-cell"><input autocomplete="off" type="number" name="%1$s" value="%2$s" min="0" size="4"></td>';
+//		$row_head_format = '<td>%1$s</td>';
+//		$input_format = '<td class="reg-man-rc-sup-data-table-cell"><input autocomplete="off" type="number" name="%1$s" value="%2$s" min="0" size="4"></td>';
 		$caption = __( 'Use this table to record additional items brought to the event but not registered to the system', 'reg-man-rc' );
 		echo '<table class="reg-man-rc-input-group-table reg-man-rc-sup-item-table">';
+
 			echo '<caption>' . $caption . '</caption>';
+
 			echo '<thead>';
-				$heading = __( 'Item Type', 'reg-man-rc' );
-				$subheading = '';
-				printf( $head_format, $heading, 'select-col' );
-
-				$heading = __( 'Fixer Station', 'reg-man-rc' );
-				$subheading = '';
-				printf( $head_format, $heading, 'select-col' );
-
-				$heading = __( 'Fixed', 'reg-man-rc' );
-				printf( $head_format, $heading, 'num-col' );
-
-				$heading = __( 'Repairable', 'reg-man-rc' );
-				printf( $head_format, $heading, 'num-col' );
-
-				$heading = __( 'End of Life', 'reg-man-rc' );
-				printf( $head_format, $heading, 'num-col' );
-
-				$heading = __( 'Repair outcome not reported', 'reg-man-rc' );
-				printf( $head_format, $heading, 'num-col' );
-
+				echo '<tr>';
+					$heading = __( 'Item Type', 'reg-man-rc' );
+					printf( $head_format, $heading, 'select-col' );
+	
+					$heading = __( 'Fixer Station', 'reg-man-rc' );
+					printf( $head_format, $heading, 'select-col' );
+	
+					$heading = __( 'Fixed', 'reg-man-rc' );
+					printf( $head_format, $heading, 'num-col' );
+	
+					$heading = __( 'Repairable', 'reg-man-rc' );
+					printf( $head_format, $heading, 'num-col' );
+	
+					$heading = __( 'End of Life', 'reg-man-rc' );
+					printf( $head_format, $heading, 'num-col' );
+	
+					$heading = __( 'Repair outcome not reported', 'reg-man-rc' );
+					printf( $head_format, $heading, 'num-col' );
+				echo '</tr>';
 			echo '</thead>';
 
 			echo '<tbody>';
@@ -319,10 +563,10 @@ class Supplemental_Event_Data_Admin_View {
 					$repairable	= isset( $data[ 'repairable_count' ] )	? $data[ 'repairable_count' ]	: 0;
 					$eol		= isset( $data[ 'eol_count' ] )			? $data[ 'eol_count' ]			: 0;
 					$unknown	= isset( $data[ 'unreported_count' ] )	? $data[ 'unreported_count' ]	: 0;
-					$this->render_supplemental_item_data_row( $station_id, $type_id, $fixed, $repairable, $eol, $unknown );
+					self::render_supplemental_item_data_row( $station_id, $type_id, $fixed, $repairable, $eol, $unknown );
 				} // endfor
 
-				$this->render_supplemental_item_data_row( 0, 0, 0, 0, 0, 0, $is_template = TRUE );
+				self::render_supplemental_item_data_row( 0, 0, 0, 0, 0, 0, $is_template = TRUE );
 
 				$label = __( 'Add new row', 'reg-man-rc' );
 				echo '<tr class="sup-item-add-button-row">';
@@ -336,11 +580,12 @@ class Supplemental_Event_Data_Admin_View {
 		echo '</table>';
 
 	} // function
-
-	private function render_supplemental_item_data_row( $station_id, $type_id, $fixed, $repairable, $eol, $unknown, $is_template = FALSE ) {
+*/
+/*
+	private static function render_supplemental_item_data_row( $station_id, $type_id, $fixed, $repairable, $eol, $unknown, $is_template = FALSE ) {
 
 		$classes = $is_template ? 'reg-man-rc-sup-item-data-template' : '';
-		$input_format = '<td class="reg-man-rc-input-cell"><input autocomplete="off" type="number" name="%1$s" value="%2$s" min="0" size="4"></td>';
+		$input_format = '<td class="reg-man-rc-sup-data-table-cell"><input autocomplete="off" type="number" name="%1$s" value="%2$s" min="0" size="4"></td>';
 
 		echo "<tr class=\"reg-man-rc-sup-item-data-row $classes\">";
 
@@ -359,8 +604,8 @@ class Supplemental_Event_Data_Admin_View {
 						foreach ( $options as $option ) {
 							$name = $option->get_name();
 							$id = $option->get_id();
-							$default_station = $option->get_fixer_station();
-							$default_station_id = isset( $default_station ) ? $default_station->get_id() : '-1';
+//							$default_station = $option->get_fixer_station();
+//							$default_station_id = isset( $default_station ) ? $default_station->get_id() : '-1';
 							$html_name = esc_html( $name );
 							$selected = selected( $id, $type_id, $echo = FALSE );
 							echo "<option value=\"$id\" data-fixer-station=\"$station_id\" $selected>$html_name</option>";
@@ -417,7 +662,42 @@ class Supplemental_Event_Data_Admin_View {
 
 		echo '</tr>';
 
+	} // function
+*/
+	/**
+	 * Render the table for the volunteer data
+	 * @return	void
+	 * @since 	v0.1.0
+	 */
+	public static function render_supplemental_volunteer_data_table( $event_key ) {
+		
+		echo '<input type="hidden" name="sup_data_volunteer_event_key" value="' . $event_key . '">';
+		
+		$fixers_title 		= esc_html__( 'Fixers', 'reg-man-rc' );
+		$non_fixers_title 	= esc_html__( 'Non-Fixers', 'reg-man-rc' );
+		
+		$format =
+				'<li class="reg-man-rc-tab-list-item">' . 
+					'<a href="#tab-%1$s" class="reg-man-rc-icon-text-container">' . 
+						'<span class="text">%2$s</span>' . 
+					'</a>' . 
+				'</li>';
+		echo '<div class="reg-man-rc-tabs-container">';
+			echo '<ul>';
+				printf( $format, 'fixers',		$fixers_title );
+				printf( $format, 'non-fixers',	$non_fixers_title );
+			echo '</ul>';
+			
+			echo '<div id="tab-fixers" class="tab-panel" data-name="fixers">';
+				self::render_supplemental_fixer_data_table( $event_key );
+			echo '</div>';
 
+			echo '<div id="tab-non-fixers" class="tab-panel" data-name="non-fixers">';
+				self::render_supplemental_non_fixer_data_table( $event_key );
+			echo '</div>';
+			
+		echo '</div>';
+			
 	} // function
 
 	/**
@@ -425,60 +705,109 @@ class Supplemental_Event_Data_Admin_View {
 	 * @return	void
 	 * @since 	v0.1.0
 	 */
-	private function render_supplemental_fixer_data_table() {
+	public static function render_supplemental_fixer_data_table( $event_key ) {
 
-		$event_key = $this->get_event_key();
 		$event_key_string = isset( $event_key ) ? $event_key->get_as_string() : NULL;
 		$event_key_array = array( $event_key_string );
-		$group_by = Volunteer_Statistics::GROUP_BY_FIXER_STATION;
-		$statistics = Volunteer_Statistics::create_for_event_key_array( $event_key_array, $group_by );
-		$fixer_group_data = $statistics->get_supplemental_stats_array();
+		$group_by = Volunteer_Stats_Collection::GROUP_BY_FIXER_STATION;
+		$stats_collection = Volunteer_Stats_Collection::create_for_event_key_array( $event_key_array, $group_by );
+		$reg_group_data = $stats_collection->get_all_registered_stats_array();
+		$sup_group_data = $stats_collection->get_supplemental_stats_array();
+//		Error_Log::var_dump( $sup_group_data );
 
 		$head_format = '<th>%1$s</th>';
-		$row_name_format = '<td>%1$s</td>';
-		$input_format = '<td class="reg-man-rc-input-cell"><input autocomplete="off" type="number" name="%1$s" value="%2$s" min="0" size="4"></td>';
-		$caption = __( 'Use this table to record additional fixers who attended the event but did not register to the system', 'reg-man-rc' );
+		$data_format = '<td class="reg-man-rc-sup-data-table-cell">%1$s</td>';
+		$input_format = '<td class="reg-man-rc-sup-data-table-cell"><input autocomplete="off" type="number" name="%1$s" value="%2$s" min="0" size="4"></td>';
+		$caption = __( 'Use this table to record additional fixers and apprentices who attended the event but did not register to the system', 'reg-man-rc' );
+
 		echo '<table class="reg-man-rc-input-group-table">';
+
 			echo '<caption>' . $caption . '</caption>';
+
 			echo '<thead>';
-				$heading = __( 'Fixer Station', 'reg-man-rc' );
-				$subheading = '';
-				printf( $head_format, $heading );
 
-				$heading = __( 'Head Count', 'reg-man-rc' );
-				printf( $head_format, $heading );
+				echo '<tr>';
+					$heading = __( 'Fixer Station', 'reg-man-rc' );
+					echo "<th rowspan=\"2\">$heading</th>";
+	
+					$heading = __( 'Registered', 'reg-man-rc' );
+					echo "<th colspan=\"2\">$heading</th>";
 
-				echo '</thead>';
+					$heading = __( 'Supplemental', 'reg-man-rc' );
+					echo "<th colspan=\"2\">$heading</th>";
+				echo '</tr>';
+
+				echo '<tr>';
+					$fixer_heading = __( 'Fixer', 'reg-man-rc' );
+					$apprentice_heading = __( 'Apprentice', 'reg-man-rc' );
+
+					printf( $head_format, $fixer_heading );
+	
+					printf( $head_format, $apprentice_heading );
+					
+					printf( $head_format, $fixer_heading );
+	
+					printf( $head_format, $apprentice_heading );
+				echo '</tr>';
+
+			echo '</thead>';
+			
 			echo '<tbody>';
 				$stations = Fixer_Station::get_all_fixer_stations();
 				foreach( $stations as $fixer_station ) {
 					echo '<tr>';
 
 						$id = $fixer_station->get_id();
-						$fixer_data = isset( $fixer_group_data[ $id ] ) ? $fixer_group_data[ $id ] : NULL;
+						$reg_data = isset( $reg_group_data[ $id ] ) ? $reg_group_data[ $id ] : NULL;
+						$sup_data = isset( $sup_group_data[ $id ] ) ? $sup_group_data[ $id ] : NULL;
 
 						$title = $fixer_station->get_name();
-						printf( $row_name_format, $title );
+						printf( $head_format, $title );
 
+						$reg_head_count = isset( $reg_data ) ? $reg_data->get_head_count() : 0;
+						$reg_appr_count = isset( $reg_data ) ? $reg_data->get_apprentice_count() : 0;
+						$reg_fixer_count = $reg_head_count - $reg_appr_count;
+						printf( $data_format, $reg_fixer_count );
+						
+						printf( $data_format, $reg_appr_count );
+						
+						$sup_head_count = isset( $sup_data ) ? $sup_data->get_head_count() : 0;
+						$sup_appr_count = isset( $sup_data ) ? $sup_data->get_apprentice_count() : 0;
+						$sup_fixer_count = $sup_head_count - $sup_appr_count;
 						$name = "fixer_head_count[$id]";
-						$head_count = isset( $fixer_data ) ? $fixer_data->get_head_count() : 0;
-						printf( $input_format, $name, $head_count );
+						printf( $input_format, $name, $sup_fixer_count );
+
+						$name = "apprentice_head_count[$id]";
+						printf( $input_format, $name, $sup_appr_count );
 
 					echo '</tr>';
 				} // endfor
 
 				echo '<tr>';
 					$id = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
-					$fixer_data = isset( $fixer_group_data[ $id ] ) ? $fixer_group_data[ $id ] : NULL;
+					$reg_data = isset( $reg_group_data[ $id ] ) ? $reg_group_data[ $id ] : NULL;
+					$sup_data = isset( $sup_group_data[ $id ] ) ? $sup_group_data[ $id ] : NULL;
 
-					$title = __( 'Fixer station not known', 'reg-man-rc' );
-					printf( $row_name_format, $title );
+					$title = __( 'Fixer station not reported', 'reg-man-rc' );
+					printf( $head_format, $title );
 
+					$reg_head_count = isset( $reg_data ) ? $reg_data->get_head_count() : 0;
+					$reg_appr_count = isset( $reg_data ) ? $reg_data->get_apprentice_count() : 0;
+					$reg_fixer_count = $reg_head_count - $reg_appr_count;
+					printf( $data_format, $reg_fixer_count );
+					
+					printf( $data_format, $reg_appr_count );
+
+					$sup_head_count = isset( $sup_data ) ? $sup_data->get_head_count() : 0;
+					$sup_appr_count = isset( $sup_data ) ? $sup_data->get_apprentice_count() : 0;
+					$sup_fixer_count = $sup_head_count - $sup_appr_count;
 					$name = "fixer_head_count[$id]";
-					$head_count = isset( $fixer_data ) ? $fixer_data->get_head_count() : 0;
-					printf( $input_format, $name, $head_count );
+					printf( $input_format, $name, $sup_fixer_count );
 
-				echo '</tr>';
+					$name = "apprentice_head_count[$id]";
+					printf( $input_format, $name, $sup_appr_count );
+
+					echo '</tr>';
 
 			echo '</tbody>';
 		echo '</table>';
@@ -491,58 +820,73 @@ class Supplemental_Event_Data_Admin_View {
 	 * @return	void
 	 * @since 	v0.1.0
 	 */
-	private function render_supplemental_non_fixer_data_table() {
+	public static function render_supplemental_non_fixer_data_table( $event_key ) {
 
-		$event_key = $this->get_event_key();
 		$event_key_string = isset( $event_key ) ? $event_key->get_as_string() : NULL;
 		$event_key_array = array( $event_key_string );
-		$group_by = Volunteer_Statistics::GROUP_BY_VOLUNTEER_ROLE;
-		$statistics = Volunteer_Statistics::create_for_event_key_array( $event_key_array, $group_by );
-		$non_fixer_group_data = $statistics->get_supplemental_stats_array();
+		$group_by = Volunteer_Stats_Collection::GROUP_BY_VOLUNTEER_ROLE;
+		$stats_collection = Volunteer_Stats_Collection::create_for_event_key_array( $event_key_array, $group_by );
+		$reg_group_data = $stats_collection->get_all_registered_stats_array();
+		$sup_group_data = $stats_collection->get_supplemental_stats_array();
 
 		$head_format = '<th>%1$s</th>';
-		$row_name_format = '<td>%1$s</td>';
-		$input_format = '<td class="reg-man-rc-input-cell"><input autocomplete="off" type="number" name="%1$s" value="%2$s" min="0" size="4"></td>';
+		$data_format = '<td class="reg-man-rc-sup-data-table-cell">%1$s</td>';
+		$input_format = '<td class="reg-man-rc-sup-data-table-cell"><input autocomplete="off" type="number" name="%1$s" value="%2$s" min="0" size="4"></td>';
 		$caption = __( 'Use this table to record additional non-fixer volunteers who attended the event but did not register to the system', 'reg-man-rc' );
+
 		echo '<table class="reg-man-rc-input-group-table">';
+
 			echo '<caption>' . $caption . '</caption>';
+
 			echo '<thead>';
-				$heading = __( 'Volunteer Role', 'reg-man-rc' );
-				$subheading = '';
-				printf( $head_format, $heading );
+				echo '<tr>';
+					$heading = __( 'Volunteer Role', 'reg-man-rc' );
+					printf( $head_format, $heading );
+	
+					$heading = __( 'Registered', 'reg-man-rc' );
+					printf( $head_format, $heading );
+					
+					$heading = __( 'Supplemental', 'reg-man-rc' );
+					printf( $head_format, $heading );
+				echo '</tr>';
+			echo '</thead>';
 
-				$heading = __( 'Head Count', 'reg-man-rc' );
-				printf( $head_format, $heading );
-
-				echo '</thead>';
 			echo '<tbody>';
 				$roles = Volunteer_Role::get_all_volunteer_roles();
 				foreach( $roles as $volunteer_role ) {
 					echo '<tr>';
 
 						$id = $volunteer_role->get_id();
-						$volunteer_data = isset( $non_fixer_group_data[ $id ] ) ? $non_fixer_group_data[ $id ] : NULL;
+						$reg_data = isset( $reg_group_data[ $id ] ) ? $reg_group_data[ $id ] : NULL;
+						$sup_data = isset( $sup_group_data[ $id ] ) ? $sup_group_data[ $id ] : NULL;
 
 						$title = $volunteer_role->get_name();
-						printf( $row_name_format, $title );
+						printf( $head_format, $title );
+						
+						$reg_head_count = isset( $reg_data ) ? $reg_data->get_head_count() : 0;
+						printf( $data_format, $reg_head_count );
 
 						$name = "non_fixer_head_count[$id]";
-						$head_count = isset( $volunteer_data ) ? $volunteer_data->get_head_count() : 0;
-						printf( $input_format, $name, $head_count );
+						$sup_head_count = isset( $sup_data ) ? $sup_data->get_head_count() : 0;
+						printf( $input_format, $name, $sup_head_count );
 
 					echo '</tr>';
 				} // endfor
 
 				echo '<tr>';
 					$id = Volunteer_Role::UNSPECIFIED_VOLUNTEER_ROLE_ID;
-					$volunteer_data = isset( $non_fixer_group_data[ $id ] ) ? $non_fixer_group_data[ $id ] : NULL;
+					$reg_data = isset( $reg_group_data[ $id ] ) ? $reg_group_data[ $id ] : NULL;
+					$sup_data = isset( $sup_group_data[ $id ] ) ? $sup_group_data[ $id ] : NULL;
+					
+					$title = __( 'Volunteer role not reported', 'reg-man-rc' );
+					printf( $head_format, $title );
 
-					$title = __( 'Volunteer role not known', 'reg-man-rc' );
-					printf( $row_name_format, $title );
+					$reg_head_count = isset( $reg_data ) ? $reg_data->get_head_count() : 0;
+					printf( $data_format, $reg_head_count );
 
 					$name = "non_fixer_head_count[$id]";
-					$head_count = isset( $volunteer_data ) ? $volunteer_data->get_head_count() : 0;
-					printf( $input_format, $name, $head_count );
+					$sup_head_count = isset( $sup_data ) ? $sup_data->get_head_count() : 0;
+					printf( $input_format, $name, $sup_head_count );
 
 				echo '</tr>';
 

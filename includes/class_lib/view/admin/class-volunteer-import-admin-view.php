@@ -6,7 +6,6 @@ use Reg_Man_RC\Control\Admin\Volunteer_Import_Admin_Controller;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\View\Ajax_Form;
 use Reg_Man_RC\View\Form_Input_List;
-use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The administrative view for Volunteer importing

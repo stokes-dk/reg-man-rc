@@ -4,19 +4,17 @@ namespace Reg_Man_RC\View\Pub;
 
 use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Event;
-use Reg_Man_RC\Model\Event_Filter;
-use Reg_Man_RC\View\Form_Input_List;
-use Reg_Man_RC\Control\Admin\Visitor_Registration_Admin_Controller;
-use Reg_Man_RC\Model\Item;
+use Reg_Man_RC\Control\Visitor_Registration_Controller;
 use Reg_Man_RC\Model\Event_Key;
 use Reg_Man_RC\Model\Item_Suggestion;
 use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Control\Template_Controller;
-use Reg_Man_RC\Model\Event_Category;
 use Reg_Man_RC\Model\Calendar;
 use Reg_Man_RC\View\Calendar_View;
 use Reg_Man_RC\View\Event_View;
+use Reg_Man_RC\Model\Fixer_Station;
+use Reg_Man_RC\View\Editable\Editable_Fixer_Station;
 
 /**
  * The visitor registration manager user interface
@@ -30,16 +28,20 @@ class Visitor_Reg_Manager {
 	/** The slug for the visitor registration manager page */
 	const DEFAULT_PAGE_SLUG = 'rc-reg';
 
-	const PAGE_ID_OPTION_KEY = 'reg-man-rc-reg-man-page-post-id';
+	const POST_ID_OPTION_KEY = 'reg-man-rc-reg-man-page-post-id';
 
 	/** The shortcode used to render the visitor registration manager on any page */
 	const SHORTCODE = 'rc-visitor-reg-manager';
 
 	private $event; // the currently selected event, if any
 
-	private static $IS_REG_MANAGER_PAGE; // A flag to indicate whether the current page is this page
+	// FIXME - not used
+//	private static $IS_REG_MANAGER_PAGE; // A flag to indicate whether the current page is this page
 
-	private static $PAGE_URL; // The permalink for this page
+	// FIXME - not used
+//	private static $PAGE_URL; // The permalink for this page
+
+	private static $VISITOR_REG_PAGE_POST; // The post containing the visitor registration page
 
 	/**
 	 * A private constructor forces users of this class to use one of the factory methods
@@ -59,10 +61,11 @@ class Visitor_Reg_Manager {
 	 * Get a boolean flag indicating whether the current page is the virtual page for the registration manager
 	 * @return	boolean		TRUE if the current page is the virtual page for the registration manager, FALSE otherwise
 	 */
+/* FIXME - not used
 	public static function get_is_registration_manager_page() {
 		if ( ! isset( self::$IS_REG_MANAGER_PAGE ) ) {
 			global $post;
-			$my_post_id = get_option( self::PAGE_ID_OPTION_KEY ); // get the post id for my page
+			$my_post_id = get_option( self::POST_ID_OPTION_KEY ); // get the post id for my page
 //			Error_Log::var_dump( $post->ID, $my_post_id );
 
 			self::$IS_REG_MANAGER_PAGE = ( $my_post_id !== FALSE ) && ( $my_post_id == $post->ID );
@@ -70,7 +73,8 @@ class Visitor_Reg_Manager {
 		} // endif
 		return self::$IS_REG_MANAGER_PAGE;
 	} // function
-
+*/
+	
 	/**
 	 * Get the currently selected event
 	 * @return	\Reg_Man_RC\Model\Event	An event instance if a valid one was specified in the GET arguments, NULL otherwise
@@ -97,6 +101,7 @@ class Visitor_Reg_Manager {
 	 * @since	v0.1.0
 	 */
 	public function render() {
+
 		if ( ! is_user_logged_in() ) { //user is NOT logged in, show the login form
 			echo '<h2 class="login-title">' . __('You must be logged in to use this page', 'reg-man-rc') . '</h2>';
 			echo '<div class="login-form-container">';
@@ -105,6 +110,7 @@ class Visitor_Reg_Manager {
 		} else { // User is logged in so show the page content
 			$this->render_view_content();
 		} // endif
+
 	} // function
 
 	/**
@@ -125,7 +131,7 @@ class Visitor_Reg_Manager {
 
 			$action = esc_url( admin_url('admin-post.php') );
 			echo "<form action=\"$action\" method=\"POST\" class=\"visitor-reg-manager-event-select-form\">";
-				echo '<input type="hidden" name="action" value="' . Visitor_Registration_Admin_Controller::EVENT_SELECT_FORM_POST_ACTION . '">'; // required for admin-post
+				echo '<input type="hidden" name="action" value="' . Visitor_Registration_Controller::EVENT_SELECT_FORM_POST_ACTION . '">'; // required for admin-post
 				self::render_event_select( );
 			echo '</form>';
 //			if (self::getIsStandaloneServer()) { // these are forms so must be rendered outside above form
@@ -280,26 +286,48 @@ class Visitor_Reg_Manager {
 		 // conditionally add my scripts and styles on the right page
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'handle_wp_enqueue_scripts_for_shortcode' ) );
 
-		add_shortcode( self::SHORTCODE, array( __CLASS__, 'get_shortcode_content' ) ); // create my shortcode
+		// create my shortcode
+		add_shortcode( self::SHORTCODE, array( __CLASS__, 'get_manager_content' ) ); 
+		
+		// Add a filter to change the content written for my page
+		add_filter( 'the_content', array(__CLASS__, 'modify_post_content') );
 
+	} // function
+
+	/**
+	 * Modify the contents for my page
+	 * @param	string	$content	The post content retrieved from the database
+	 * @return	string	The post content modified for my page
+	 * @since	v0.1.0
+	 */
+	public static function modify_post_content( $content ) {
+		global $post;
+		$result = $content; // return the original content by default
+		if ( ( $post->ID == self::get_post_id() ) && in_the_loop() && is_main_query() ) {
+			if ( ! post_password_required( $post ) ) {
+				$result .= self::get_manager_content();
+			} // endif
+		} // endif
+		return $result;
 	} // function
 
 
 	/**
-	 * Generate content for the shortcode
+	 * Get the content for the manager
 	 *
-	 * This method is called automatically when the shortcode is inserted into a page
+	 * This method is called automatically when the Visitor Registration Manager page is rendered 
+	 *  or when the shortcode is inserted into a page
 	 *
 	 * @return	string	The contents of the Visitor Registration Manager view
 	 *
 	 * @since	v0.1.0
 	 */
-	public static function get_shortcode_content() {
-		// Returns the contents for the shortcode.  WP will insert the result into the page.
+	public static function get_manager_content() {
+		// Returns the contents for the manager
 
 		ob_start();
-			$me = self::create();
-			$me->render();
+			$view = self::create();
+			$view->render();
 		$result = ob_get_clean();
 
 		return $result;
@@ -315,7 +343,9 @@ class Visitor_Reg_Manager {
 	 */
 	public static function handle_wp_enqueue_scripts_for_shortcode() {
 		global $post;
-		if ( ( $post instanceof \WP_Post ) && has_shortcode( $post->post_content, self::SHORTCODE ) ) {
+		$visitor_reg_post_id = self::get_post_id();
+		if ( ( $post instanceof \WP_Post ) && 
+			( ( $post->ID == $visitor_reg_post_id ) || has_shortcode( $post->post_content, self::SHORTCODE ) ) ) {
 			self::enqueue_scripts();
 		} // endif
 	} // function
@@ -337,9 +367,11 @@ class Visitor_Reg_Manager {
 	 * Handle plugin activation.
 	 * This function is called by the plugin controller during plugin activation
 	 */
+/* FIXME - we don't do this anymore, if the page does not exist at any time we create it
 	public static function handle_plugin_activation() {
 		self::insert_page(); // create the page for this view
 	} // function
+*/
 
 	/**
 	 * Handle plugin deactivation.
@@ -353,17 +385,44 @@ class Visitor_Reg_Manager {
 	 * Get the post ID for the visitor registration manager page
 	 * @return string
 	 */
-	public static function get_page_id() {
-		$result = get_option( self::PAGE_ID_OPTION_KEY );
+	public static function get_post_id() {
+		$post = self::get_post();
+		$result = isset( $post ) ? $post->ID : NULL;
 		return $result;
 	} // function
 
 	/**
+	 * Get the post for the visitor registration manager page
+	 * @return \WP_Post
+	 */
+	public static function get_post() {
+		if ( ! isset( self::$VISITOR_REG_PAGE_POST ) ) {
+
+			// Get the post from post ID stored in the options table
+			$post_id = get_option( self::POST_ID_OPTION_KEY );
+			self::$VISITOR_REG_PAGE_POST = ! empty( $post_id ) ? get_post( $post_id ) : NULL;
+			
+			// If that post has been deleted then re-create it
+			if ( empty( self::$VISITOR_REG_PAGE_POST ) ) {
+
+				// This will create the post and store the ID in the options table
+				// If it fails, there's nothing more I can do
+				$post_id = self::insert_page();
+				self::$VISITOR_REG_PAGE_POST = ! empty( $post_id ) ? get_post( $post_id ) : NULL;
+				
+			} // endif
+
+		} // endif
+
+		return self::$VISITOR_REG_PAGE_POST;
+	} // function
+
+	/**
 	 * Get the permalink for the visitor registration manager page
-	 * @return string|WP_Error
+	 * @return string|\WP_Error
 	 */
 	public static function get_page_permalink() {
-		$post_id = get_option( self::PAGE_ID_OPTION_KEY );
+		$post_id = self::get_post_id();
 		$result = ! empty( $post_id ) ? get_page_link( $post_id ) : '';
 		return $result;
 	} // function
@@ -388,10 +447,14 @@ class Visitor_Reg_Manager {
 
 
 
+	/** 
+	 * Insert the post (page) for the visitor registration manager
+	 * @return int	The post ID
+	 */
 	private static function insert_page() {
 		// Create my page in the database
-		$title = __( 'Visitor Registration Manager', 'reg-man-rc' );
-		$content = '[' . self::SHORTCODE . ']';
+		$title = __( 'Visitor Registration', 'reg-man-rc' );
+		$content = '';
 		$template = Template_Controller::MINIMAL_TEMPLATE_SLUG;
 		$page_post = array(
 			'post_title'		=> $title,
@@ -405,20 +468,23 @@ class Visitor_Reg_Manager {
 		);
 		$post_id = wp_insert_post( $page_post, $wp_error = TRUE ); // create the post and get the id
 		if ( is_int( $post_id ) ) {
-			update_option( self::PAGE_ID_OPTION_KEY, $post_id );
+			update_option( self::POST_ID_OPTION_KEY, $post_id );
+			$result = $post_id;
 		} else { // We got a post id of 0 so there was an error
-			$fail_msg = __( 'Failed to insert for visitor registration manager', 'reg-man-rc' );
+			$fail_msg = __( 'Failed to insert for visitor registration page', 'reg-man-rc' );
 			Error_Log::log_wp_error( $fail_msg, $post_id ); // post_id is a WP_Error in this case
+			$result = NULL;
 		} // endif
+		return $result;
 	} // function
 
 	private static function delete_page() {
 		// Delete the page to hold this form
-		$post_id = get_option( self::PAGE_ID_OPTION_KEY ); // get the post id so I can delete the page
+		$post_id = get_option( self::POST_ID_OPTION_KEY ); // get the post id so I can delete the page
 		if ( FALSE === $post_id ) { // unable to get the option value for the page's post id, so can't delete it
 			/* translators: %s is an option key */
 			$format = __( 'Cannot delete visitor registration page because get_option() returned FALSE for option: %s', 'reg-man-rc' );
-			$msg = sprintf( $format, self::PAGE_ID_OPTION_KEY );
+			$msg = sprintf( $format, self::POST_ID_OPTION_KEY );
 			Error_Log::log_msg( $msg );
 			$result = FALSE;
 		} else {
@@ -431,11 +497,11 @@ class Visitor_Reg_Manager {
 				Error_Log::log_msg( $msg );
 				$result = FALSE;
 			} else {
-				$del_option_result = delete_option( self::PAGE_ID_OPTION_KEY ); // remove the option value
+				$del_option_result = delete_option( self::POST_ID_OPTION_KEY ); // remove the option value
 				if ( FALSE === $del_option_result ) {
 					/* translators: %s is replaced with an option key */
 					$format = __( 'delete_option() returned FALSE for option key: %s', 'reg-man-rc' );
-					$msg = sprintf( $format, self::PAGE_ID_OPTION_KEY );
+					$msg = sprintf( $format, self::POST_ID_OPTION_KEY );
 					Error_Log::log_msg( $msg );
 					$result = FALSE;
 				} else {

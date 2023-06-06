@@ -2,7 +2,10 @@
 namespace Reg_Man_RC\Model;
 
 use Reg_Man_RC\View\Map_View;
-use Reg_Man_RC\View\Event_Group_Map_Marker_View;
+use Reg_Man_RC\View\Event_View;
+use Reg_Man_RC\View\Event_Descriptor_View;
+use Reg_Man_RC\View\Volunteer_Registration_View;
+use Reg_Man_RC\View\Object_View\Event_Descriptor_Group_View;
 
 /**
  * An instance of this class represents a group of events at a single location.
@@ -18,12 +21,17 @@ class Event_Group_Map_Marker implements Map_Marker {
 
 	private $events_array = array(); // The set of events represented by this group
 	private $event_descriptors_array = array(); // The set of separate event descriptors included in the group keyed by event key
-	private $sole_event = FALSE; // Will contain the Event object in the case that this group has only 1 event, NULL otherwise
-	private $sole_event_descriptor = FALSE; // Will contain the Event_Descriptor object in the case that there is only 1, NULL otherwise
-	private $is_event_group_complete; // A flag set to TRUE if all events in this group are complete
 
+	private $sole_event; // Will contain the Event object in the case that this group has only 1 event, NULL otherwise
+	private $sole_event_descriptor; // Will contain the Event_Descriptor object in the case that there is only 1, NULL otherwise
+	private $is_event_group_complete; // A flag set to TRUE if all events in this group are complete (in the past)
+	private $is_event_group_cancelled; // A flag set to TRUE if all events in this group are cancelled
+	private $is_event_group_tentative; // A flag set to TRUE if all events in this group are tentative
+	private $is_volunteer_registered; // A flag set to TRUE if the current volunteer is registered to any event in the group
+	private $map_marker_label_class_names; // A list of HTML class names applied to the map marker label for this group
+	
 	private $id; // An ID for the group
-	private $map_marker_title; // A title for the map marker
+	private $map_marker_title; // A title for the map marker, this may be used more than once
 	private $place_name = FALSE; // Use FALSE as a flag to indicate that we should try to get it later
 	private $location = FALSE;
 	private $geo_pos;
@@ -107,7 +115,7 @@ class Event_Group_Map_Marker implements Map_Marker {
 				// Put it in a group by itself so we can list event individual summaries with no location
 				$group_id = 'TBD-' . $event->get_key();
 				if ( ! isset( $result[ $group_id ] ) ) {
-					$place_name = NULL; // Without a venue there is no place name
+//					$place_name = NULL; // Without a venue there is no place name
 					$location = $event->get_location(); // We'll use this for the whole group
 					$result[ $group_id ] = self::create_for_TBD_location( $group_id );
 				} // endif
@@ -234,7 +242,7 @@ class Event_Group_Map_Marker implements Map_Marker {
 	 * Add an event to this group
 	 * @param Event $event
 	 */
-	public function add_event( $event ) {
+	private function add_event( $event ) {
 		$this->events_array[] = $event;
 		$event_descriptor = $event->get_event_descriptor();
 		$event_descriptor_id = $event_descriptor->get_event_descriptor_id();
@@ -254,16 +262,16 @@ class Event_Group_Map_Marker implements Map_Marker {
 	} // function
 
 	/**
-	 * Get the sole Event object if this group contains exactly 1, otherwise NULL
-	 * @return Event|NULL
+	 * Get the sole Event object if this group contains exactly 1, otherwise FALSE
+	 * @return Event|FALSE
 	 */
-	public function get_sole_event() {
-		if ( $this->sole_event === FALSE ) {
+	private function get_sole_event() {
+		if ( ! isset( $this->sole_event ) ) {
 			if ( count( $this->events_array ) === 1 ) {
 				$events_array = array_values( $this->events_array );
 				$this->sole_event = $events_array[ 0 ];
 			} else {
-				$this->sole_event = NULL;
+				$this->sole_event = FALSE;
 			} // endif
 		} // endif
 		return $this->sole_event;
@@ -279,19 +287,39 @@ class Event_Group_Map_Marker implements Map_Marker {
 	} // function
 
 	/**
-	 * Get the sole Event_Descriptor object if this group contains exactly 1, otherwise NULL
-	 * @return Event_Descriptor|NULL
+	 * Get the sole Event_Descriptor object if this group contains exactly 1, otherwise FALSE
+	 * @return Event_Descriptor|FALSE
 	 */
-	public function get_sole_event_descriptor() {
-		if ( $this->sole_event_descriptor === FALSE ) {
+	private function get_sole_event_descriptor() {
+		if ( ! isset( $this->sole_event_descriptor ) ) {
 			if ( count( $this->event_descriptors_array ) === 1 ) {
 				$desc_array = array_values( $this->event_descriptors_array );
 				$this->sole_event_descriptor = $desc_array[ 0 ];
 			} else {
-				$this->sole_event_descriptor = NULL;
+				$this->sole_event_descriptor = FALSE;
 			} // endif
 		} // endif
 		return $this->sole_event_descriptor;
+	} // function
+	
+	/**
+	 * Get the array of event objects that belong to the specified event descriptor
+	 * @param string $event_descriptor_id
+	 * @param string $event_provider_id
+	 * @return Event[]
+	 */
+	public function get_events_by_descriptor( $event_descriptor ) {
+		$result = array();
+		$events_array = $this->get_events_array();
+		$desc_id = $event_descriptor->get_event_descriptor_id();
+		$prov_id = $event_descriptor->get_provider_id();
+		foreach( $events_array as $event ) {
+			if ( ( $event->get_event_descriptor_id() == $desc_id ) &&
+				 ( $event->get_provider_id() == $prov_id ) ) {
+				$result[] = $event;
+			} // endif
+		} // function
+		return $result;
 	} // function
 
 	/**
@@ -312,7 +340,108 @@ class Event_Group_Map_Marker implements Map_Marker {
 		} // endif
 		return $this->is_event_group_complete;
 	} // endif
+	
+	/**
+	 * Get a flag indicating whether all events in this group are cancelled
+	 * @return boolean	TRUE if all events are cancelled, FALSE otherwise
+	 */
+	private function get_is_event_group_cancelled() {
+		if ( ! isset( $this->is_event_group_cancelled ) ) {
+			$event_desc_array = $this->get_event_descriptors_array();
+			$result = TRUE; // Assume yes unless we discover otherwise
+			foreach( $event_desc_array as $event_desc ) {
+				$status = $event_desc->get_event_status();
+				$status_id = isset( $status ) ? $status->get_id() : Event_Status::CONFIRMED; // Defensive
+				if ( $status_id !== Event_Status::CANCELLED ) {
+					$result = FALSE;
+					break;
+				} // endif
+			} // endfor
+			$this->is_event_group_cancelled = $result;
+		} // endif
+		return $this->is_event_group_cancelled;
+	} // endif
+	
+	/**
+	 * Get a flag indicating whether all events in this group are cancelled
+	 * @return boolean	TRUE if all events are cancelled, FALSE otherwise
+	 */
+	private function get_is_event_group_tentative() {
+		if ( ! isset( $this->is_event_group_tentative ) ) {
+			$event_desc_array = $this->get_event_descriptors_array();
+			$result = TRUE; // Assume yes unless we discover otherwise
+			foreach( $event_desc_array as $event_desc ) {
+				$status = $event_desc->get_event_status();
+				$status_id = isset( $status ) ? $status->get_id() : Event_Status::CONFIRMED; // Defensive
+				if ( $status_id !== Event_Status::TENTATIVE ) {
+					$result = FALSE;
+					break;
+				} // endif
+			} // endfor
+			$this->is_event_group_tentative = $result;
+		} // endif
+		return $this->is_event_group_tentative;
+	} // endif
 
+	/**
+	 * Get a flag indicating whether the current volunteer is registered to any event in the group
+	 * @return boolean	TRUE if the volunteer is registered to any event in the group, FALSE otherwise
+	 */
+	private function get_is_volunteer_registered() {
+		if ( ! isset( $this->is_volunteer_registered ) ) {
+			$events_array = $this->get_events_array();
+			$result = FALSE; // Assume no unless we discover otherwise
+			foreach( $events_array as $event ) {
+				$vol_reg = $event->get_volunteer_registration();
+				if ( isset( $vol_reg ) ) {
+					$result = TRUE;
+					break;
+				} // endif
+			} // endfor
+			$this->is_volunteer_registered = $result;
+		} // endif
+		return $this->is_volunteer_registered;
+	} // endif
+	
+	
+	/**
+	 * Get the html class names to be assigned to the entry or NULL if no classes are needed.
+	 * Multiple class names should be contained in a single string separated by spaces.
+	 * @param string $calendar_type		One of the Calendar_Type_* constants defined by Calendar
+	 * @return string|NULL
+	 * @since v0.1.0
+	 */
+	private function get_map_marker_label_class_names( $map_type ) {
+		
+		if ( ! isset( $this->map_marker_label_class_names ) ) {
+
+			$class_array = array();
+
+			// Completed / Upcoming
+			$class_array[] = $this->get_is_event_group_complete() ? 'completed' : 'upcoming';
+
+			// Status
+			if ( $this->get_is_event_group_cancelled() ) {
+				$class_array[] = 'cancelled-status';
+			} elseif( $this->get_is_event_group_tentative() ) {
+				$class_array[] = 'tentative-status';
+			} // endif
+
+			// Volunteer registration status
+			if ( $map_type == Map_View::MAP_TYPE_CALENDAR_VOLUNTEER_REG ) {
+				$class_array[] = $this->get_is_volunteer_registered() ? 'vol-reg-registered' : 'vol-reg-not-registered';
+			} // endif
+
+			// implode the array
+			$this->map_marker_label_class_names = implode( ' ', $class_array );
+
+		} // endif
+		
+		return $this->map_marker_label_class_names;
+		
+	} // function
+
+	
 	/**
 	 * Get the marker title as a string, e.g. "Toronto Reference Library".
 	 * This string is shown as rollover text for the marker, similar to an element's title attribute.
@@ -322,43 +451,31 @@ class Event_Group_Map_Marker implements Map_Marker {
 	 * @since v0.1.0
 	 */
 	public function get_map_marker_title( $map_type ) {
-		if ( ! isset( $this->map_marker_title ) ) {
-			$sole_event = $this->get_sole_event();
-			if ( isset( $sole_event ) ) {
 
-				$this->map_marker_title = $sole_event->get_label();
+		if ( ! isset( $this->map_marker_title ) ) {
+
+			$sole_event = $this->get_sole_event();
+			if ( ! empty( $sole_event ) ) {
+				
+				// A single event so just use its label
+				$this->map_marker_title = $sole_event->get_map_marker_title( $map_type );
 
 			} else {
 
 				$sole_desc = $this->get_sole_event_descriptor();
-				if ( isset( $sole_desc ) ) {
-
-					$title = $sole_desc->get_event_summary();
-
+				$event_count = count( $this->get_events_array() );
+				if ( ! empty( $sole_desc ) ) {
+					$summary = $sole_desc->get_event_summary();
 				} else {
-
-					$name = $this->get_place_name();
-					$loc = $this->get_location();
-					$geo = $this->get_geographical_position();
-					if ( isset( $name ) ) {
-						$title = $name;
-					} elseif ( isset( $loc ) ) {
-						$title = $loc;
-					} else {
-						$title = isset( $geo ) ? $geo->get_as_string() : __( 'Location not known', 'reg-man-rc' );
-					} // endif
-
+					$summary = __( 'Multiple events', 'reg-man-rc' );
 				} // endif
 
-				$event_count = count( $this->get_events_array() );
-				/* Translators:
-				 * %1$s is a place name for a map marker like "Toronto Reference Library",
-				 * %2$s is a count of events at that locaation
-				 */
-				$format = _n( '%1$s — %2$s event', '%1$s — %2$s events', $event_count, 'reg-man-rc' );
-				$this->map_marker_title = sprintf( $format, $title, number_format_i18n( $event_count ) );
-
+				/* Translators: %1$s a count of events, %2$s is an event title */
+				$format = _n( '%1$s event : %2$s', '%1$s events : %2$s', $event_count, 'reg-man-rc' );
+				$this->map_marker_title = sprintf( $format, number_format_i18n( $event_count ), $summary );
+					
 			}  // endif
+
 		} // endif
 
 		return $this->map_marker_title;
@@ -379,11 +496,53 @@ class Event_Group_Map_Marker implements Map_Marker {
 		// For the admin stats maps we don't want any labels because there could be hundreds of events
 		if ( $map_type !== Map_View::MAP_TYPE_ADMIN_STATS ) {
 
+			$sole_event = $this->get_sole_event();
+			if ( ! empty( $sole_event ) ) {
+			
+				// A single event so just use its label
+				$result = $sole_event->get_map_marker_label( $map_type );
+
+			} else {
+			
+				$event_count = count( $this->get_events_array() );
+				/* Translators: %1$s is an event title, %2$s is a count of events */
+				$format = _n( '%1$s event', '%1$s events', $event_count, 'reg-man-rc' );
+				$text = sprintf( $format, number_format_i18n( $event_count ) ); // start with count of events
+				$classes = $this->get_map_marker_label_class_names( $map_type );
+				
+				// Mark group if it is are cancelled or tentative
+				if ( $this->get_is_event_group_cancelled() ) {
+					
+					/* Translators: %1$s is a count of event dates like "4 dates" */
+					$format = __( '(Cancelled) %1$s ', 'reg-man-rc' );
+					$text = sprintf( $format, $text );
+					
+				} elseif( $this->get_is_event_group_tentative() ) {
+					
+					/* Translators: %1$s is a count of event dates like "4 dates" */
+					$format = __( '(Tentative) %1$s ', 'reg-man-rc' );
+					$text = sprintf( $format, $text );
+					
+				} // endif
+
+				$result = Map_Marker_Label::create( $text, $classes );
+				
+					
+			} // endif
+			
+		} // endif
+		
+		return $result;
+
+		
+		// For the admin stats maps we don't want any labels because there could be hundreds of events
+		if ( $map_type !== Map_View::MAP_TYPE_ADMIN_STATS ) {
+
 			$is_complete = $this->get_is_event_group_complete();
 
 			// Show Cancelled for all events that were cancelled
 			$sole_desc = $this->get_sole_event_descriptor();
-			if ( isset( $sole_desc ) ) {
+			if ( ! empty( $sole_desc ) ) {
 				$status = $sole_desc->get_event_status();
 				$status_id = $status->get_id();
 				if ( $status_id == Event_Status::CANCELLED ) {
@@ -446,7 +605,7 @@ class Event_Group_Map_Marker implements Map_Marker {
 	 * @since v0.1.0
 	 */
 	public function get_map_marker_id( $map_type ) {
-		return $this->id; // This is set when the object is create
+		return $this->id; // This is set when the object is created
 	} // function
 
 	/**
@@ -456,7 +615,7 @@ class Event_Group_Map_Marker implements Map_Marker {
 	 * @since v0.1.0
 	 */
 	public function get_map_marker_geographic_position( $map_type ) {
-		return $this->geo_pos; // This is set when the object is create
+		return $this->geo_pos; // This is set when the object is created
 	} // function
 
 	/**
@@ -482,9 +641,9 @@ class Event_Group_Map_Marker implements Map_Marker {
 	 * @since v0.1.0
 	 */
 	public function get_map_marker_colour( $map_type ) {
-
+		
 		$sole_desc = $this->get_sole_event_descriptor();
-		if ( isset( $sole_desc ) ) {
+		if ( ! empty( $sole_desc ) ) {
 
 			$result = $sole_desc->get_map_marker_colour( $map_type );
 
@@ -506,6 +665,7 @@ class Event_Group_Map_Marker implements Map_Marker {
 
 		} // endif
 
+		
 		return $result;
 
 	} // function
@@ -522,7 +682,18 @@ class Event_Group_Map_Marker implements Map_Marker {
 		$result = NULL;
 		// For the admin stats maps we don't want to change opacity for hundreds of past events
 		if ( $map_type !== Map_View::MAP_TYPE_ADMIN_STATS ) {
-			$result = $this->get_is_event_group_complete() ? 0.25 : 1;
+
+			$sole_event = $this->get_sole_event();
+			if ( ! empty( $sole_event ) ) {
+				
+				$result = $sole_event->get_map_marker_opacity( $map_type );
+	
+			} else {
+			
+				// But for an event descriptor we need to check if the events for the current timeframe are complete 
+				$result = $this->get_is_event_group_complete() ? 0.5 : 1;
+				
+			} // endif
 		} // endif
 
 		return $result;
@@ -536,8 +707,30 @@ class Event_Group_Map_Marker implements Map_Marker {
 	 */
 	public function get_map_marker_info( $map_type ) {
 
-		$view = Event_Group_Map_Marker_View::create_for_map_info_window( $this, $map_type );
-		$result = $view->get_object_view_content();
+		$sole_event = $this->get_sole_event();
+		if ( ! empty( $sole_event ) ) {
+			
+			$result = $sole_event->get_map_marker_info( $map_type );
+
+		} else {
+
+			$sole_desc = $this->get_sole_event_descriptor();
+			if ( ! empty( $sole_desc ) ) {
+				
+				$view = Event_Descriptor_View::create_for_map_info_window( $sole_desc, $map_type );
+				$events_array = $this->get_events_by_descriptor( $sole_desc );
+				$view->set_events_array( $events_array );
+				$result = $view->get_object_view_content();
+				
+			} else {
+
+				$view = Event_Descriptor_Group_View::create_for_map_info_window( $this, $map_type );
+				$result = $view->get_object_view_content();
+				
+			} // endif
+			
+		} // endif
+		
 		return $result;
 
 	} // function

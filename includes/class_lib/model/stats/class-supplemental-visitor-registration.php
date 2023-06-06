@@ -1,6 +1,9 @@
 <?php
 namespace Reg_Man_RC\Model\Stats;
 
+use Reg_Man_RC\Model\Event_Key;
+use Reg_Man_RC\Model\Error_Log;
+
 /**
  * Describes a supplemental registration record for a volunteer for an event
  *
@@ -70,7 +73,7 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 	 * 		@type	string	'returning_count'			The number of returning visitors
 	 * 		@type	string	'unreported_count'			The number of visitors whose first-time/returning status is not known
 	 * }
-	 * @return	\Reg_Man_RC\Model\Supplemental_Visitor[]		An array of instances of this class.
+	 * @return	Supplemental_Visitor_Registration[]		An array of instances of this class.
 	 */
 	private static function create_instance_array_from_data_array( $data_array ) {
 
@@ -122,8 +125,8 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 	/**
 	 * Get the supplemental visitor group stats for the specified events and grouped in the specified way
 	 * @param	Event_Key[]		$event_key_array	An array of event keys whose group stats are to be returned
-	 * @param	string			$group_by			One of the "GROUP_BY" constants from Visitor_Statistics
-	 * @return	Volunteer_Group_Stats[]	An array of instances of Volunteer_Group_Stats describing the volunteers and their related head counts.
+	 * @param	string			$group_by			One of the "GROUP_BY" constants from Visitor_Stats_Collection
+	 * @return	Volunteer_Stats[]	An array of instances of Volunteer_Stats describing the volunteers and their related head counts.
 	 */
 	public static function get_supplemental_group_stats_array( $event_key_array, $group_by ) {
 
@@ -134,7 +137,7 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 			$result = array();
 			$table = $wpdb->prefix . self::SUPPLEMENTAL_VISITOR_REG_TABLE_NAME;
 			switch ( $group_by ) {
-				case Visitor_Statistics::GROUP_BY_EVENT:
+				case Visitor_Stats_Collection::GROUP_BY_EVENT:
 					$name_col = 'event_key';
 					break;
 				default:
@@ -164,11 +167,11 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 				$join_count = 0; //  or joining the mailing list
 				foreach ( $data_array as $data ) {
 					$name			= isset( $data[ 'name' ] )			? $data[ 'name' ]			: ''; //$em_dash;
-					$visitor_count	= isset( $data[ 'visitor_count' ] )	? $data[ 'visitor_count' ] 	: 0;
+//					$visitor_count	= isset( $data[ 'visitor_count' ] )	? $data[ 'visitor_count' ] 	: 0;
 					$first_count	= isset( $data[ 'first_count' ] )	? $data[ 'first_count' ] 	: 0;
 					$return_count	= isset( $data[ 'return_count' ] )	? $data[ 'return_count' ] 	: 0;
 					$unknown_count	= isset( $data[ 'unrep_count' ] )	? $data[ 'unrep_count' ]	: 0;
-					$instance = Visitor_Group_Stats::create( $name, $first_count, $return_count, $unknown_count, $email_count, $join_count );
+					$instance = Visitor_Stats::create( $name, $first_count, $return_count, $unknown_count, $email_count, $join_count );
 					$result[ $name ] = $instance;
 				} // endfor
 			} // endif
@@ -179,6 +182,7 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 	/**
 	 * Set the supplemental visitor registration counts for this event
 	 * @param	int		$first_time_count	The count of first-time visitors for the event
+	 * @return	boolean	TRUE if the update was successful, FALSE otherwise
 	 * @since	v0.1.0
 	 */
 	public static function set_supplemental_visitor_reg_counts( $event_key, $first_time_count, $returning_count, $unreported_count ) {
@@ -213,14 +217,14 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 				'returning_count'		=> max( 0, intval( $returning_count ) ),
 				'unreported_count'		=> max( 0, intval( $unreported_count ) ),
 			);
-			$types = array_fill( 0, count( $vals ), '%s');
+			$types = array_fill( 0, count( $vals ), '%s' );
 
 			if ( isset( $existing_id ) ) {
 				// We must update an existing record
 				$where = array( 'id' => $existing_id );
 				$where_format = array( '%s' );
 				$update_result = $wpdb->update( $table, $vals, $where, $types, $where_format );
-				$result = ( $update_result == 1 ) ? TRUE : FALSE;
+				$result = ( $update_result !== FALSE ) ? TRUE : FALSE;
 			} else {
 				// We must insert a new record
 				$vals[ 'event_key' ] = $event_key;
@@ -340,6 +344,15 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 	public function get_is_join_mail_list() {
 		return FALSE;
 	} // function
+	
+	/**
+	 * Get a count of the number of items registered by this visitor, if known.
+	 * @return	int|NULL	A count of the number of items registered by this visitor or NULL if we don't know.
+	 * @since	v0.1.0
+	 */
+	public function get_item_count() {
+		return NULL;
+	} // endif
 
 	/**
 	 * Get a string indicating the source of this descriptor

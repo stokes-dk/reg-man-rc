@@ -5,18 +5,17 @@ namespace Reg_Man_RC\View\Pub;
 use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\View\Form_Input_List;
-use Reg_Man_RC\Model\Item;
 use Reg_Man_RC\Model\Event_Key;
 use Reg_Man_RC\Model\Volunteer;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\View\Ajax_Form;
-use Reg_Man_RC\Model\Calendar;
 use Reg_Man_RC\Control\Volunteer_Controller;
 use Reg_Man_RC\View\Calendar_View;
 use Reg_Man_RC\Control\Volunteer_Registration_Controller;
-use Reg_Man_RC\View\Event_View;
 use Reg_Man_RC\View\Volunteer_Registration_View;
 use Reg_Man_RC\View\Volunteer_Registration_Form;
+use Reg_Man_RC\Model\Settings;
+use Reg_Man_RC\Model\Calendar;
 
 /**
  * The volunteer area user interface.
@@ -29,7 +28,7 @@ class Volunteer_Area {
 	/** The default slug for the volunteer area page */
 	const DEFAULT_PAGE_SLUG = 'volunteer-area';
 
-	const PAGE_ID_OPTION_KEY = 'reg-man-rc-volunteer-area-page-post-id';
+	const POST_ID_OPTION_KEY = 'reg-man-rc-volunteer-area-page-post-id';
 
 	/** The shortcode used to render the volunteer area on any page */
 	const SHORTCODE = 'rc-volunteer-area';
@@ -40,10 +39,12 @@ class Volunteer_Area {
 	const PAGE_NAME_EVENT			= 'event';
 	const PAGE_NAME_PREFERENCES		= 'pref';
 
-	private $curr_page_title; // The title for the current event
+	private static $CURR_PAGE_SUBTITLE; // The title for the current sub page, like preferences or an event
 
-	private static $PAGE_NAME; // The name of the page currently being viewed
+	private static $PAGE_NAME; // The name of the page currently being viewed, e.g. Settings
 	private static $EVENT; // The event currently being viewed, if one exists
+	
+	private static $VOL_AREA_POST; // The post containing the volunteer area
 
 	/**
 	 * A private constructor forces users of this class to use one of the factory methods
@@ -127,9 +128,8 @@ class Volunteer_Area {
 		$input_list = self::get_volunteer_login_input_list( $email, $is_remember_me, $is_require_password, $event_key );
 		ob_start();
 			// Add a nonce
-			$name = '_wpnonce';
 			$ajax_action = Volunteer_Controller::AJAX_VOLUNTEER_LOGIN_ACTION;
-			$value = wp_nonce_field( $ajax_action ); // Note that this renders the nonce in place
+			wp_nonce_field( $ajax_action ); // Note that this renders the nonce in place
 			// Render the input list
 			$input_list->render();
 		$result = ob_get_clean();
@@ -153,7 +153,7 @@ class Volunteer_Area {
 
 		if ( ! $is_require_password ) {
 			$is_required = TRUE;
-			$hint = ''; //esc_html__( 'Enter the email address you use to register for events', 'reg-man-rc' );
+			$hint = esc_html__( 'Enter the email address you use to register for events', 'reg-man-rc' );
 			$classes = '';
 			$addn_attrs = 'autofocus="autofocus"';
 			$input_list->add_email_input( $label, $name, $value, $hint, $classes, $is_required, $addn_attrs );
@@ -184,9 +184,10 @@ class Volunteer_Area {
 
 		$label = __( 'Remember me', 'reg-man-rc' );
 		$name = 'is-remember';
+		$hint = ''; //__( 'Return to this page later without entering your email address', 'reg-man-rc' );
 		$value = 1;
 		$is_checked = $is_remember_me ? 1 : 0;
-		$input_list->add_checkbox_input( $label, $name, $value, $is_checked );
+		$input_list->add_checkbox_input( $label, $name, $value, $is_checked, $hint );
 
 		$label = $is_require_password ? __( 'Login', 'reg-man-rc' ) : __( 'Continue', 'reg-man-rc' );
 		$type = 'submit';
@@ -247,12 +248,9 @@ class Volunteer_Area {
 				$icon = '<span class="volunteer-area-title-back-link-icon dashicons dashicons-arrow-left-alt2"></span>';
 				echo "<a href=\"$href\">$icon<span class=\"volunteer-area-title-back-link-text\">$text</a>";
 			echo '</div>';
+		} else {
+			echo '<div class="reg-man-rc-volunteer-area-header-part"></div>'; // To push the user to the right
 		} // endif
-
-		// Title section
-		echo '<div class="reg-man-rc-volunteer-area-header-part volunteer-area-title-text">';
-			echo $this->get_current_page_title();
-		echo '</div>';
 
 		// User
 		echo '<div class="reg-man-rc-volunteer-area-header-part">';
@@ -265,9 +263,10 @@ class Volunteer_Area {
 		$volunteer = Volunteer::get_current_volunteer();
 		if ( isset( $volunteer ) ) {
 			$public_name = $volunteer->get_public_name();
+			
 			// Note that the volunteer object is in the public space here and DOES NOT contain the original email
 			// We must get the email adderss out of the cookie
-//			$email = Volunteer::get_volunteer_email_cookie();
+			$email = Volunteer::get_volunteer_email_cookie();
 
 			$item_format =
 				'<li class="reg-man-rc-dropdown-menu-item %4$s">' .
@@ -294,14 +293,20 @@ class Volunteer_Area {
 			} // endif
 
 			// Exit
-			$text = esc_html__( 'Exit', 'reg-man-rc' );
-			$href = Volunteer_Controller::get_volunteer_area_exit_href();
-			$items[] = array(
-					$text,
-					$href,
-					'exit',
-					'reg-man-rc-volunteer-area-exit-button'
-			);
+			if ( Volunteer::get_is_exist_registered_user_for_email( $email ) ) {
+				// Registered users should log out the normal way
+				// TODO: We could add a "Logout" option here
+			} else {
+				// We will only add the "Exit" option for volunteers who are not registered users
+				$text = esc_html__( 'Exit', 'reg-man-rc' );
+				$href = Volunteer_Controller::get_volunteer_area_exit_href();
+				$items[] = array(
+						$text,
+						$href,
+						'exit',
+						'reg-man-rc-volunteer-area-exit-button'
+				);
+			} // endif
 
 			// Menu container
 			echo '<div class="volunteer-area-user-container reg-man-rc-dropdown-menu-container">';
@@ -334,10 +339,12 @@ class Volunteer_Area {
 	 */
 	private function render_calendar() {
 
-		// The calendar info windows contain a button for "quick sign up"
-		// Pressing that button should submit a form already on the page
-		// I will render that form here
-		$this->render_quick_signup_form();
+		if ( Settings::get_is_allow_volunteer_registration_quick_signup() ) {
+			// The calendar info windows contain a button for "quick sign up"
+			// Pressing that button should submit a form already on the page
+			// I will render that form here
+			$this->render_quick_signup_form();
+		} // endif
 
 		// Render the calendar
 		$view = Calendar_View::create_for_volunteer_registration_calendar();
@@ -427,6 +434,46 @@ class Volunteer_Area {
 		// Filter query vars to include mine
 		add_filter( 'query_vars', array( __CLASS__, 'filter_query_vars' ), 10, 1 );
 
+		// Filter query vars to include mine
+		add_filter( 'the_title', array( __CLASS__, 'filter_the_title' ), 10, 2 );
+
+	} // function
+
+	/**
+	 * Filter the title for the volunteer area so we can add a page subtitle for an event
+	 * @param string $post_title
+	 * @param int $post_id
+	 * @return string
+	 */
+	public static function filter_the_title( $post_title, $post_id ) {
+
+		$vol_area_post_id = self::get_post_id();
+		
+		// In the loop to make sure we don't change the title in the menu
+		if ( $post_id == $vol_area_post_id && in_the_loop() ) {
+			
+			$sub_page_title = self::get_current_page_subtitle();
+			
+			if ( ! empty( $sub_page_title ) ) {
+				
+				/* Translators: %1$s is a sub page title inside the volunteer area, %2$s is the volunteer area main title */
+				$format = _x( '%1$s — %2$s', 'A title for a subpage in the volunteer area', 'reg-man-rc' );
+				$result = sprintf( $format, $sub_page_title, $post_title );
+
+			} else {
+				
+				$result = $post_title;
+				
+			} // endif
+			
+		} else {
+			
+			$result = $post_title;
+			
+		} // endif
+		
+		return $result;
+		
 	} // function
 
 	public static function filter_query_vars( $public_query_vars ) {
@@ -474,32 +521,32 @@ class Volunteer_Area {
 	} // function
 
 	/**
-	 * Get the current page title
+	 * Get the current page subtitle
 	 * @return string
 	 */
-	private function get_current_page_title() {
-		if ( ! isset( $this->curr_page_title ) ) {
-			$page_name = $this->get_page_name_from_request();
+	private static function get_current_page_subtitle() {
+		if ( ! isset( self::$CURR_PAGE_SUBTITLE ) ) {
+			$page_name = self::get_page_name_from_request();
 			switch( $page_name ) {
 
 				case self::PAGE_NAME_HOME:
 				default:
-					$this->curr_page_title = __( 'Volunteer Events Calendar', 'reg-man-rc' );
+					self::$CURR_PAGE_SUBTITLE = ''; // A subtitle is not necessary on the home page
 					break;
 
 				case self::PAGE_NAME_EVENT:
-					$event = $this->get_event_from_request();
-					$this->curr_page_title = $event->get_label();
+					$event = self::get_event_from_request();
+					self::$CURR_PAGE_SUBTITLE = $event->get_label();
 					break;
 
 				case self::PAGE_NAME_PREFERENCES:
-					$this->curr_page_title = __( 'Preferences', 'reg-man-rc' );
+					self::$CURR_PAGE_SUBTITLE = __( 'Preferences', 'reg-man-rc' );
 					break;
 
 			} // endswitch
 
 		} // endif
-		return $this->curr_page_title;
+		return self::$CURR_PAGE_SUBTITLE;
 	} // function
 
 	/**
@@ -567,18 +614,46 @@ class Volunteer_Area {
 	 * Get the post ID for this page
 	 * @return string
 	 */
-	public static function get_page_id() {
-		$result = get_option( self::PAGE_ID_OPTION_KEY );
+	public static function get_post_id() {
+		$post = self::get_post();
+		$result = isset( $post ) ? $post->ID : NULL;
 		return $result;
 	} // function
 
 	/**
+	 * Get the post for volunteer area
+	 * @return \WP_Post
+	 */
+	public static function get_post() {
+		
+		if ( ! isset( self::$VOL_AREA_POST ) ) {
+
+			// Get the post from post ID stored in the options table
+			$post_id = get_option( self::POST_ID_OPTION_KEY );
+			self::$VOL_AREA_POST = ! empty( $post_id ) ? get_post( $post_id ) : NULL;
+			
+			// If that post has been deleted then re-create it
+			if ( empty( self::$VOL_AREA_POST ) ) {
+
+				// This will create the post and store the ID in the options table
+				// If it fails, there's nothing more I can do
+				$post_id = self::insert_page();
+				self::$VOL_AREA_POST = ! empty( $post_id ) ? get_post( $post_id ) : NULL;
+				
+			} // endif
+
+		} // endif
+
+		return self::$VOL_AREA_POST;
+		
+	} // function
+
+	/**
 	 * Get the URL for this page
-	 * @param	boolean	$is_include_volunteer	TRUE if the resulting should include the current volunteer's identity
-	 * @return string|WP_Error
+	 * @return string|\WP_Error
 	 */
 	public static function get_href_for_main_page() {
-		$post_id = get_option( self::PAGE_ID_OPTION_KEY );
+		$post_id = get_option( self::POST_ID_OPTION_KEY );
 		$result = ! empty( $post_id ) ? get_page_link( $post_id ) : '';
 		return $result;
 	} // function
@@ -595,19 +670,24 @@ class Volunteer_Area {
 	} // function
 
 	/**
-	 * Get the permalink for this page
-	 * @param	Event	$event					The event whose area page is to be returned
-	 * @param	boolean	$is_include_volunteer	TRUE if the URL should include the current volunteer's identity, FALSE otherwise
-	 * @return string
+	 * Get the permalink for a volunteer area event page
+	 * @param	Event	$event	The event whose area page is to be returned
+	 * @return string|NULL
 	 */
 	public static function get_href_for_event_page( $event ) {
 		$base_url = urldecode( self::get_href_for_main_page() );
 		if ( ! isset( $event ) ) {
-			$result = $base_url; // Defensive
+			$result = NULL; // Defensive
 		} else {
-			$event_key = $event->get_key();
-			$args = array( Event_Key::EVENT_KEY_QUERY_ARG_NAME => $event_key );
-			$result = add_query_arg( $args, $base_url );
+			$vol_reg_cal = Calendar::get_volunteer_registration_calendar();
+			$is_on_cal = isset( $vol_reg_cal ) ? $vol_reg_cal->get_is_event_contained_in_calendar( $event ) : FALSE;
+			if ( ! $is_on_cal ) {
+				$result = NULL;
+			} else {
+				$event_key = $event->get_key();
+				$args = array( Event_Key::EVENT_KEY_QUERY_ARG_NAME => $event_key );
+				$result = add_query_arg( $args, $base_url );
+			} // endif
 		} // endif
 		return $result;
 	} // function
@@ -629,7 +709,7 @@ class Volunteer_Area {
 		);
 		$post_id = wp_insert_post( $page_post, $wp_error = TRUE ); // create the post and get the id
 		if ( is_int( $post_id ) ) {
-			update_option( self::PAGE_ID_OPTION_KEY, $post_id );
+			update_option( self::POST_ID_OPTION_KEY, $post_id );
 		} else { // We got a post id of 0 so there was an error
 			$fail_msg = __( 'Failed to insert for visitor registration manager', 'reg-man-rc' );
 			Error_Log::log_wp_error( $fail_msg, $post_id ); // post_id is a WP_Error in this case
@@ -638,11 +718,11 @@ class Volunteer_Area {
 
 	private static function delete_page() {
 		// Delete the page to hold this form
-		$post_id = get_option( self::PAGE_ID_OPTION_KEY ); // get the post id so I can delete the page
+		$post_id = get_option( self::POST_ID_OPTION_KEY ); // get the post id so I can delete the page
 		if ( FALSE === $post_id ) { // unable to get the option value for the page's post id, so can't delete it
 			/* translators: %s is an option key */
 			$format = __( 'Cannot delete visitor registration page because get_option() returned FALSE for option: %s', 'reg-man-rc' );
-			$msg = sprintf( $format, self::PAGE_ID_OPTION_KEY );
+			$msg = sprintf( $format, self::POST_ID_OPTION_KEY );
 			Error_Log::log_msg( $msg );
 			$result = FALSE;
 		} else {
@@ -655,11 +735,11 @@ class Volunteer_Area {
 				Error_Log::log_msg( $msg );
 				$result = FALSE;
 			} else {
-				$del_option_result = delete_option( self::PAGE_ID_OPTION_KEY ); // remove the option value
+				$del_option_result = delete_option( self::POST_ID_OPTION_KEY ); // remove the option value
 				if ( FALSE === $del_option_result ) {
 					/* translators: %s is replaced with an option key */
 					$format = __( 'delete_option() returned FALSE for option key: %s', 'reg-man-rc' );
-					$msg = sprintf( $format, self::PAGE_ID_OPTION_KEY );
+					$msg = sprintf( $format, self::POST_ID_OPTION_KEY );
 					Error_Log::log_msg( $msg );
 					$result = FALSE;
 				} else {

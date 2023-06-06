@@ -2,7 +2,6 @@
 namespace Reg_Man_RC\Control;
 
 use Reg_Man_RC\Model\Volunteer;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Volunteer_Registration;
 use Reg_Man_RC\Model\Ajax_Form_Response;
@@ -153,6 +152,10 @@ class Volunteer_Registration_Controller {
 				$roles = $is_use_defaults ? $target_volunteer->get_preferred_roles() : NULL;
 			} // endif
 
+			// Comments
+			$volunteer_comments = isset( $form_data[ 'volunteer-comments' ] ) ? trim( $form_data[ 'volunteer-comments' ] ) : NULL;
+			
+			
 			// Get the current volunteer registration record if one exists
 			$vol_reg = Volunteer_Registration::get_registration_for_volunteer_and_event( $target_volunteer, $event_key );
 
@@ -170,9 +173,10 @@ class Volunteer_Registration_Controller {
 					$is_apprentice = ! empty( $fixer_station ) ? $is_apprentice : FALSE; // not an apprentice if no station
 					$vol_reg->set_is_fixer_apprentice( $is_apprentice );
 					$vol_reg->set_volunteer_roles_array( $roles );
+					$vol_reg->set_volunteer_registration_comments( $volunteer_comments );
 				} else {
 					// Adding a new registration
-					Volunteer_Registration::create_new_registration( $target_volunteer, $event, $roles, $fixer_station, $is_apprentice );
+					Volunteer_Registration::create_new_registration( $target_volunteer, $event, $roles, $fixer_station, $is_apprentice, $volunteer_comments );
 				} // endif
 
 			} else {
@@ -188,7 +192,8 @@ class Volunteer_Registration_Controller {
 			// For regular posts we will load the new ajax form content into the response
 			if ( ! $is_quick_signup ) {
 				$vol_reg_form = Volunteer_Registration_Form::create( $target_volunteer, $event );
-				$content = $vol_reg_form->get_form_content( $is_open = ! $is_use_defaults );
+//				$content = $vol_reg_form->get_form_content( $is_open = ! $is_use_defaults );
+				$content = $vol_reg_form->get_form_content( $is_open = TRUE );
 				$ajax_response->set_html_data( $content );
 			} // endif
 

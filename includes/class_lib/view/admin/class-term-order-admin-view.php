@@ -4,7 +4,6 @@ namespace Reg_Man_RC\View\Admin;
 use Reg_Man_RC\Control\Term_Order_Controller;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\View\Ajax_Form;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Ajax_Form_Response;
 use Reg_Man_RC\View\Form_Input_List;
 

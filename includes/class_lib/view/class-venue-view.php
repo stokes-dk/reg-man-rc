@@ -2,14 +2,13 @@
 namespace Reg_Man_RC\View;
 
 use Reg_Man_RC\Model\Venue;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\View\Object_View\List_Item;
 use Reg_Man_RC\View\Object_View\Map_Section;
 use Reg_Man_RC\View\Object_View\List_Section;
 use Reg_Man_RC\View\Object_View\Abstract_Object_View;
-use Reg_Man_RC\View\Object_View\Location_Item_Provider;
 use Reg_Man_RC\View\Object_View\Venue_Item_Provider;
 use Reg_Man_RC\View\Object_View\Object_View;
+use Reg_Man_RC\View\Object_View\Object_View_Section;
 
 /**
  * An instance of this class provides a user interface for an venue.

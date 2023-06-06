@@ -36,6 +36,7 @@ class Calendar {
 	// Note that categories are a taxonomy so we don't store as metadata, they're acquired through get_terms()
 //	private static $SHOW_UNCATEGORIZED_META_KEY					= self::POST_TYPE . '-show-uncategorized';
 	private static $VIEWS_META_KEY								= self::POST_TYPE . '-views';
+	private static $DURATIONS_META_KEY							= self::POST_TYPE . '-durations';
 	private static $IS_SHOW_PAST_EVENTS_META_KEY				= self::POST_TYPE . '-is-show-past-events';
 
 	private $post;
@@ -46,8 +47,10 @@ class Calendar {
 	private $event_class_array;
 	private $event_status_array;
 	private $event_category_array;
+	private $event_category_names_array;
 //	private $show_uncategorized;
 	private $view_format_ids_array;
+	private $duration_ids_array;
 	private $is_show_past_events;
 	private $is_show_past_events_toggle_button;
 
@@ -148,15 +151,13 @@ class Calendar {
 				$result->calendar_type = self::CALENDAR_TYPE_ADMIN_EVENTS;
 				$result->post_id = 0;
 				$result->name = __( 'Administrative Calendar', 'reg-man-rc' );
-				$result->description =  __( 'A calendar showing all events for administrative purposes', 'reg-man-rc' );
+//				$result->description =  __( 'A calendar showing all events for administrative purposes', 'reg-man-rc' );
 				$result->event_class_array = array( Event_Class::PUBLIC, Event_Class::PRIVATE, Event_Class::CONFIDENTIAL );
 				$result->event_status_array = array_keys( Event_Status::get_all_event_statuses() );
 				$result->event_category_array = Event_Category::get_all_event_categories();
-				$result->view_format_ids_array = array_keys( Calendar_View_Format::get_all_calendar_view_formats() );
+				$result->view_format_ids_array = Settings::get_admin_calendar_views();
+				$result->duration_ids_array = Settings::get_admin_calendar_durations();
 				self::$ADMIN_CALENDAR = $result;
-			} else {
-				// This should never happen but just return something instead of nothing
-				self::$ADMIN_CALENDAR = self::get_visitor_registration_calendar();
 			} // endif
 		} // endif
 		return self::$ADMIN_CALENDAR;
@@ -190,8 +191,6 @@ class Calendar {
 				// Make sure the ID and type are set so we know this is for a special purpose
 				self::$VISITOR_REG_CALENDAR->id				= self::CALENDAR_TYPE_VISITOR_REG;
 				self::$VISITOR_REG_CALENDAR->calendar_type	= self::CALENDAR_TYPE_VISITOR_REG;
-				// A map view for visitor registration doesn't make much sense
-				self::$VISITOR_REG_CALENDAR->remove_map_view_format();
 			} // endif
 		} // endif
 		return self::$VISITOR_REG_CALENDAR;
@@ -301,7 +300,8 @@ class Calendar {
 				break;
 
 			default:
-				$visible_statuses = array( 'publish' ); // Only return published calendars here
+//				$visible_statuses = is_admin() ? self::get_visible_statuses() : array( 'publish' ); // Only return published calendars on front end
+				$visible_statuses = self::get_visible_statuses();
 				$post = get_post( $calendar_id );
 				if ( ( $post !== NULL ) && ( in_array( $post->post_status, $visible_statuses ) ) ) {
 					$post_type = $post->post_type; // make sure that the given post is the right type, there's no reason it shouldn't be
@@ -421,17 +421,30 @@ class Calendar {
 	} // function
 
 	/**
-	 * Get the next upcoming event for this calendar.
+	 * Get the next $count number of upcoming events for this calendar.
 	 * This method will apply the calendar's settings for event status, categories and so on.
-	 * @return	Event|NULL	An event object representing the next upcoming event or NULL if there is no event upcoming
+	 * If $is_exclude_cancelled is TRUE then cancelled events will be excluded from the result, even if they
+	 * are normally included on this calendar.
+	 * @param	int|NULL	$count	The count of events to return as a positive integer, 0 to return all upcoming events.
+	 * @param	boolean		$is_exclude_cancelled	TRUE if cancelled events should be excluded from the result
+	 * @return	Event[]		An array of event objects representing the upcoming events, limited to the count specified.
+	 *  Note that if there are no events upcoming the array will be empty.
 	 */
-	public function get_next_calendar_event() {
+	public function get_upcoming_calendar_events( $count, $is_exclude_cancelled = FALSE ) {
 		$event_filter = Event_Filter::create_for_calendar( $this );
+		if ( $is_exclude_cancelled ) {
+			$calendar_status_array = $this->get_event_status_array();
+			if ( in_array( Event_Status::CANCELLED, $calendar_status_array ) ) {
+				$new_status_array = array_diff( $calendar_status_array, array( Event_Status::CANCELLED ) );
+				$event_filter->set_accept_statuses( $new_status_array );
+			} // endif
+		} // endif
 		$now = new \DateTime( 'now', wp_timezone() );
 		$event_filter->set_accept_minimum_date_time( $now );
 		$event_filter->set_sort_order( Event_Filter::SORT_BY_DATE_ASCENDING );
 		$event_array = Event::get_all_events_by_filter( $event_filter );
-		$result = ( is_array( $event_array ) && isset( $event_array[ 0 ] ) ) ? $event_array[ 0 ] : NULL;
+		$count = intval( $count );
+		$result = ( $count > 0 ) ? array_splice( $event_array, 0, $count ) : $event_array;
 		return $result;
 	} // function
 
@@ -443,7 +456,7 @@ class Calendar {
 	 * @return	Calendar_Entry[]	An array of Calendar_Entry objects in the specified range
 	 */
 	 public function get_calendar_entries_in_date_range( $start_date_time, $end_date_time ) {
-
+/* FIXME - this does nothing
 	 	$calendar_type = $this->get_calendar_type();
 		// We will determine the type of calendar entries to return based on the calendar entry type
 		// For special calendar IDs like the volunteer registration calendar we will return special entries.
@@ -455,11 +468,13 @@ class Calendar {
 			case self::CALENDAR_TYPE_ADMIN_EVENTS:
 	 		case self::CALENDAR_TYPE_EVENTS:
 	 		default:
+*/
 	 			$result = $this->get_calendar_events_in_date_range( $start_date_time, $end_date_time );
+/*
 	 			break;
 
 	 	} // endswitch
-
+*/
 	 	return $result;
 
 	} // function
@@ -472,6 +487,7 @@ class Calendar {
 	 * @param	\DateTime			$end_date_time
 	 * @return	Calendar_Entry[]	An array of Calendar_Entry objects in the specified range
 	 */
+/* FIXME - NO LONGER USED!
 	 public function get_volunteer_registration_calendar_entries_in_date_range( $start_date_time, $end_date_time ) {
 
 	 	$result = array();
@@ -499,22 +515,22 @@ class Calendar {
 
 		return $result;
 	} // function
-
+*/
+	
 	/**
 	 * Get an array of Map_Marker objects for this calendar that fall within the specified date range.
 	 * This method will apply the calendar's settings for event status, categories and so on.
-	 * @param	string				$map_type	One of the Map_View::MAP_TYPE_* constants
 	 * @param	\DateTime			$start_date_time
 	 * @param	\DateTime			$end_date_time
 	 * @return	Map_Marker[]		An array of Map_Marker objects in the specified range
 	 */
-	 public function get_map_markers_in_date_range( $map_type, $start_date_time, $end_date_time ) {
+	public function get_map_markers_in_date_range( $start_date_time, $end_date_time ) {
 
 		$events_array = $this->get_calendar_events_in_date_range( $start_date_time, $end_date_time );
 
 		// What I have now is an array of events but what I need is an array of event groups so that the map markers
 		// for multiple events at the same location are not all stacked on top of each other.
-		// Instead, events at one location are grouped together into a single marker.
+		// Events at one location are grouped together into a single marker.
 
 		$group_markers = Event_Group_Map_Marker::create_array_for_events_array( $events_array );
 
@@ -541,6 +557,7 @@ class Calendar {
 			$event_filter = Event_Filter::create_for_calendar( $this );
 			$event_filter->set_accept_minimum_date_time( $start_date_time );
 			$event_filter->set_accept_maximum_date_time( $end_date_time );
+			$event_filter->set_sort_order( Event_Filter::SORT_BY_DATE_ASCENDING );
 
 			$result = Event::get_all_events_by_filter( $event_filter );
 
@@ -552,24 +569,21 @@ class Calendar {
 
 	/**
 	 * Get the default array of views to be shown when no specific set of views is defined for the calendar.
-	 * @return	string[]	The viewss to be shown on a calendar by default, e.g. array( Calendar_View_Format::MONTH_GRID_VIEW )
+	 * @return	string[]	The viewss to be shown on a calendar by default, e.g. array( Calendar_View_Format::GRID_VIEW )
 	 * @since	v0.1.0
 	 */
 	public static function get_default_view_format_ids_array() {
-		$result = array();
-		$result[] = Calendar_View_Format::MONTH_GRID_VIEW; // Always show the month view
-		$result[] = Calendar_View_Format::MONTH_LIST_VIEW; // Add month list view
-		if ( Map_View::get_is_map_view_enabled() ) {
-			$result[] = Calendar_View_Format::MAP_VIEW; // Show a map if we have an API key
-		} // endif
+		$result = array(
+			Calendar_View_Format::GRID_VIEW
+		);
 		return $result;
 	} // function
 
 	/**
 	 * Get the array of view format IDs to be shown on this calendar.
-	 * View format ID values are defined as constants in the Calendar_View_Format, e.g. Calendar_View_Format::MONTH_GRID_VIEW.
+	 * View format ID values are defined as constants in the Calendar_View_Format, e.g. Calendar_View_Format::GRID_VIEW.
 	 * @return	string[]	The array of view constant strings to be shown on this calendar,
-	 *  e.g. array( Calendar_View_Format::MONTH_GRID_VIEW, Calendar_View_Format::MAP_VIEW )
+	 *  e.g. array( Calendar_View_Format::GRID_VIEW, Calendar_View_Format::MAP_VIEW )
 	 * @since	v0.1.0
 	 */
 	public function get_view_format_ids_array() {
@@ -590,7 +604,7 @@ class Calendar {
 	/**
 	 * Set the array of view format IDs to be shown on this calendar.
 	 * @param	string|string[]		$view_format_ids_array		The new array of view format IDs to be shown on this calendar.
-	 * View format ID values are defined as constants in the Calendar_View_Format, e.g. Calendar_View_Format::MONTH_GRID_VIEW.
+	 * View format ID values are defined as constants in the Calendar_View_Format, e.g. Calendar_View_Format::GRID_VIEW.
 	 * For convenience the caller may pass a single value rather than an array.
 	 * @return	void
 	 * @since	v0.1.0
@@ -615,6 +629,7 @@ class Calendar {
 		unset( $this->view_format_ids_array ); // allow it to be re-acquired
 	} // function
 
+/* FIXME - not used
 	private function remove_map_view_format() {
 		$format_ids_array = $this->get_view_format_ids_array();
 		if ( in_array( Calendar_View_Format::MAP_VIEW, $format_ids_array ) ) {
@@ -622,7 +637,95 @@ class Calendar {
 			$this->view_format_ids_array = ! empty( $format_ids_array ) ? $format_ids_array : self::get_default_view_format_ids_array();
 		} // endif
 	} // function
-
+*/
+	/**
+	 * Get the default array of durations to be shown when no specific set is defined for the calendar.
+	 * @return	string[]	The durations to be shown on a calendar by default, e.g. array( Calendar_Duration::ONE_MONTH )
+	 * @since	v0.1.0
+	 */
+	public static function get_default_duration_ids_array() {
+		$result = array(
+				Calendar_Duration::ONE_MONTH,
+		);
+		return $result;
+	} // function
+	
+	
+	/**
+	 * Get the default array of views to be shown on the admin calendar when no specific set of views is defined.
+	 * @return	string[]	The views to be shown on the admin calendar by default.
+	 * @since	v0.1.0
+	 */
+	public static function get_default_admin_calendar_view_format_ids_array() {
+		$result = array();
+		$result[] = Calendar_View_Format::GRID_VIEW; // Always show the month view
+		$result[] = Calendar_View_Format::LIST_VIEW; // Add month list view
+		if ( Map_View::get_is_map_view_enabled() ) {
+			$result[] = Calendar_View_Format::MAP_VIEW; // Show a map if we have an API key
+		} // endif
+		return $result;
+	} // function
+	
+	/**
+	 * Get the default array of durations to be shown on the admin when no specific set is defined.
+	 * @return	string[]	The durations to be shown on the admin calendar by default.
+	 * @since	v0.1.0
+	 */
+	public static function get_default_admin_calendar_duration_ids_array() {
+		$result = array(
+				Calendar_Duration::ONE_MONTH,
+//				Calendar_Duration::TWO_MONTHS,
+//				Calendar_Duration::THREE_MONTHS,
+//				Calendar_Duration::SIX_MONTHS,
+				Calendar_Duration::ONE_YEAR,
+		);
+		return $result;
+	} // function
+	
+	/**
+	 * Get the array of duration IDs to be shown on this calendar.
+	 * Duration ID values are defined as constants in the Calendar_Duration class, e.g. Calendar_Duration::ONE_MONTH.
+	 * @return	string[]	The array of duration constant strings to be shown on this calendar,
+	 *  e.g. array( Calendar_Duration::ONE_MONTH, Calendar_Duration::THEE_MONTHS )
+	 * @since	v0.1.0
+	 */
+	public function get_duration_ids_array() {
+		if ( ! isset( $this->duration_ids_array ) ) {
+			$post_id = $this->get_post_id();
+			$meta = ! empty( $post_id ) ? get_post_meta( $post_id, self::$DURATIONS_META_KEY, $single = TRUE ) : NULL;
+			$this->duration_ids_array = ! empty( $meta ) ? $meta : self::get_default_duration_ids_array();
+		} // endif
+		return $this->duration_ids_array;
+	} // function
+	
+	/**
+	 * Set the array of duration IDs to be shown on this calendar.
+	 * @param	string|string[]		$duration_ids_array		The new array of duration IDs to be shown on this calendar.
+	 * Duration ID values are defined as constants in the Calendar_Duration, e.g. Calendar_Duration::ONE_MONTH.
+	 * For convenience the caller may pass a single value rather than an array.
+	 * @return	void
+	 * @since	v0.1.0
+	 */
+	public function set_duration_ids_array( $duration_ids_array ) {
+		if ( ! is_array( $duration_ids_array ) ) {
+			$duration_ids_array = array( $duration_ids_array ); // convert single value to an array for processing
+		} // endif
+		$all_durations = Calendar_Duration::get_all_calendar_durations();
+		$new_durations = array();
+		foreach ( $duration_ids_array as $duration_id ) {
+			if ( array_key_exists( $duration_id, $all_durations ) ) {
+				$new_durations[] = $duration_id;
+			} // endif
+		} // endif
+		if ( empty( $new_durations ) ) {
+			// The new value is empty so we can remove the metadata
+			delete_post_meta( $this->get_post_id(), self::$DURATIONS_META_KEY );
+		} else {
+			update_post_meta( $this->get_post_id(), self::$DURATIONS_META_KEY, $new_durations );
+		} // endif
+		unset( $this->duration_ids_array ); // allow it to be re-acquired
+	} // function
+	
 	/**
 	 * Get the array of classes to be shown in the volunteer registration calendar.
 	 * @return	string[]	The event classes to be shown on the volunteer registration calendar
@@ -767,11 +870,28 @@ class Calendar {
 				} // endfor
 				wp_set_post_terms( $post_id, $category_id_array, Event_Category::TAXONOMY_NAME );
 			} // endif
-			$this->category_object_array = NULL; // reset my internal vars so they can be re-acquired
-			$this->categories = NULL;
+			$this->event_category_array = NULL; // reset my internal vars so they can be re-acquired
 		} // endif
 	} // function
 
+	/**
+	 * Get array of names of the event categories to be shown on this calendar.
+	 * @return	string[]	An array of names for the event categories to be shown on this calendar.
+	 * This may be an empty array if there are no categories associated with the calendar.
+	 * @since	v0.1.0
+	 */
+	private function get_event_category_names_array() {
+		if ( ! isset( $this->event_category_names_array ) ) {
+			$this->event_category_names_array = array();
+			$categories = $this->get_event_category_array();
+			foreach( $categories as $category ) {
+				$this->event_category_names_array[] = $category->get_name();
+			} // endfor
+		} // endif
+		return $this->event_category_names_array;
+	} // function
+	
+	
 	/**
 	 * Get a flag indicating whether past events are to be shown on this calendar.
 	 * @return	boolean		A flag set to TRUE if past events are to be shown on the calendar.
@@ -805,6 +925,29 @@ class Calendar {
 		unset( $this->is_show_past_events ); // allow it to be re-acquired
 	} // function
 
+	/**
+	 * Get a boolean indicating whether this calendar contains the specified event.
+	 * This requires checking the event's categories, status and class to make sure they are all valid for this calendar.
+	 * @param	Event	$event
+	 * @return	boolean	TRUE if the event appears on this calendar, FALSE otherwise
+	 */
+	public function get_is_event_contained_in_calendar( $event ) {
+		if ( ! isset( $event ) ) {
+			$result = FALSE; // Defensive
+		} else {
+			$event_category_names = $event->get_categories();
+			$event_status = $event->get_status();
+			$event_class = $event->get_class();
+			$calendar_category_names_array = $this->get_event_category_names_array();
+			$calendar_status_array = $this->get_event_status_array();
+			$calendar_class_array = $this->get_event_class_array();
+			$result = 
+				! empty( array_intersect( $event_category_names, $calendar_category_names_array ) ) &&
+				in_array( $event_status->get_id(), $calendar_status_array ) &&
+				in_array( $event_class->get_id(), $calendar_class_array );
+		} // endif
+		return $result;
+	} // function
 	/**
 	 *  Register the Calendar custom post type during plugin init.
 	 *

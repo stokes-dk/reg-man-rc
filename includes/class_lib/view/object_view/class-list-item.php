@@ -24,12 +24,15 @@ class List_Item {
 	const VOLUNTEER_REG_STATUS			= 'volunteer-reg-status';
 	const VOLUNTEER_REG_DETAILS_LINK	= 'volunteer-reg-details';
 
-	const ADMIN_EVENT_VIEW_LINK			= 'admin-event-edit';
-	const ADMIN_EVENT_EDIT_LINK			= 'admin-event-link';
-	const ADMIN_EVENT_VOLUNTEERS_LINK	= 'admin-volunteers-link';
-	const ADMIN_EVENT_ITEMS_LINK		= 'admin-fixers-link';
-	const ADMIN_EVENT_VOL_AREA_LINK		= 'admin-vol-area-link';
-
+	const ADMIN_EVENT_VIEW_LINK				= 'admin-event-view-link';
+	const ADMIN_EVENT_EDIT_LINK				= 'admin-event-edit-link';
+	const ADMIN_EVENT_ITEMS					= 'admin-event-items';
+	const ADMIN_EVENT_ITEMS_ITEMIZED		= 'admin-event-items-itemized';
+	const ADMIN_EVENT_VOLUNTEERS			= 'admin-event-volunteers';
+	const ADMIN_EVENT_VOLUNTEERS_ITEMIZED	= 'admin-event-volunteers-itemized';
+	const ADMIN_EVENT_VOL_AREA_LINK			= 'admin-vol-area-link';
+	const ADMIN_EVENT_MORE_DETAILS_LINK		= 'admin-event-more-details-link';
+	
 	const VISITOR_REG_LAUNCH_LINK		= 'visitor-reg-launch';
 
 	const MORE_DETAILS_LINK				= 'general-more-details';
@@ -149,24 +152,6 @@ class List_Item {
 			$icon_title = __( 'More details', 'reg-man-rc' );
 			$link = "<a class=\"object-view-more-details-link\" href=\"$href\">$link_text</a>";
 			$classes = 'reg-man-rc-object-view-details-more-details-link-item';
-			$result = List_Item::create( $link, $icon, $icon_title, $classes );
-		} else {
-			$result = NULL;
-		} // endif
-		return $result;
-	} // function
-
-	/**
-	 * Create an item with a link to an admin page.
-	 * @param	string		$href		The href attribute for the link
-	 * @param	string		$link_text	The text for the link.  By default this is "More details".
-	 * @return	List_Item	The "More details" link item
-	 * @since	v0.1.0
-	 */
-	public static function create_admin_text_and_link_item( $href, $link_text, $icon, $icon_title, $classes = '' ) {
-		if ( ! empty( $href ) ) {
-			$link = "<a class=\"object-view-admin-link\" href=\"$href\">$link_text</a>";
-			$classes = "reg-man-rc-object-view-details-admin-link-item $classes";
 			$result = List_Item::create( $link, $icon, $icon_title, $classes );
 		} else {
 			$result = NULL;

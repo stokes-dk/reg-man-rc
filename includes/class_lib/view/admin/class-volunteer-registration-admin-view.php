@@ -4,13 +4,12 @@ namespace Reg_Man_RC\View\Admin;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Model\Volunteer_Registration;
 use Reg_Man_RC\View\Form_Input_List;
-use Reg_Man_RC\Model\Event_Filter;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Volunteer_Role;
 use Reg_Man_RC\Model\Volunteer;
-use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\View\Event_View;
 use Reg_Man_RC\Model\Calendar;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The administrative view for Volunteer Registration
@@ -61,7 +60,7 @@ class Volunteer_Registration_Admin_View {
 	 */
 	public static function add_sortable_columns( $columns ) {
 		$fixer_station_tax_col = 'taxonomy-' . Fixer_Station::TAXONOMY_NAME;
-		$vol_role_tax_col = 'taxonomy-' . Volunteer_Role::TAXONOMY_NAME;
+//		$vol_role_tax_col = 'taxonomy-' . Volunteer_Role::TAXONOMY_NAME;
 		$columns[ $fixer_station_tax_col ] = $fixer_station_tax_col;
 //		$columns[ $vol_role_tax_col ] = $vol_role_tax_col;
 		return $columns;
@@ -83,9 +82,9 @@ class Volunteer_Registration_Admin_View {
 					__( 'Volunteer', 'reg-man-rc' ),	// Box title
 					$render_fn,							// Content callback, must be of type callable
 					Volunteer_Registration::POST_TYPE, 	// Post type for this meta box
-					'side',								// Meta box position
+					'normal',								// Meta box position
 					'high'								// Meta box priority
-	        );
+			);
 
 			$new_id = Volunteer_Registration::POST_TYPE . '-event-metabox';
 			$render_fn = array( __CLASS__, 'render_event_meta_box' );
@@ -94,9 +93,21 @@ class Volunteer_Registration_Admin_View {
 					__( 'Event', 'reg-man-rc' ),		// Box title
 					$render_fn,							// Content callback, must be of type callable
 					Volunteer_Registration::POST_TYPE, 	// Post type for this meta box
-					'side',								// Meta box position
+					'normal',								// Meta box position
 					'high'								// Meta box priority
-	        );
+			);
+
+			// Comments
+			$new_id = Volunteer_Registration::POST_TYPE . '-comments-metabox';
+			$render_fn = array( __CLASS__, 'render_comments_metabox' );
+			add_meta_box(
+					$new_id,								// Unique ID for the element
+					__( 'Private Notes', 'reg-man-rc' ),	// Box title
+					$render_fn,								// Content callback, must be of type callable
+					Volunteer_Registration::POST_TYPE, 		// Post type for this meta box
+					'normal',								// Meta box position
+					'high'									// Meta box priority
+			);
 
 			$new_id = Volunteer_Registration::POST_TYPE . '-fixer-station-metabox';
 			$view = Fixer_Station_Admin_View::create();
@@ -124,6 +135,34 @@ class Volunteer_Registration_Admin_View {
 		} // endif
 	} // function
 
+	/**
+	 * Render the alternate descriptions metabox for the specified post
+	 * @param	\WP_Post	$post
+	 */
+	public static function render_comments_metabox( $post ) {
+		if ( $post->post_type === Volunteer_Registration::POST_TYPE ) {
+
+			// We need a flag to distinguish the case where no user input is provided
+			//  versus the case where no inputs were shown at all like in quick edit mode
+			echo '<input type="hidden" name="alt_desc_input_flag" value="TRUE">';
+			$vol_reg = Volunteer_Registration::get_registration_by_id( $post->ID );
+			$input_list = Form_Input_List::create();
+			$label = __( 'Volunteer Note', 'reg-man-rc' );
+			// Note that we use the name 'post_content' so that this will automatically be saved there
+			$name = 'post_content';
+			$val = isset( $vol_reg ) ? $vol_reg->get_volunteer_registration_comments() : '';
+			$hint = '';
+			$classes = 'full-width'; // We want a wide text input here
+			$is_required = FALSE;
+			$addn_attrs = 'readonly="readonly"';
+			$rows = 2;
+			$input_list->add_text_area_input( $label, $name, $rows, $val, $hint, $classes, $is_required, $addn_attrs );
+
+			$input_list->render();
+		} // function
+	} // function
+
+	
 	/**
 	 * Render the meta box for the event
 	 * @param	\WP_Post	$post
@@ -306,6 +345,7 @@ class Volunteer_Registration_Admin_View {
 			'is-apprentice'				=> __( 'Apprentice', 'reg-man-rc' ),
 			$volunteer_role_tax_col		=> __( 'Volunteer Roles', 'reg-man-rc' ),
 			'email'						=> __( 'Email', 'reg-man-rc' ),
+			'vol-reg-comments'			=> __( 'Volunteer Note', 'reg-man-rc' ),
 			'date'						=> __( 'Last Update', 'reg-man-rc' ),
 			'author'					=> __( 'Author', 'reg-man-rc' ),
 		);
@@ -363,6 +403,11 @@ class Volunteer_Registration_Admin_View {
 					$result = ! empty( $email ) ? $email : $em_dash;
 					break;
 
+				case 'vol-reg-comments':
+					$comments = $registration->get_volunteer_registration_comments();
+					$result = ! empty( $comments ) ? $comments : $em_dash;
+					break;
+					
 				default:
 					$result = $em_dash;
 					break;
@@ -444,13 +489,13 @@ class Volunteer_Registration_Admin_View {
 				wp_dropdown_categories( array(
 					'show_option_all'	=> $taxonomy->labels->all_items,
 					'class'				=> 'reg-man-rc-filter postform',
-		            'taxonomy'			=> $tax_name,
-		            'name'				=> $tax_name,
-		            'orderby'			=> 'count',
+					'taxonomy'			=> $tax_name,
+					'name'				=> $tax_name,
+					'orderby'			=> 'count',
 					'order'				=> 'DESC',
-		            'value_field'		=> 'slug',
-		            'selected'			=> $curr_id,
-		            'hierarchical'		=> $taxonomy->hierarchical,
+					'value_field'		=> 'slug',
+					'selected'			=> $curr_id,
+					'hierarchical'		=> $taxonomy->hierarchical,
 					'show_count'		=> FALSE,
 					'hide_if_empty'		=> TRUE,
 				) );

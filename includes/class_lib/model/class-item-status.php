@@ -23,11 +23,19 @@ class Item_Status {
 
 	private static $ALL_STATUS_ARRAY; // an array of all the statuses that we'll create once and reuse
 	private static $DEFAULT_STATUS; // The default status, used when an item has no status setting
+	
+	// The status IDs for items whose repair outcomes have been reported
+	private static 	$REPAIR_STATUS_IDS = array(
+			self::FIXED,
+			self::REPAIRABLE,
+			self::END_OF_LIFE
+	);
 
 	private $id;
 	private $name;
 	private $desc;
 	private $ords_key; // The key for this status as defined by the Open Repair Data Standard
+	private $is_repair_outcome_status;
 
 	private function __construct( $id, $name, $desc, $ords_key ) {
 		$this->id = $id;
@@ -142,6 +150,18 @@ class Item_Status {
 	 */
 	public function get_description() {
 		return $this->desc;
+	} // function
+	
+	/**
+	 * Get a boolean indicating whether this status is a repair outcome
+	 * @return	boolean	TRUE when this status is a repair outcome status like Fixed,
+	 * 	FALSE when the status does not indicate any repair outcome like Registered.
+	 */
+	public function get_is_repair_outcome_status() {
+		if ( ! isset( $this->is_repair_outcome_status ) ) {
+			$this->is_repair_outcome_status = in_array( $this->id, self::$REPAIR_STATUS_IDS );
+		} // endif
+		return $this->is_repair_outcome_status;
 	} // function
 
 } // class

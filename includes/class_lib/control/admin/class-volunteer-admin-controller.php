@@ -4,7 +4,6 @@ namespace Reg_Man_RC\Control\Admin;
 use Reg_Man_RC\Model\Volunteer;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Volunteer_Role;
-use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The volunteer controller

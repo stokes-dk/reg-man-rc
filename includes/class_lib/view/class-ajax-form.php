@@ -1,7 +1,6 @@
 <?php
 namespace Reg_Man_RC\View;
 
-use Reg_Man_RC\Model\Error_Log;
 
 /**
  * An instance of this class will render a <form> element with the correct content to be used with Wordpress' ajax
@@ -260,7 +259,7 @@ class Ajax_Form {
 		$ajax_action = $this->get_ajax_action();
 		$replace_html = $this->get_is_replace_content_with_response_html() ? 'TRUE' : 'FALSE';
 		$is_footer_data = $is_render_in_footer ? 'TRUE' : 'FALSE';
-		$encType = $this->get_is_file_upload() ? 'encType="multipart/form-data"' : '';
+		$encType = $this->get_is_file_upload() ? 'multipart/form-data' : '';
 		$form_content = $this->get_form_content();
 
 		$classes = array();
@@ -276,7 +275,7 @@ class Ajax_Form {
 		$data[] = "data-ajax-action=\"$ajax_action\"";
 		$data[] = "data-auto-replace-html=\"$replace_html\"";
 		$data[] = "data-is-render-in-footer=\"$is_footer_data\"";
-		$data[] = "data-enc-type=\"$encType\"";
+		$data[] = "data-form-enc-type=\"$encType\"";
 		$data = implode( ' ', $data );
 
 //		echo "<form action=\"$form_action\" method=\"$form_method\" $encType class=\"reg-man-rc-ajax-form $classes\" $data>";

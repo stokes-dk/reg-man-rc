@@ -2,13 +2,13 @@
 namespace Reg_Man_RC\View\Object_View;
 
 use Reg_Man_RC\Model\Event;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Event_Filter;
 use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\Model\Event_Status;
 use Reg_Man_RC\Model\Event_Class;
 use Reg_Man_RC\Model\Event_Descriptor;
 use Reg_Man_RC\View\Event_View;
+use Reg_Man_RC\View\Map_View;
 
 /**
  * An instance of this class provides List_Item instances for displaying the details of an event descriptor
@@ -17,6 +17,7 @@ use Reg_Man_RC\View\Event_View;
 class Event_Descriptor_Item_Provider implements List_item_Provider {
 
 	private $event_descriptor;
+	private $events_array; // An array of events (for this descriptor) whose details are to be included
 	private $object_view;
 	private $delegate_item_provider;
 
@@ -42,6 +43,28 @@ class Event_Descriptor_Item_Provider implements List_item_Provider {
 	 */
 	private function get_event_descriptor() {
 		return $this->event_descriptor;
+	} // function
+
+	/**
+	 * Get the array of events for this item provider
+	 * @return	Event[]
+	 * @since	v0.4.0
+	 */
+	private function get_events_array() {
+		if ( ! isset( $this->events_array ) ) {
+			$event_descriptor = $this->get_event_descriptor();
+			$this->events_array = Event::get_events_array_for_event_descriptor( $event_descriptor );
+		} // endif
+		return $this->events_array;
+	} // function
+
+	/**
+	 * Set the array of events for this item provider
+	 * @param	Event[]
+	 * @since	v0.4.0
+	 */
+	public function set_events_array( $events_array ) {
+		$this->events_array = $events_array;
 	} // function
 
 	/**
@@ -101,6 +124,11 @@ class Event_Descriptor_Item_Provider implements List_item_Provider {
 			case List_Item::EVENT_UPCOMING_DATES:
 				$is_found = TRUE;
 				$result = $this->get_event_upcoming_dates_item();
+				break;
+
+			case List_Item::EVENT_DATE:
+				$is_found = TRUE;
+				$result = $this->get_event_dates_item();
 				break;
 
 			case List_Item::EVENT_FIXER_STATIONS:
@@ -308,6 +336,94 @@ class Event_Descriptor_Item_Provider implements List_item_Provider {
 
 	} // function
 
+	
+	/**
+	 * Get an item showing the dates for the events assinged to the events array.
+	 * Note that this only makes sense on a calendar map info window or another situation where
+	 *  the array of events has been assigned for this descriptor.
+	 * @return	List_Item|NULL	An item showing the list of event dates.
+	 * @since	v0.4.0
+	 */
+	private function get_event_dates_item() {
+		$result = NULL; // Assume nothing
+		$events_array = $this->get_events_array();
+
+		if ( ! empty( $events_array ) && ( count( $events_array ) > 1 ) ) {
+
+			$object_view = $this->get_object_view();
+			$map_type = $object_view->get_info_window_map_type(); // This is only ever inside a map
+
+			// I need to sort these so the dates are not in random order
+			$event_filter = Event_Filter::create();
+			$event_filter->set_sort_order( Event_Filter::SORT_BY_DATE_ASCENDING );
+			$events_array = $event_filter->apply_filter( $events_array );
+
+			switch ( $map_type ) {
+				
+				case Map_View::MAP_TYPE_OBJECT_PAGE:
+				case Map_View::MAP_TYPE_CALENDAR_EVENTS:
+				default:
+					$date_group_title	= __( 'Event dates', 'reg-man-rc' ); // Note that not all events have links
+					$icon = 'calendar-alt';
+					$icon_title = __( 'Event dates', 'reg-man-rc' );
+					$link_type = Object_View::OBJECT_PAGE_TYPE_EVENT;
+					$is_open = TRUE;
+					$date_class_array = array();
+					break;
+
+				case Map_View::MAP_TYPE_CALENDAR_VOLUNTEER_REG:
+					$date_group_title	= __( 'Event dates (tap/click to view registration)', 'reg-man-rc' );
+					$icon = 'text-page';
+					$icon_title = __( 'Volunteer event registration details pages', 'reg-man-rc' );
+					$link_type = Object_View::OBJECT_PAGE_TYPE_VOLUNTEER_REGISTRATION;
+					$is_open = TRUE;
+					// Mark my registered events with special classes
+					$date_class_array = $this->get_event_date_vol_reg_class_array();
+					break;
+
+				case Map_View::MAP_TYPE_CALENDAR_ADMIN:
+					$date_group_title	= __( 'Event dates (tap/click for more details)', 'reg-man-rc' );
+					$icon = 'text-page';
+					$icon_title = __( 'Event dates', 'reg-man-rc' );
+					$link_type = Object_View::OBJECT_PAGE_TYPE_ADMIN_DASHBOARD_EVENT_DETAILS;
+					$is_open = FALSE;
+					$date_class_array = array();
+					break;
+
+				case Map_View::MAP_TYPE_ADMIN_STATS:
+					$date_group_title	= __( 'Event dates', 'reg-man-rc' );
+					$icon = 'calendar-alt';
+					$icon_title = __( 'Event dates', 'reg-man-rc' );
+					$link_type = NULL;
+					$is_open = FALSE;
+					$date_class_array = array();
+					break;
+
+				case Map_View::MAP_TYPE_CALENDAR_VISITOR_REG:
+					$date_group_title	= __( 'Event dates (tap/click to launch registration)', 'reg-man-rc' );
+					$icon = 'calendar-alt';
+					$icon_title = __( 'Event dates', 'reg-man-rc' );
+					$link_type = Object_View::OBJECT_PAGE_TYPE_VISITOR_REGISTRATION;
+					$is_open = TRUE;
+					$date_class_array = array();
+					break;
+
+			} // endswitch
+
+			$item_content = Event_View::create_event_date_group_details_element(
+							$date_group_title, $events_array, $link_type, $is_open, $exclude_event = NULL, $date_class_array );
+
+			$classes = 'reg-man-rc-object-view-details-event-location-group-dates';
+
+			$result = List_Item::create( $item_content, $icon, $icon_title, $classes );
+
+		} // endif
+
+		return $result;
+
+	} // function
+
+	
 	/**
 	 * Get the fixer stations item
 	 * @return	List_Item|NULL	An item showing the event's fixer stations, or null if no stations are assigned
@@ -323,7 +439,7 @@ class Event_Descriptor_Item_Provider implements List_item_Provider {
 		if ( $is_non_repair ) {
 
 			// TODO: maybe this message should be a setting
-			$item_content = __( 'No fixing, just fun!', 'reg-man-rc' );
+			$item_content = __( 'Non-repair event', 'reg-man-rc' );
 			$icon = 'admin-tools';
 			$icon_title  = __( 'Fixing', 'reg-man-rc' );
 			$classes = 'reg-man-rc-object-view-details-event-fixer-stations';
@@ -331,6 +447,7 @@ class Event_Descriptor_Item_Provider implements List_item_Provider {
 			$result = List_Item::create( $item_content, $icon, $icon_title, $classes );
 
 		} elseif ( ! is_array( $fixer_station_array ) ) {
+			
 			// The fixer stations are set to NULL or some other non-array thing
 			// In that case we won't say anything, maybe the event description says what stations there are
 
@@ -457,11 +574,28 @@ class Event_Descriptor_Item_Provider implements List_item_Provider {
 			$link_text = __( 'Edit', 'reg-man-rc' );
 			$icon = 'edit';
 			$icon_title = __( 'Edit event', 'reg-man-rc' );
-			$result = List_Item::create_admin_text_and_link_item( $href, $link_text, $icon, $icon_title );
+			$result = Event_Item_Provider::create_admin_link_item( $href, $link_text, $icon, $icon_title );
 		} // endif
 		return $result;
 	} // function
 
-
+	/**
+	 * Get an array of strings of class names keyed by event key to be applied to the event dates array.
+	 * E.g. array( '[1234]' => 'vol-reg-registered'
+	 * This allows us to mark event dates as registered or not for the volunteer
+	 * @return string[]
+	 */
+	private function get_event_date_vol_reg_class_array() {
+		$result = array();
+		$events = $this->get_events_array();
+		foreach( $events as $event ) {
+			$vol_reg = $event->get_volunteer_registration();
+			if ( isset( $vol_reg ) ) {
+				$key = $event->get_key();
+				$result[ $key ] = 'vol-reg-registered';
+			} // endif
+		} // endif
+		return $result;
+	} // function
 
 } // class

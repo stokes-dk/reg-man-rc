@@ -3,6 +3,7 @@ namespace Reg_Man_RC\Model;
 
 use Reg_Man_RC\View\Event_Descriptor_View;
 use Reg_Man_RC\Model\Stats\Wilson_Confidence_Interval;
+use Reg_Man_RC\View\Pub\Volunteer_Area;
 
 /**
  * This class contains static methods used to access and set the settings for the plugin
@@ -12,31 +13,28 @@ use Reg_Man_RC\Model\Stats\Wilson_Confidence_Interval;
  */
 class Settings {
 
-	// Attachment ID for the logo shown on our minimal template for forms like visitor registration
-	const REG_FORM_LOGO_OPTION_KEY						= 'reg-man-rc-reg-form-logo-id';
-
-	// Option to store user request to skip initialization of taxo
+	// Option to store user request to skip initialization of taxonomy
 	const IS_SKIP_OBJECT_TYPE_INIT_OPTION_KEY_BASE		= 'reg-man-rc-skip-object-type-init-'; // taxonomy or CPT name is appended to this
 
-	// Flag to indicate that this is the public server rather than a satelite registration server
-	const IS_PUBLIC_SERVER_OPTION_KEY					= 'reg-man-rc-is-public-server';
 
-	// Flag to indicate that the block editor should be used for our custom post types
-	const IS_USE_BLOCK_EDITOR_OPTION_KEY				= 'reg-man-rc-is-use-block-editor';
-
+	// Options for visitor registration
+	const HOUSE_RULES_POST_ID_OPTION_KEY				= 'reg-man-rc-house-rules-post-id';
+//	const HOUSE_RULES_DEFAULT_PAGE_PATH					= 'house-rules-and-safety-procedures';
+	const IS_SHOW_ITEM_TYPE_IN_VISITOR_REG_OPTION_KEY	= 'reg-man-rc-is-show-item-type-in-vis-reg';
+	
 	// Settings for events
 	const EVENT_START_TIME_OPTION_KEY					= 'reg-man-rc-default-event-start-time';
-	const EVENT_END_TIME_OPTION_KEY						= 'reg-man-rc-default-event-end-time';
+	const EVENT_DURATION_OPTION_KEY						= 'reg-man-rc-default-event-duration';
 	const ALLOW_MULTI_EVENT_CATS_OPTION_KEY				= 'reg-man-rc-event-allow-multi-cats';
-	const DISPLAY_EVENT_SIDEBAR_OPTION_KEY				= 'reg-man-rc-event-display-sidebar';
-
-	// Permalink slugs for our custom post types
-	const EVENTS_SLUG_OPTION_KEY						= 'reg-man-rc-events-slug';
-	const ITEMS_SLUG_OPTION_KEY							= 'reg-man-rc-items-slug';
-	const VOLUNTEERS_SLUG_OPTION_KEY					= 'reg-man-rc-volunteers-slug';
-	const CALENDARS_SLUG_OPTION_KEY						= 'reg-man-rc-calendars-slug';
-	const VENUES_SLUG_OPTION_KEY						= 'reg-man-rc-venues-slug';
-
+	
+	// Settings for calendars
+	const ADMIN_CALENDAR_VIEWS_OPTION_KEY				= 'reg-man-rc-admin-calendar-views';
+	const ADMIN_CALENDAR_DURATIONS_OPTION_KEY			= 'reg-man-rc-admin-calendar-durations';
+	
+	// Option keys to store the post ID of special calendars
+	const VISITOR_REG_CALENDAR_OPTION_KEY				= Calendar::POST_TYPE . '-visitor-reg-cal-id';
+	const VOLUNTEER_REG_CALENDAR_OPTION_KEY				= Calendar::POST_TYPE . '-volunteer-reg-cal-id';
+	
 	// Settings for google maps
 	const GOOGLE_MAPS_API_KEY_OPTION_KEY				= 'reg-man-rc-google-maps-api-key';
 	const GOOGLE_MAPS_DEFAULT_CENTRE_PLACE_OPTION_KEY	= 'reg-man-rc-google-maps-default-centre-place';
@@ -47,24 +45,29 @@ class Settings {
 	const LOCATION_GROUP_COMPARE_PRECISION_OPTION_KEY	= 'reg-man-rc-location-group-precision';
 	const LOCATION_GROUP_COMPARE_PRECISION_DEFAULT		= 4;
 
-	// The house rules page shown on visitor registration
-	const HOUSE_RULES_DEFAULT_PAGE_PATH					= 'house-rules-and-safety-procedures';
-
-	// Option keys to store the post ID of special calendars
-	const VISITOR_REG_CALENDAR_OPTION_KEY				= Calendar::POST_TYPE . '-visitor-reg-cal-id';
-	const VOLUNTEER_REG_CALENDAR_OPTION_KEY				= Calendar::POST_TYPE . '-volunteer-reg-cal-id';
+	// Settings for volunteer area
+	// Note that allow volunteer area comments is stored in the post as comment_status = 'open'
+	const REQUIRE_VOLUNTEER_AREA_REGISTERED_USER_OPTION_KEY	= 'reg-man-rc-vol-area-require-reg-user';
+	
+	// Options for satellite registration systems
+//	const SATELLITE_REGISTRATION_HUB_URL_KEY			= 'reg-man-rc-satellite-hub-url';
+	
+	// Permalink slugs for our custom post types
+	const EVENTS_SLUG_OPTION_KEY						= 'reg-man-rc-events-slug';
+	const ITEMS_SLUG_OPTION_KEY							= 'reg-man-rc-items-slug';
+	const VOLUNTEERS_SLUG_OPTION_KEY					= 'reg-man-rc-volunteers-slug';
+	const CALENDARS_SLUG_OPTION_KEY						= 'reg-man-rc-calendars-slug';
+	const VENUES_SLUG_OPTION_KEY						= 'reg-man-rc-venues-slug';
 
 	private static $maps_centre_geo; // Stores the Geographic Position object for the default map centre
 
 	/**
-	 * Get the attacment ID for the organization logo to show at the top of forms
+	 * Show Item Type column in visitor registration list?
 	 * @return int
 	 */
-	public static function get_reg_form_logo_image_attachment_id() {
-		$result = get_option( self::REG_FORM_LOGO_OPTION_KEY );
-		if ( empty( $result ) ) {
-			$result = get_theme_mod( 'custom_logo' ); // Ask for the theme modification value for logo
-		} // endif
+	public static function get_is_show_item_type_in_visitor_registration_list() {
+		$opt = get_option( self::IS_SHOW_ITEM_TYPE_IN_VISITOR_REG_OPTION_KEY );
+		$result = ( $opt == '1' );
 		return $result;
 	} // function
 
@@ -76,31 +79,6 @@ class Settings {
 		$external_event_providers = External_Event_Descriptor::get_all_external_event_providers();
 		$external_data_providers = apply_filters( 'reg_man_rc_get_external_data_providers', array() );
 		$result = ( ! empty( $external_event_providers ) || ! empty( $external_data_providers ) );
-		return $result;
-	} // function
-
-	/**
-	 * Get a flag indicating whether to use the block editor for my custom post types
-	 *
-	 * @return	boolean|NULL	Returns TRUE if the user has opted to use the block editor,
-	 * 		FALSE if the user has opted to NOT use the block editor,
-	 * 		or NULL if the user has selected no option and will use the system default
-	 */
-	// TODO: This should really be a user preference
-	public static function get_is_use_block_editor() {
-		return FALSE; // FIXME TESTING!!!
-		$opt = get_option( self::IS_USE_BLOCK_EDITOR_OPTION_KEY, NULL );
-		switch( $opt ) {
-			case '1':
-				$result = TRUE; // Use the block editor
-				break;
-			case '0':
-				$result = FALSE; // Do not use the block editor
-				break;
-			default:
-				$result = NULL; // Use the system default
-				break;
-		} // endswitch
 		return $result;
 	} // function
 
@@ -124,29 +102,11 @@ class Settings {
 	} // function
 
 
-
 	/**
-	 * Returns a flag indicating whether this install is a publicly accessible central server (normal case)
-	 *  or a satellite registration system on a laptop or other portable device.
-	 * @return boolean
+	 * Get the default event start time as a string in 24-hour clock notation with leading zeros, e.g. '13:00'.
+	 * This is used for time input when creating events
+	 * @return string|mixed|boolean
 	 */
-	public static function get_is_pubilc_server() {
-		$opt = get_option( self::IS_PUBLIC_SERVER_OPTION_KEY, '1' );
-		$result = ( $opt == '1' );
-		return $result;
-	} // function
-
-	public static function set_is_public_server( $is_public_server ) {
-		$val = trim( strval( $is_public_server ) );
-		if ( $val == '' ) {
-			delete_option( self::IS_PUBLIC_SERVER_OPTION_KEY );
-		} else {
-			$val = boolval( $val ) ? '1' : '0';
-			update_option( self::IS_PUBLIC_SERVER_OPTION_KEY, $val );
-		} // endif
-	} // function
-
-
 	public static function get_default_event_start_time() {
 		$default = '12:00'; // Must be 24-hour clock with leading zeros, format H:i
 		$opt = get_option( self::EVENT_START_TIME_OPTION_KEY );
@@ -154,12 +114,46 @@ class Settings {
 		return $result;
 	} // function
 
-	public static function get_default_event_end_time() {
-		$default = '16:00'; // Must be 24-hour clock with leading zeros, format H:i
-		$opt = get_option( self::EVENT_END_TIME_OPTION_KEY );
+	/**
+	 * Get the default event duration as a string that can be used to construct a date interval, e.g. PT4H for plus 4 hours.
+	 * @return string
+	 */
+	public static function get_default_event_duration_date_interval_string() {
+		$default = 'PT4H'; // 4 hours
+		$opt = get_option( self::EVENT_DURATION_OPTION_KEY );
 		$result = ! empty( $opt ) ? $opt : $default;
 		return $result;
 	} // function
+	
+	/**
+	 * Get the default event end time based on the default event duration and the current default start time.
+	 * The result is in 24-hour clock notation with leading zeros so it can be used in a time input, e.g. "17:00"
+	 * @return string
+	 */
+	public static function get_default_event_end_time() {
+
+		$interval_string = self::get_default_event_duration_date_interval_string();
+		try {
+			$date_interval = new \DateInterval( $interval_string );
+		} catch( \Exception $exc ) {
+			$default = 'PT4H'; // 4 hours, this should never happen but defensive
+			$date_interval = new \DateInterval( $default );
+			/* translators: %1$s is an invalid date interval string  */
+			$msg = sprintf( __( 'An invalid date interval string is stored in the options table: %1$s.', 'reg-man-rc' ), $interval_string );
+			Error_Log::log_exception( $msg, $exc );
+		} // endtry
+
+		$start_time = self::get_default_event_start_time();
+		$dt = new \DateTime( $start_time ); // This will use today's date by default but it won't matter, we just need time
+		$dt->add( $date_interval ); // Add the duration
+		$result_format = 'H:i';   // The result is formated using 24-hour clock with leading zeros for use in time input
+		$result = $dt->format( $result_format );
+		return $result;
+	} // function
+	
+	// TODO: create a setting for default event duration
+	// Sanitize the value for default end time, make sure it is greater than start time
+	// OR create a slider for duration in minutes with steps
 
 	public static function get_is_allow_recurring_events() {
 		$result = FALSE;
@@ -172,24 +166,26 @@ class Settings {
 		return $result;
 	} // function
 
-	public static function get_is_display_event_sidebar() {
-		$opt = get_option( self::DISPLAY_EVENT_SIDEBAR_OPTION_KEY );
-		$result = ( $opt == '1' );
+	public static function get_admin_calendar_views() {
+		$opt = get_option( self::ADMIN_CALENDAR_VIEWS_OPTION_KEY );
+		$result = ! empty( $opt ) ? $opt : Calendar::get_default_admin_calendar_view_format_ids_array();
 		return $result;
 	} // function
-
-	public static function get_is_allow_event_comments() {
+	
+	public static function get_admin_calendar_durations() {
+		$opt = get_option( self::ADMIN_CALENDAR_DURATIONS_OPTION_KEY );
+		$result = ! empty( $opt ) ? $opt : Calendar::get_default_admin_calendar_duration_ids_array();
+		return $result;
+	} // function
+	
+	
+	public static function get_is_allow_comments_on_new_items() {
 		$result = FALSE;
 		return $result;
 	} // function
 
-	public static function get_is_allow_item_comments() {
-		$result = FALSE;
-		return $result;
-	} // function
-
-	public static function get_house_rules_page_path() {
-		$result = self::HOUSE_RULES_DEFAULT_PAGE_PATH;
+	public static function get_house_rules_post_id() {
+		$result = get_option( self::HOUSE_RULES_POST_ID_OPTION_KEY, 0 );
 		return $result;
 	} // function
 
@@ -386,4 +382,63 @@ class Settings {
 		} // endif
 	} // function
 
+	public static function get_is_require_volunteer_area_registered_user() {
+		$opt = get_option( self::REQUIRE_VOLUNTEER_AREA_REGISTERED_USER_OPTION_KEY );
+		$result = ( $opt == '1' );
+		return $result;
+	} // function
+	
+	public static function get_is_allow_volunteer_area_comments() {
+		$post = Volunteer_Area::get_post();
+		$result = isset( $post ) && ( $post->comment_status == 'open' );
+		return $result;
+	} // function
+	
+	public static function set_is_allow_volunteer_area_comments( $is_allow_comments ) {
+		$post_id = Volunteer_Area::get_post_id();
+		if ( ! empty( $post_id ) ) {
+			$comment_status = $is_allow_comments ? 'open' : 'closed';
+			$args = array(
+					'ID'				=> $post_id,
+					'comment_status'	=> $comment_status,
+			);
+			wp_update_post( $args );
+		} // endif
+	} // function
+	
+	public static function get_is_allow_volunteer_registration_quick_signup() {
+		return FALSE;
+	} // endif
+
+	
+	/**
+	 * Returns a flag indicating whether this install is a satellite registration system,
+	 *  for example on a laptop or other portable device.
+	 * In the normal case, the result is FALSE
+	 * @return boolean
+	 */
+/* FIXME - NOT USED
+	public static function get_is_satellite_registration_system() {
+		$hub_url = self::get_satellite_registration_hub_url();
+		$result = ! empty( $hub_url );
+		return $result;
+	} // function
+
+	public static function get_satellite_registration_hub_url() {
+		$default_value = NULL;
+		$result = get_option( self::SATELLITE_REGISTRATION_HUB_URL_KEY, $default_value );
+		return $result;
+	} // function
+	
+	public static function set_satellite_registration_hub_url( $hub_url ) {
+		$val = trim( strval( $hub_url ) );
+		if ( $val == '' ) {
+			delete_option( self::SATELLITE_REGISTRATION_HUB_URL_KEY );
+		} else {
+			update_option( self::IS_SATELLITE_REGISTRATION_SYSTEM_KEY, $val );
+		} // endif
+	} // function
+*/
+
+	
 } // class

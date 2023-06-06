@@ -12,9 +12,11 @@
 	background: #eee;
 	border: 1px solid #ccc;
 }
- 
  .visitor-reg-form-container .visitor-reg-input-accordion .visitor-reg-accordion-section {
 	padding: 1em;
+}
+ .visitor-reg-form-container .visitor-reg-input-accordion .visitor-reg-accordion-section > .form-input-list {
+	margin: 0;
 }
 .visitor-reg-form-container .house-rules {
 	font-size: inherit; margin: 1em;
@@ -42,7 +44,7 @@
 }
 .visitor-reg-form .item-list-input,
 .add-item-to-visitor-reg-form .item-list-input {
-	margin: 0.25em 0.5em; vertical-align: top;
+	margin: 0.25em 0.25em; vertical-align: top;
 }
 
 .visitor-reg-form .item-list-item .item-list-input input,
@@ -60,6 +62,15 @@
 .visitor-reg-form .visitor-reg-item-list,
 .add-item-to-visitor-reg-form .add-item-to-visitor-reg-new-item-list {
 	list-style: none; margin: 0; padding: 0;
+}
+.visitor-reg-item-list .item-list-input-group {
+	display: flex;
+	flex-wrap: wrap;
+}
+.visitor-reg-item-list .item-list-input-group .input-item {
+	flex-grow: 1;
+	flex-shrink: 0;
+	padding: 0.25em;
 }
 .visitor-reg-form .visitor-reg-item-list {
  counter-reset: item-num;
@@ -87,8 +98,9 @@
 }
 .visitor-reg-form .visitor-reg-item-list .reg-item-remove-button,
 .add-item-to-visitor-reg-form .add-item-to-visitor-reg-new-item-list .reg-item-remove-button {
-	float: right; padding: 0.1em 0.25em; cursor: pointer;
+	text-align: right;
 }
+.reg-item-remove-button .dashicons { cursor: pointer; }
 @media screen and (min-width: 40em) {
 	.visitor-reg-dialog .visitor-reg-form { width: 35em; }
 }

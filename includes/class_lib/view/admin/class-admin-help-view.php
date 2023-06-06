@@ -1,11 +1,7 @@
 <?php
 namespace Reg_Man_RC\View\Admin;
 
-use Reg_Man_RC\View\Ajax_Form;
-use Reg_Man_RC\Model\Error_Log;
-use Reg_Man_RC\Control\Admin\Admin_Help_Controller;
 use Reg_Man_RC\Model\Event_Category;
-use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Volunteer_Role;
 use Reg_Man_RC\Model\Item_Type;

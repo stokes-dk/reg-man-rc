@@ -5,15 +5,23 @@ use Reg_Man_RC\Model\Event_Key;
 use Reg_Man_RC\Model\Volunteer_Role;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Volunteer_Registration;
+use Reg_Man_RC\Model\Event_Filter;
+use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Model\Event;
 
-/**Volunteer_Statistics
- * An instance of this class represents stats about how many volunteers attended an event or events.
- * Statistics may be grouped by volunteer role or total.
+/**
+ * An instance of this class provides sets of Volunteer_Stats objects based on a set of event keys and a grouping.
+ * For example, you can create an instance of this class for volunteers at all events grouped by volunteer_role.
+ * The get_all_stats_array() method of that instance will return an assoicative array of Volunteer_Stats objects
+ * keyed by volunteer role ID.
+ * The get_internal_registered_stats_array() method will return an associative array of Volunteer_Stats objects 
+ * only for the volunteers registered internally, and not including supplemental volunteer data or external
+ * volunteer registrations like those from the legacy system.
  *
  * @since	v0.1.0
  *
  */
-class Volunteer_Statistics {
+class Volunteer_Stats_Collection {
 
 	const GROUP_BY_EVENT				= 'event'; // group volunteer registrations by event
 	const GROUP_BY_VOLUNTEER_ROLE		= 'role'; // group registrations by their volunteer role, e.g. "Greeter"
@@ -26,10 +34,10 @@ class Volunteer_Statistics {
 	private $group_by;
 	private $event_count;
 
-	private $total_stats_array;
+	private $all_stats_array;
 	private $internal_stats_array;
 	private $external_stats_array;
-	private $registered_stats_array;
+	private $all_registered_stats_array;
 	private $supplemental_stats_array;
 
 	private function __construct() { }
@@ -42,12 +50,16 @@ class Volunteer_Statistics {
 	 * @param	string			$group_by			A string specifying how the results should be grouped.
 	 * The value must be one of the GROUP_BY_* constants defined in this class.
 	 *
-	 * @return Volunteer_Statistics	An instance of this class which provides the item group stats and their related data.
+	 * @return Volunteer_Stats_Collection
 	 */
 	public static function create_for_event_key_array( $event_key_array, $group_by ) {
 		$result = new self();
 		$result->event_array_key = $event_key_array;
-		$result->event_count = is_array( $event_key_array ) ? count( $event_key_array ) : 0;
+		if ( is_array( $event_key_array ) ) {
+			$result->event_count = count( $event_key_array );
+		} else {
+			$result->event_count = Event_Stats_Collection::get_all_known_events_count();
+		} // endif
 		$result->group_by = $group_by;
 		return $result;
 	} // endif
@@ -61,7 +73,7 @@ class Volunteer_Statistics {
 	 *  stats are to be returned, or NULL if all stats are to be returned.
 	 * @param	string				$group_by	One of the GROUP_BY_* constants defined in this class which specifies
 	 *  how the stats are to be grouped.
-	 * @return Volunteer_Statistics	An instance of this class which provides the item group stats and their related data.
+	 * @return Volunteer_Stats_Collection
 	 *
 	 */
 	public static function create_for_filter( $filter, $group_by ) {
@@ -89,12 +101,12 @@ class Volunteer_Statistics {
 
 	/**
 	 * Get the stats for all voluntters including registered and supplemental for the specified events and grouped in the specified way
-	 * @return Volunteer_Group_Stats[]	An array of instances of Volunteer_Group_Stats describing the number of volunteers.
+	 * @return Volunteer_Stats[]	An array of instances of Volunteer_Stats describing the number of volunteers.
 	 */
-	public function get_total_stats_array() {
-		if ( ! isset( $this->total_stats_array ) ) {
+	public function get_all_stats_array() {
+		if ( ! isset( $this->all_stats_array ) ) {
 			// Merge the registered and supplemental stats arrays
-			$reg_stats_array = $this->get_registered_stats_array();
+			$reg_stats_array = $this->get_all_registered_stats_array();
 			$sup_stats_array = $this->get_supplemental_stats_array();
 
 			$merged_stats = self::merge_stats_arrays( $reg_stats_array, $sup_stats_array );
@@ -102,17 +114,17 @@ class Volunteer_Statistics {
 //	Error_Log::var_dump( $group_by );
 			switch ( $group_by ) {
 				case self::GROUP_BY_VOLUNTEER_ROLE:
-					$this->total_stats_array = self::sort_items_by_volunteer_role( $merged_stats );
+					$this->all_stats_array = self::sort_items_by_volunteer_role( $merged_stats );
 					break;
 				case self::GROUP_BY_FIXER_STATION:
-					$this->total_stats_array = self::sort_items_by_station( $merged_stats );
+					$this->all_stats_array = self::sort_items_by_station( $merged_stats );
 					break;
 				default:
-					$this->total_stats_array = $merged_stats; // Just don't fail if there's no group by
+					$this->all_stats_array = $merged_stats; // Just don't fail if there's no group by
 			} // endswitch
 
 		} // endif
-		return $this->total_stats_array;
+		return $this->all_stats_array;
 	} // function
 
 	private static function sort_items_by_volunteer_role( $stats_array ) {
@@ -120,7 +132,7 @@ class Volunteer_Statistics {
 		$all_roles = Volunteer_Role::get_all_volunteer_roles(); // this gives me the correct order
 		foreach( $all_roles as $role ) {
 			$id = $role->get_id();
-			$result[ $id ] = isset( $stats_array[ $id ] ) ? $stats_array[ $id ] : Volunteer_Group_Stats::create( $id );
+			$result[ $id ] = isset( $stats_array[ $id ] ) ? $stats_array[ $id ] : Volunteer_Stats::create( $id );
 		} // endfor
 
 		// Include a row for "not specified"
@@ -137,7 +149,7 @@ class Volunteer_Statistics {
 		$all_stations = Fixer_Station::get_all_fixer_stations(); // this gives me the correct order
 		foreach( $all_stations as $station ) {
 			$id = $station->get_id();
-			$result[ $id ] = isset( $stats_array[ $id ] ) ? $stats_array[ $id ] : Volunteer_Group_Stats::create( $id );
+			$result[ $id ] = isset( $stats_array[ $id ] ) ? $stats_array[ $id ] : Volunteer_Stats::create( $id );
 		} // endfor
 
 		// Include a row for "not specified"
@@ -152,28 +164,28 @@ class Volunteer_Statistics {
 
 	/**
 	 * Get the stats for all registered volunteers for the specified events and grouped in the specified way
-	 * @return Volunteer_Group_Stats[]	An array of instances of Volunteer_Group_Stats describing the items and their related data.
+	 * @return Volunteer_Stats[]	An array of instances of Volunteer_Stats describing the items and their related data.
 	 */
-	public function get_registered_stats_array() {
-		if ( ! isset( $this->registered_stats_array ) ) {
+	public function get_all_registered_stats_array() {
+		if ( ! isset( $this->all_registered_stats_array ) ) {
 
 			// Merge the internal and external stats arrays
-			$int_stats_array = $this->get_internal_stats_array();
-			$ext_stats_array = $this->get_external_stats_array();
+			$int_stats_array = $this->get_internal_registered_stats_array();
+			$ext_stats_array = $this->get_external_registered_stats_array();
 //	Error_Log::var_dump( $ext_stats_array );
 
-			$this->registered_stats_array = self::merge_stats_arrays( $int_stats_array, $ext_stats_array );
-// Error_Log::var_dump( $int_stats_array, $ext_stats_array, $this->registered_stats_array );
+			$this->all_registered_stats_array = self::merge_stats_arrays( $int_stats_array, $ext_stats_array );
+// Error_Log::var_dump( $int_stats_array, $ext_stats_array, $this->all_registered_stats_array );
 		} // endif
 
-		return $this->registered_stats_array;
+		return $this->all_registered_stats_array;
 	} // function
 
 	/**
 	 * Merge two arrays of stats
-	 * @param	Volunteer_Group_Stats[]	$array_1
-	 * @param	Volunteer_Group_Stats[]	$array_2
-	 * @return	Volunteer_Group_Stats[]	The two arrays merged with their totals summed
+	 * @param	Volunteer_Stats[]	$array_1
+	 * @param	Volunteer_Stats[]	$array_2
+	 * @return	Volunteer_Stats[]	The two arrays merged with their totals summed
 	 */
 	private static function merge_stats_arrays( $array_1, $array_2 ) {
 		$result = $array_1 + $array_2; // union of the two arrays bassed on keys
@@ -185,7 +197,7 @@ class Volunteer_Statistics {
 				$stats_1 = $array_1[ $name ];
 				$stats_2 = $array_2[ $name ];
 				// Add the two matching rows together
-				$result[ $name ] = Volunteer_Group_Stats::create(
+				$result[ $name ] = Volunteer_Stats::create(
 						$name,
 						$stats_1->get_head_count() + $stats_2->get_head_count()
 					);
@@ -196,7 +208,7 @@ class Volunteer_Statistics {
 
 	/**
 	 * Get the supplemental stats for the specified events and grouped in the specified way
-	 * @return Volunteer_Group_Stats[]	An array of instances of Volunteer_Group_Stats describing the volunteers and their related head counts.
+	 * @return Volunteer_Stats[]	An array of instances of Volunteer_Stats describing the volunteers and their related head counts.
 	 */
 	public function get_supplemental_stats_array() {
 		if ( ! isset( $this->supplemental_stats_array ) ) {
@@ -210,9 +222,9 @@ class Volunteer_Statistics {
 	/**
 	 * Get the internal items stats (stats for items registered using this plugin)
 	 *  for the specified events and grouped in the specified way
-	 * @return Item_Group_Stats[]	An array of instances of Item_Group_Stats describing the items and their related data.
+	 * @return Volunteer_Stats[]	An array of instances of Volunteer_Stats describing the items and their related data.
 	 */
-	private function get_internal_stats_array() {
+	public function get_internal_registered_stats_array() {
 		if ( ! isset( $this->internal_stats_array ) ) {
 
 			$event_key_array = $this->get_event_key_array();
@@ -231,33 +243,38 @@ class Volunteer_Statistics {
 
 				$event_meta_key = Volunteer_Registration::EVENT_META_KEY;
 				$apprentice_meta_key = Volunteer_Registration::IS_APPRENTICE_META_KEY;
-				$attendance_meta_key = Volunteer_Registration::ATTENDANCE_META_KEY;
+//				$attendance_meta_key = Volunteer_Registration::ATTENDANCE_META_KEY;
 				$reg_post_type = Volunteer_Registration::POST_TYPE;
 				$role_taxonomy = Volunteer_Role::TAXONOMY_NAME;
 				$station_taxonomy = Fixer_Station::TAXONOMY_NAME;
 
 				switch ( $group_by ) {
+
 					case self::GROUP_BY_EVENT:
 						$name_col = 'event_meta.meta_value';
 						break;
+
 					case self::GROUP_BY_VOLUNTEER_ROLE:
 						$name_col = 'COALESCE( t.term_id, 0 )'; // We need NULL to become 0
 						break;
+
 					case self::GROUP_BY_FIXER_STATION:
 						$name_col = 't.term_id';
 						break;
+
 					case self::GROUP_BY_TOTAL_FIXERS:
 					case self::GROUP_BY_TOTAL_NON_FIXERS:
 					case self::GROUP_BY_TOTAL:
 					default:
 						$name_col = "''";
 						break;
+
 				} // endswitch
 
 				$select = "SELECT $name_col AS name, count(*) AS head_count";
 				$from =	" FROM $posts_table AS p ";
-				$where = " WHERE p.post_type = '$reg_post_type' ";
-				$group_clause = ' GROUP BY name ';
+				$where = " WHERE p.post_type = '$reg_post_type' AND p.post_status = 'publish' ";
+//				$group_clause = ' GROUP BY name ';
 
 				if ( ( $group_by == self::GROUP_BY_EVENT ) || ( ! empty( $event_key_array ) ) ) {
 					// When grouping by event or when getting specific events we need to join the post meta table
@@ -273,9 +290,9 @@ class Volunteer_Statistics {
 						" LEFT JOIN $terms_table AS t ON t.term_id = tt.term_id ";
 					// Limit results to those with either a role, or no fixer station or no taxonomy at all
 					$where .=
-						" AND (  ( ( tt.taxonomy = '$role_taxonomy' ) AND ( tt.term_taxonomy_id IS NOT NULL ) ) OR " .
-						"        ( ( tt.taxonomy = '$station_taxonomy' ) AND ( tt.term_taxonomy_id IS NULL ) ) OR " .
-						'        ( ( tt.taxonomy IS NULL ) AND ( tt.term_taxonomy_id IS NULL ) ) ) ';
+						" AND (	( ( tt.taxonomy = '$role_taxonomy' ) AND ( tt.term_taxonomy_id IS NOT NULL ) ) OR " .
+						"		( ( tt.taxonomy = '$station_taxonomy' ) AND ( tt.term_taxonomy_id IS NULL ) ) OR " .
+						'		( ( tt.taxonomy IS NULL ) AND ( tt.term_taxonomy_id IS NULL ) ) ) ';
 				} elseif ( $group_by == self::GROUP_BY_TOTAL_NON_FIXERS ) {
 					// I need all records where the taxonomy is either a role or there is nothing specified (no station, no role)
 					// The only way I can think to make this work is using an inner query
@@ -347,7 +364,7 @@ class Volunteer_Statistics {
 						$name		= isset( $data[ 'name' ] )				? $data[ 'name' ]				: '';
 						$head_count	= isset( $data[ 'head_count' ] )		? $data[ 'head_count' ]			: 0;
 						$appr_count	= isset( $data[ 'apprentice_count' ] )	? $data[ 'apprentice_count' ]	: 0;
-						$instance = Volunteer_Group_Stats::create( $name, $head_count, $appr_count );
+						$instance = Volunteer_Stats::create( $name, $head_count, $appr_count );
 						$this->internal_stats_array[ $name ] = $instance;
 					} // endfor
 				} // endif
@@ -359,9 +376,9 @@ class Volunteer_Statistics {
 	/**
 	 * Get the external items fixed stats (stats for items registered using an registration source other than this plugin)
 	 *  for the specified events and grouped in the specified way
-	 * @return Item_Group_Stats[]	An array of instances of Item_Group_Stats describing the items and their related data.
+	 * @return Volunteer_Stats[]	An array of instances of Volunteer_Stats describing the items and their related data.
 	 */
-	private function get_external_stats_array() {
+	public function get_external_registered_stats_array() {
 		if ( ! isset( $this->external_stats_array ) ) {
 			$this->external_stats_array = array();
 
@@ -424,7 +441,7 @@ class Volunteer_Statistics {
 				} else {
 					// Two external names may be used for the same internal name so we need to check if we already have a count
 					if ( ! isset( $this->external_stats_array[ $name ] ) ) {
-						$instance = Volunteer_Group_Stats::create( $name, $head_count, $appr_count );
+						$instance = Volunteer_Stats::create( $name, $head_count, $appr_count );
 						$this->external_stats_array[ $name ] = $instance;
 					} else {
 						// We already have stats for this name so we need to add in the new values
@@ -436,7 +453,7 @@ class Volunteer_Statistics {
 
 			if ( $has_unspecified ) {
 				$name = $no_name;
-				$instance = Volunteer_Group_Stats::create( $name, $unspecified_head_count, $unspecified_appr_count );
+				$instance = Volunteer_Stats::create( $name, $unspecified_head_count, $unspecified_appr_count );
 				$this->external_stats_array[ $name ] = $instance;
 			} // endif
 		} // endif

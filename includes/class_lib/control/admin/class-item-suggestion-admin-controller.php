@@ -158,7 +158,7 @@ class Item_Suggestion_Admin_Controller {
 					remove_action( 'save_post_' . Item_Suggestion::POST_TYPE, array( __CLASS__, 'handle_post_save' ) );
 					// Set the post status to draft since it doesn't have a valid item type
 					$post_data = array(
-						'ID'          => $post_id,
+						'ID'		  => $post_id,
 						'post_status' => 'draft',
 					);
 					wp_update_post( $post_data );
@@ -192,7 +192,7 @@ class Item_Suggestion_Admin_Controller {
 					printf( $error_format, esc_html__( __( 'Item type is required.', 'reg-man-rc' ) ) );
 				} // endif
 /*
-		        if ( empty( $item->get_fixer_station() ) ) {
+				if ( empty( $item->get_fixer_station() ) ) {
 					printf( $error_format, esc_html__( __( 'Fixer station is required.', 'reg-man-rc' ) ) );
 				} // endif
 */

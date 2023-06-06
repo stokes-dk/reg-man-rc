@@ -4,7 +4,6 @@ namespace Reg_Man_RC\View\Admin;
 use Reg_Man_RC\Model\Item;
 use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Fixer_Station;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Model\Item_Suggestion;
 use Reg_Man_RC\Model\Settings;
@@ -411,7 +410,7 @@ class Item_Type_Admin_View {
 		$input_id = 'item-type-ext-names-input';
 		$input_name = 'item-type-ext-names';
 		$label = __( 'Alternate Names', 'reg-man-rc' );
-		$desc = __( 'Enter a pipe-separated list of alternate names for this item type, e.g. "Name 1 | Name 2".', 'reg-man-rc' );
+		$desc = __( 'Enter a pipe-separated list of alternate names used in external registration data for this item type, e.g. "Name 1 | Name 2".', 'reg-man-rc' );
 		$ext_names = ! empty( $item_type ) ? $item_type->get_external_names() : '';
 		echo '<tr class="form-field term-group-wrap">';
 			echo '<th scope="row">';

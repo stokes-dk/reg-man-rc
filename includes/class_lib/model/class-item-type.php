@@ -43,7 +43,7 @@ class Item_Type {
 	/**
 	 * Create a new instance of this class using the supplied data object
 	 *
-	 * @param	WP_Term			$term	The object containing the data for this instance
+	 * @param	\WP_Term		$term	The object containing the data for this instance
 	 * @return	Item_Type		An instance of this class
 	 *
 	 * @since v0.1.0
@@ -144,7 +144,6 @@ class Item_Type {
 	 * @since v0.1.0
 	 */
 	public static function get_all_term_taxonomy_ids() {
-//		Error_Log::log_backtrace();
 		if ( ! isset( self::$term_tax_ids_array ) ) {
 			self::$term_tax_ids_array = get_terms( array(
 					'taxonomy'		=> self::TAXONOMY_NAME,
@@ -206,8 +205,9 @@ class Item_Type {
 	 *
 	 * @since v0.1.0
 	 */
+/* FIXME - not used
 	private static function get_is_exist_term_by_name( $name ) {
-		$name = wp_specialchars_decode( $type_name ); // A & B should be found using A &amp; B and vice-versa
+		$name = wp_specialchars_decode( $name ); // A & B should be found using A &amp; B and vice-versa
 		$term_array = get_terms( array(
 				'taxonomy'		=> self::TAXONOMY_NAME,
 				'hide_empty'	=> FALSE, // We want all, including those used by no post
@@ -221,6 +221,7 @@ class Item_Type {
 		} // endif
 		return $result;
 	} // function
+*/
 
 	/**
 	 * Get the item type with the specified ID
@@ -530,7 +531,10 @@ class Item_Type {
 				'public'				=> TRUE,	// whether it's intended for public use - must be TRUE to enable polylang translations
 				'publicly_queryable'	=> FALSE,	// can it be queried
 				'show_ui'				=> TRUE,	// does it have a UI for managing it
-				'show_in_rest'			=> TRUE,	// is it accessible via REST, TRUE is required for the Gutenberg editor!!!
+				// Note that if we set show_in_rest to TRUE then the block editor will show a metabox in post types
+				//  that use this taxonom REGARDLESS of the setting for meta_box_cb
+				// There is a way around that using the 'rest_prepare_taxonomy' filter if absolutely necessary
+				'show_in_rest'			=> FALSE,	// is it accessible via REST, TRUE is required for the Gutenberg editor!!!
 				'show_in_menu'			=> TRUE,	// TRUE means show in submenu under its associated post type
 				'show_in_nav_menus'		=> FALSE,	// available for selection in navigation menus?
 				'show_admin_column'		=> TRUE,	// show values as column in in admin post listing screens
@@ -706,7 +710,7 @@ class Item_Type {
 				'taxonomy'			   => self::TAXONOMY_NAME,
 				'hide_empty'			 => FALSE,
 		);
-		$query = new WP_Term_Query( $args );
+		$query = new \WP_Term_Query( $args );
 		foreach( $query->get_terms() as $term ){
 			wp_delete_term( $term->term_id, self::TAXONOMY_NAME );
 		} // endfor

@@ -2,61 +2,72 @@
 namespace Reg_Man_RC\Model\Stats;
 
 use Reg_Man_RC\Model\Event_Key;
-use Reg_Man_RC\Model\Stats\Supplemental_Item;
 use Reg_Man_RC\Model\Item;
 use Reg_Man_RC\Model\Item_Status;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Item_Type;
+use Reg_Man_RC\Model\Event_Filter;
+use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Model\Event;
 
 /**
- * An instance of this class represents stats about how many items been fixed, not fixed and so on.
- * Statistics may be grouped by item description, item type, event or total.
+ * An instance of this class provides sets of Item_Stats objects based on a set of event keys and a grouping.
+ * For example, you can create an instance of this class for items from all events grouped by fixer station.
+ * The get_all_stats_array() method of that instance will return an assoicative array of Item_Stats objects
+ * keyed by fixer station ID.
+ * The get_internal_registered_stats_array() method will return an associative array of Item_Stats objects 
+ * only for the items registered internally, and not including supplemental item data or items registered externally.
  *
  * @since	v0.1.0
  *
  */
-class Item_Statistics {
+class Item_Stats_Collection {
 
-	const GROUP_BY_FIXER_STATION	= 'station';	// group items by their fixer station, e.g. "Appliances & Housewares"
-	const GROUP_BY_ITEM_DESC		= 'desc';		// group items by their description, e.g. "Toaster"
-	const GROUP_BY_ITEM_TYPE		= 'type';		// group by item type, e.g. "Electric / Electronic"
-	const GROUP_BY_EVENT			= 'event';		// group by event
-	const GROUP_BY_TOTAL			= 'total';		// group all items together so we can count the totals
-
+	const GROUP_BY_FIXER_STATION	= 'station';			// group items by their fixer station, e.g. "Appliances & Housewares"
+	const GROUP_BY_ITEM_DESC		= 'desc';				// group items by their description, e.g. "Toaster"
+	const GROUP_BY_ITEM_TYPE		= 'type';				// group by item type, e.g. "Electric / Electronic"
+	const GROUP_BY_STATION_AND_TYPE	= 'station_and_type';	// group by fixer station and item type, e.g. "Appliances|Electric / Electronic"
+	const GROUP_BY_EVENT			= 'event';				// group by event
+	const GROUP_BY_TOTAL			= 'total';				// group all items together so we can count the totals
+	
 	private $event_array_key;
 	private $group_by;
 	private $event_count;
 
-	private $total_stats_array;
+	private $all_stats_array;
 	private $internal_stats_array;
 	private $external_stats_array;
-	private $registered_stats_array;
+	private $all_registered_stats_array;
 	private $supplemental_stats_array;
 
 	private function __construct() { }
 
 	/**
-	 * Create the items stats object for the specified events and grouped in the specified way
+	 * Create an Item_Stats_Collection for the specified events and grouped in the specified way
 	 *
 	 * @param	string[]|NULL	$event_key_array	An array of event key strings specifying which event's items are to be included
 	 *  or NULL to get all item stats (from all events)
 	 * @param	string			$group_by			A string specifying how the results should be grouped.
 	 * The value must be one of the GROUP_BY_* constants defined in this class.
 	 *
-	 * @return Item_Statistics	An instance of this class which provides the item group stats and their related data.
+	 * @return Item_Stats_Collection	An instance of this class which provides the item group stats and their related data.
 	 */
 	public static function create_for_event_key_array( $event_key_array, $group_by ) {
 		$result = new self();
 		$result->event_array_key = $event_key_array;
-		$result->event_count = is_array( $event_key_array ) ? count( $event_key_array ) : 0;
+		if ( is_array( $event_key_array ) ) {
+			$result->event_count = count( $event_key_array );
+		} else {
+			$result->event_count = Event_Stats_Collection::get_all_known_events_count();
+		} // endif
 		$result->group_by = $group_by;
 		return $result;
 	} // endif
 
 	/**
-	 * Get the items fixed stats for items registered to the set of events derived from the specified filter.
+	 * Create an Item_Stats_Collection for items registered to the set of events derived from the specified filter.
 	 *
-	 * If the event filter is NULL then all items fixed stats will be returned.
+	 * If the event filter is NULL then the collection will be for all events.
 
 	 * @param	Event_Filter|NULL	$filter		An Event_Filter instance which limits the set of events whose
 	 *  items stats are to be returned, or NULL if all stats are to be returned.
@@ -64,7 +75,7 @@ class Item_Statistics {
 	 *  how the stats are to be grouped.
 	 *  If this argument is GROUP_BY_ITEM_TYPE, for example, then the result will contain one row for each item type
 	 *  and the stats will contain the data for that type.
-	 * @return Item_Statistics	An instance of this class which provides the item group stats and their related data.
+	 * @return Item_Stats_Collection	An instance of this class which provides the item group stats and their related data.
 	 *
 	 */
 	public static function create_item_stats_for_filter( $filter, $group_by ) {
@@ -92,12 +103,12 @@ class Item_Statistics {
 
 	/**
 	 * Get the item stats for all items including registered items and supplemental for the specified events and grouped in the specified way
-	 * @return Item_Group_Stats[]	An array of instances of Item_Group_Stats describing the items and their related data.
+	 * @return Item_Stats[]	An array of instances of Item_Stats describing the items and their related data.
 	 */
-	public function get_total_stats_array() {
-		if ( ! isset( $this->total_stats_array ) ) {
+	public function get_all_stats_array() {
+		if ( ! isset( $this->all_stats_array ) ) {
 			// Merge the registered and supplemental stats arrays
-			$reg_stats_array = $this->get_registered_stats_array();
+			$reg_stats_array = $this->get_all_registered_stats_array();
 			$sup_stats_array = $this->get_supplemental_stats_array();
 //	Error_Log::var_dump( $reg_stats_array );
 //	Error_Log::var_dump( $sup_stats_array );
@@ -106,48 +117,47 @@ class Item_Statistics {
 
 			$group_by = $this->get_group_by();
 //	Error_Log::var_dump( $group_by );
+
+			// Sort the stats so they always appear in the same order and fill in missing entries as necessary
 			switch ( $group_by ) {
+				
 				case self::GROUP_BY_ITEM_TYPE:
-					$this->total_stats_array = self::sort_items_by_type( $merged_stats );
+					$this->all_stats_array = self::sort_and_fill_items_by_type( $merged_stats );
 					break;
+				
 				case self::GROUP_BY_FIXER_STATION:
-					$this->total_stats_array = self::sort_items_by_station( $merged_stats );
+					$this->all_stats_array = self::sort_and_fill_items_by_station( $merged_stats );
 					break;
+				
+				case self::GROUP_BY_STATION_AND_TYPE:
+					$this->all_stats_array = self::sort_items_by_station_and_type( $merged_stats );
+					break;
+				
 				default:
-					$this->total_stats_array = $merged_stats; // Just don't fail if there's no group by
+					$this->all_stats_array = $merged_stats; // Just don't fail if there's no group by
+					break;
+					
 			} // endswitch
 
 		} // endif
-		return $this->total_stats_array;
+		return $this->all_stats_array;
 	} // function
 
-	private static function sort_items_by_type( $stats_array ) {
+	/**
+	 * Sort the stats array so that they are always displayed in the same order and fill in any missing entries
+	 * @param	Item_Stats[] $stats_array
+	 * @return 	Item_Stats[]
+	 */
+	private static function sort_and_fill_items_by_type( $stats_array ) {
 		$result = array();
 		$all_types = Item_Type::get_all_item_types(); // this gives me the correct order
 		foreach( $all_types as $type ) {
 			$id = $type->get_id();
-			$result[ $id ] = isset( $stats_array[ $id ] ) ? $stats_array[ $id ] : Item_Group_Stats::create( $id );
+			$result[ $id ] = isset( $stats_array[ $id ] ) ? $stats_array[ $id ] : Item_Stats::create( $id );
 		} // endfor
 
-		// Include a row for "not specified"
-		$not_specified_id = 0;
-		if ( isset( $stats_array[ $not_specified_id ] ) ) {
-			$result[ $not_specified_id ] = $stats_array[ $not_specified_id ];
-		} // endif
-
-		return $result;
-	} // function
-
-	private static function sort_items_by_station( $stats_array ) {
-		$result = array();
-		$all_stations = Fixer_Station::get_all_fixer_stations(); // this gives me the correct order
-		foreach( $all_stations as $station ) {
-			$id = $station->get_id();
-			$result[ $id ] = isset( $stats_array[ $id ] ) ? $stats_array[ $id ] : Item_Group_Stats::create( $id );
-		} // endfor
-
-		// Include a row for "not specified"
-		$not_specified_id = 0;
+		// Include a row for "not specified" if necessary
+		$not_specified_id = Item_Type::UNSPECIFIED_ITEM_TYPE_ID;
 		if ( isset( $stats_array[ $not_specified_id ] ) ) {
 			$result[ $not_specified_id ] = $stats_array[ $not_specified_id ];
 		} // endif
@@ -156,21 +166,100 @@ class Item_Statistics {
 	} // function
 
 	/**
-	 * Get the item stats for all registered items for the specified events and grouped in the specified way
-	 * @return Item_Group_Stats[]	An array of instances of Item_Group_Stats describing the items and their related data.
+	 * Sort the stats array so that they are always displayed in the same order and fill in any missing entries
+	 * @param	Item_Stats[] $stats_array
+	 * @return 	Item_Stats[]
 	 */
-	public function get_registered_stats_array() {
-		if ( ! isset( $this->registered_stats_array ) ) {
+	private static function sort_and_fill_items_by_station( $stats_array ) {
+		$result = array();
+		$all_stations = Fixer_Station::get_all_fixer_stations(); // this gives me the correct order
+		foreach( $all_stations as $station ) {
+			$id = $station->get_id();
+			$result[ $id ] = isset( $stats_array[ $id ] ) ? $stats_array[ $id ] : Item_Stats::create( $id );
+		} // endfor
 
-			// Merge the internal and external stats arrays
-			$int_stats_array = $this->get_internal_stats_array();
-			$ext_stats_array = $this->get_external_stats_array();
-
-			$this->registered_stats_array = self::merge_item_stats_arrays( $int_stats_array, $ext_stats_array );
-// Error_Log::var_dump( $int_stats_array, $ext_stats_array, $this->registered_stats_array );
+		// Include a row for "not specified" if necessary
+		$not_specified_id = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
+		if ( isset( $stats_array[ $not_specified_id ] ) ) {
+			$result[ $not_specified_id ] = $stats_array[ $not_specified_id ];
 		} // endif
 
-		return $this->registered_stats_array;
+		return $result;
+	} // function
+
+	/**
+	 * Sort the stats array so that they are always displayed in the same order
+	 * @param	Item_Stats[] $stats_array
+	 * @return 	Item_Stats[]
+	 */
+	private static function sort_items_by_station_and_type( $stats_array ) {
+		$result = array();
+
+		// Start by grouping by fixer station then by item type within each station
+		$all_stations = Fixer_Station::get_all_fixer_stations();
+		$all_types = Item_Type::get_all_item_types();
+		$unspecified_station_id = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
+		$unspecified_type_id = Item_Type::UNSPECIFIED_ITEM_TYPE_ID;
+				
+		foreach( $all_stations as $station ) {
+
+			$station_id = $station->get_id();
+			
+			foreach( $all_types as $type ) {
+
+				$type_id = $type->get_id();
+				$name = "$station_id|$type_id";
+				if ( isset( $stats_array[ $name ] ) ) {
+					$result[ $name ] = $stats_array[ $name ];
+				} // endif
+
+			} // endfor
+
+			// Include a row for "not specified" type for this station if necessary
+			$name = "$station_id|$unspecified_type_id";
+			if ( isset( $stats_array[ $name ] ) ) {
+				$result[ $name ] = $stats_array[ $name ];
+			} // endif
+				
+		} // endfor
+
+		// Include rows for "not specified" station if necessary
+		foreach( $all_types as $type ) {
+
+			$type_id = $type->get_id();
+			$name = "$unspecified_station_id|$type_id";
+			if ( isset( $stats_array[ $name ] ) ) {
+				$result[ $name ] = $stats_array[ $name ];
+			} // endif
+
+		} // endfor
+
+		// Include a row for "not specified" station and "not specified" type if necessary
+		$name = "$unspecified_station_id|$unspecified_type_id";
+		if ( isset( $stats_array[ $name ] ) ) {
+			$result[ $name ] = $stats_array[ $name ];
+		} // endif
+				
+		return $result;
+	} // function
+
+	
+	/**
+	 * Get the item stats for all registered items for the specified events and grouped in the specified way
+	 * @return Item_Stats[]	An array of instances of Item_Stats describing the items and their related data.
+	 */
+	public function get_all_registered_stats_array() {
+		if ( ! isset( $this->all_registered_stats_array ) ) {
+
+			// Merge the internal and external stats arrays
+			$int_stats_array = $this->get_internal_registered_stats_array();
+			$ext_stats_array = $this->get_external_registered_stats_array();
+
+			$this->all_registered_stats_array = self::merge_item_stats_arrays( $int_stats_array, $ext_stats_array );
+// Error_Log::var_dump( $int_stats_array, $ext_stats_array, $this->all_registered_stats_array );
+		} // endif
+
+		return $this->all_registered_stats_array;
 	} // function
 
 	private static function merge_item_stats_arrays( $array_1, $array_2 ) {
@@ -183,7 +272,7 @@ class Item_Statistics {
 				$stats_1 = $array_1[ $name ];
 				$stats_2 = $array_2[ $name ];
 				// Add the two matching rows together
-				$result[ $name ] = Item_Group_Stats::create(
+				$result[ $name ] = Item_Stats::create(
 						$name,
 						$stats_1->get_item_count()			+ $stats_2->get_item_count(),
 						$stats_1->get_fixed_count()			+ $stats_2->get_fixed_count(),
@@ -197,7 +286,7 @@ class Item_Statistics {
 
 	/**
 	 * Get the supplemental item stats for the specified events and grouped in the specified way
-	 * @return Item_Group_Stats[]	An array of instances of Item_Group_Stats describing the items and their related data.
+	 * @return Item_Stats[]	An array of instances of Item_Stats describing the items and their related data.
 	 */
 	public function get_supplemental_stats_array() {
 		if ( ! isset( $this->supplemental_stats_array ) ) {
@@ -212,9 +301,9 @@ class Item_Statistics {
 	/**
 	 * Get the internal items stats (stats for items registered using this plugin)
 	 *  for the specified events and grouped in the specified way
-	 * @return Item_Group_Stats[]	An array of instances of Item_Group_Stats describing the items and their related data.
+	 * @return Item_Stats[]	An array of instances of Item_Stats describing the items and their related data.
 	 */
-	private function get_internal_stats_array() {
+	public function get_internal_registered_stats_array() {
 		if ( ! isset( $this->internal_stats_array ) ) {
 
 			$event_key_array = $this->get_event_key_array();
@@ -249,11 +338,20 @@ class Item_Statistics {
 						break;
 
 					case self::GROUP_BY_FIXER_STATION:
-						$name_col = 't.term_id';
+						$name_col = 'station_terms.term_id';
 						break;
 
 					case self::GROUP_BY_ITEM_TYPE:
-						$name_col = 't.term_id';
+						$name_col = 'type_terms.term_id';
+						break;
+
+					case self::GROUP_BY_STATION_AND_TYPE:
+						$name_col = 
+							'CONCAT( ' .
+								" CASE WHEN station_terms.term_id IS NULL THEN '0' ELSE station_terms.term_id END," .
+								" '|', " .
+								" CASE WHEN type_terms.term_id IS NULL THEN '0' ELSE type_terms.term_id END " .
+							')';
 						break;
 
 					default:
@@ -272,28 +370,26 @@ class Item_Statistics {
 				$where = " WHERE post_type = '$item_post_type' AND p.post_status = 'publish' ";
 				$group_clause = ' GROUP BY name ';
 
-				if ( $group_by == self::GROUP_BY_FIXER_STATION ) {
-//					$tax_name = Fixer_Station::TAXONOMY_NAME;
-					$tt_ids = Fixer_Station::get_all_term_taxonomy_ids();
-//					Error_Log::var_dump( $tt_ids );
+				if (( $group_by == self::GROUP_BY_FIXER_STATION ) ||
+					( $group_by == self::GROUP_BY_STATION_AND_TYPE ) ) {
+					$station_tt_ids = Fixer_Station::get_all_term_taxonomy_ids();
+//					Error_Log::var_dump( $station_tt_ids );
 					$from .=
-						" LEFT JOIN $term_rels_table AS tr ON p.ID = tr.object_id " .
-						'   AND tr.term_taxonomy_id in ( ' . implode( ',', $tt_ids ) . ' ) ' .
-						" LEFT JOIN $term_tax_table AS tt ON tt.term_taxonomy_id = tr.term_taxonomy_id " .
-//						"   AND tt.taxonomy = '$tax_name' " .
-						" LEFT JOIN $terms_table AS t ON t.term_id = tt.term_id ";
+						" LEFT JOIN $term_rels_table AS station_tr ON p.ID = station_tr.object_id " .
+						'   AND station_tr.term_taxonomy_id in ( ' . implode( ',', $station_tt_ids ) . ' ) ' .
+						" LEFT JOIN $term_tax_table AS station_tt ON station_tt.term_taxonomy_id = station_tr.term_taxonomy_id " .
+						" LEFT JOIN $terms_table AS station_terms ON station_terms.term_id = station_tt.term_id ";
 				} // endif
 
-				if ( $group_by == self::GROUP_BY_ITEM_TYPE ) {
-//					$tax_name = Item_Type::TAXONOMY_NAME;
-					$tt_ids = Item_Type::get_all_term_taxonomy_ids();
-//					Error_Log::var_dump( $tt_ids );
+				if (( $group_by == self::GROUP_BY_ITEM_TYPE ) ||
+					( $group_by == self::GROUP_BY_STATION_AND_TYPE ) ) {
+					$type_tt_ids = Item_Type::get_all_term_taxonomy_ids();
+//					Error_Log::var_dump( $type_tt_ids );
 					$from .=
-						" LEFT JOIN $term_rels_table AS tr ON p.ID = tr.object_id " .
-						'   AND tr.term_taxonomy_id in ( ' . implode( ',', $tt_ids ) . ' ) ' .
-						" LEFT JOIN $term_tax_table AS tt ON tt.term_taxonomy_id = tr.term_taxonomy_id " .
-//						"   AND tt.taxonomy = '$tax_name' " .
-		  				" LEFT JOIN $terms_table AS t ON t.term_id = tt.term_id ";
+						" LEFT JOIN $term_rels_table AS type_tr ON p.ID = type_tr.object_id " .
+						'   AND type_tr.term_taxonomy_id in ( ' . implode( ',', $type_tt_ids ) . ' ) ' .
+						" LEFT JOIN $term_tax_table AS type_tt ON type_tt.term_taxonomy_id = type_tr.term_taxonomy_id " .
+		  				" LEFT JOIN $terms_table AS type_terms ON type_terms.term_id = type_tt.term_id ";
 				} // endif
 
 				if ( ( $group_by == self::GROUP_BY_EVENT ) || ( ! empty( $event_key_array ) ) ) {
@@ -314,7 +410,7 @@ class Item_Statistics {
 					$data_array = $wpdb->get_results( $stmt, ARRAY_A );
 				} // endif
 
-//Error_Log::var_dump( $query );
+// Error_Log::var_dump( $query );
 //Error_Log::var_dump( $event_key_array );
 //Error_Log::var_dump( $data_array );
 
@@ -324,6 +420,8 @@ class Item_Statistics {
 					$no_name = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
 				} elseif ( $group_by == self::GROUP_BY_ITEM_TYPE ) {
 					$no_name = Item_Type::UNSPECIFIED_ITEM_TYPE_ID;
+				} elseif ( $group_by == self::GROUP_BY_STATION_AND_TYPE ) {
+					$no_name = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID . '|' . Item_Type::UNSPECIFIED_ITEM_TYPE_ID ;
 				} else {
 					$no_name = '';
 				} // endif
@@ -334,7 +432,7 @@ class Item_Statistics {
 						$fixed		= isset( $data[ 'fixed_count' ] )		? $data[ 'fixed_count' ] 		: 0;
 						$repairable	= isset( $data[ 'repairable_count' ] )	? $data[ 'repairable_count' ]	: 0;
 						$eol		= isset( $data[ 'eol_count' ] )			? $data[ 'eol_count' ]			: 0;
-						$instance = Item_Group_Stats::create( $name, $item_count, $fixed, $repairable, $eol );
+						$instance = Item_Stats::create( $name, $item_count, $fixed, $repairable, $eol );
 						$this->internal_stats_array[ $name ] = $instance;
 					} // endfor
 				} // endif
@@ -346,9 +444,9 @@ class Item_Statistics {
 	/**
 	 * Get the external items fixed stats (stats for items registered using an registration source other than this plugin)
 	 *  for the specified events and grouped in the specified way
-	 * @return Item_Group_Stats[]	An array of instances of Item_Group_Stats describing the items and their related data.
+	 * @return Item_Stats[]	An array of instances of Item_Stats describing the items and their related data.
 	 */
-	private function get_external_stats_array() {
+	public function get_external_registered_stats_array() {
 		if ( ! isset( $this->external_stats_array ) ) {
 			$this->external_stats_array = array();
 
@@ -370,69 +468,55 @@ class Item_Statistics {
 			// The above returns an array of data arrays.  I will convert those into my internal objects
 //			Error_Log::var_dump( $ext_data );
 
-			$no_name = ( $group_by == self::GROUP_BY_ITEM_TYPE ) ? Item_Type::UNSPECIFIED_ITEM_TYPE_ID : '';
-			$has_unspecified = FALSE; // if the external data contains item types we don't know then we need a row for that
-			$unspecified_item_count	= 0; // counts for unspecified items
-			$unspecified_fixed		= 0;
-			$unspecified_repairable	= 0;
-			$unspecified_eol		= 0;
+			if ( $group_by == self::GROUP_BY_ITEM_TYPE ) {
+				$no_name = Item_Type::UNSPECIFIED_ITEM_TYPE_ID;
+			} elseif( $group_by == self::GROUP_BY_FIXER_STATION ) {
+				$no_name = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
+			} elseif ( $group_by == self::GROUP_BY_STATION_AND_TYPE ) {
+				$no_name = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID . '|' . Item_Type::UNSPECIFIED_ITEM_TYPE_ID ;
+			} else {
+				$no_name = ''; // In other cases missing name data is replaced by empty string
+			} // endif
 //			Error_Log::var_dump( $group_by );
+
 			foreach( $ext_data as $ext_data_row ) {
-				$is_unspecified = FALSE;
-				$name		= isset( $ext_data_row[ 'name' ] )	? $ext_data_row[ 'name' ]	: $no_name;
+//				$is_unspecified = FALSE;
+				$name = isset( $ext_data_row[ 'name' ] ) ? $ext_data_row[ 'name' ] : $no_name;
 				// If items were grouped by type or station then external systems may use other names
 				// We need to use the internal names so try to find the right one
 				if ( $group_by == self::GROUP_BY_FIXER_STATION ) {
 					$station = Fixer_Station::get_fixer_station_by_name( $name );
-					if ( isset( $station ) ) {
-						$name = $station->get_id(); // use our internal IDs
-					} else {
-						// Otherwise it's an unknown fixer station
-						$is_unspecified = TRUE;
-					} // endif
-				} // endif
-				if ( $group_by == self::GROUP_BY_ITEM_TYPE ) {
+					$name = isset( $station ) ? $station->get_id() : $no_name;
+				} elseif ( $group_by == self::GROUP_BY_ITEM_TYPE ) {
 					$item_type = Item_Type::get_item_type_by_name( $name );
-					if ( isset( $item_type ) ) {
-						$name = $item_type->get_id(); // use our internal IDs
-					} else {
-						// Otherwise it's an unknown type
-						$is_unspecified = TRUE;
-					} // endif
+					$name = isset( $item_type ) ? $item_type->get_id() : $no_name;
+				} elseif ( $group_by == self::GROUP_BY_STATION_AND_TYPE ) {
+					$parts = explode( '|', $name );
+					$station = isset( $parts[ 0 ] ) ? Fixer_Station::get_fixer_station_by_name( $parts[ 0 ] ) : NULL;
+					$type = isset( $parts[ 1 ] ) ? Item_Type::get_item_type_by_name( $parts[ 1 ] ) : NULL;
+					$station_id = isset( $station ) ? $station->get_id() : Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
+					$type_id = isset( $type ) ? $type->get_id() : Item_Type::UNSPECIFIED_ITEM_TYPE_ID;
+					$name = "$station_id|$type_id";
 				} // endif
+				
 				$item_count	= isset( $ext_data_row[ 'item_count' ] )		? intval( $ext_data_row[ 'item_count' ] ) 		: 0;
 				$fixed		= isset( $ext_data_row[ 'fixed_count' ] )		? intval( $ext_data_row[ 'fixed_count' ] ) 		: 0;
 				$repairable	= isset( $ext_data_row[ 'repairable_count' ] )	? intval( $ext_data_row[ 'repairable_count' ] )	: 0;
 				$eol		= isset( $ext_data_row[ 'eol_count' ] )			? intval( $ext_data_row[ 'eol_count' ] )		: 0;
-				if ( $is_unspecified ) {
-					$has_unspecified = TRUE;
-					$unspecified_item_count	+= $item_count;
-					$unspecified_fixed		+= $fixed;
-					$unspecified_repairable	+= $repairable;
-					$unspecified_eol		+= $eol;
+
+				// Two external names may be used for the same internal name so we need to check if we already have a count
+				if ( ! isset( $this->external_stats_array[ $name ] ) ) {
+					$instance = Item_Stats::create( $name, $item_count, $fixed, $repairable, $eol );
+					$this->external_stats_array[ $name ] = $instance;
 				} else {
-					// Two external names may be used for the same internal name so we need to check if we already have a count
-					if ( ! isset( $this->external_stats_array[ $name ] ) ) {
-						$instance = Item_Group_Stats::create( $name, $item_count, $fixed, $repairable, $eol );
-						$this->external_stats_array[ $name ] = $instance;
-					} else {
-						// We already have stats for this name so we need to add in the new values
-						$instance = $this->external_stats_array[ $name ];
-						$instance->add_to_counts( $item_count, $fixed, $repairable, $eol );
-					} // endif
+					// We already have stats for this name so we need to add in the new values
+					$instance = $this->external_stats_array[ $name ];
+					$instance->add_to_counts( $item_count, $fixed, $repairable, $eol );
 				} // endif
 			} // endfor
-			if ( $has_unspecified ) {
-				$name = $no_name;
-				$instance = Item_Group_Stats::create( $name, $unspecified_item_count, $unspecified_fixed, $unspecified_repairable, $unspecified_eol );
-				$this->external_stats_array[ $name ] = $instance;
-			} // endif
-
 		} // endif
 
 		return $this->external_stats_array;
 	} // function
-
-
 
 } // class

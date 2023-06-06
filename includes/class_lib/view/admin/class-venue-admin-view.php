@@ -6,8 +6,6 @@ use Reg_Man_RC\View\Form_Input_List;
 use Reg_Man_RC\View\Map_View;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Model\Internal_Event_Descriptor;
-use Reg_Man_RC\Model\Error_Log;
-use Reg_Man_RC\Model\Settings;
 
 /**
  * The administrative view for venues

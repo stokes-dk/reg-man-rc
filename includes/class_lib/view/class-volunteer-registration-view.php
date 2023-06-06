@@ -3,7 +3,6 @@ namespace Reg_Man_RC\View;
 use Reg_Man_RC\Model\Volunteer_Registration;
 use Reg_Man_RC\Model\Calendar;
 use Reg_Man_RC\Model\Event;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\View\Pub\Volunteer_Area;
 use Reg_Man_RC\Model\Volunteer;
 use Reg_Man_RC\View\Object_View\Object_View;
@@ -14,7 +13,9 @@ use Reg_Man_RC\View\Object_View\Ajax_Form_Section;
 use Reg_Man_RC\View\Object_View\Tabs_Section;
 use Reg_Man_RC\View\Object_View\Abstract_Object_View;
 use Reg_Man_RC\View\Object_View\Volunteer_Registration_Item_Provider;
-use Reg_Man_RC\Model\Event_Filter;
+use Reg_Man_RC\View\Object_View\Event_Descriptor_Item_Provider;
+use Reg_Man_RC\View\Object_View\Object_View_Section;
+use Reg_Man_RC\Model\Settings;
 
 /**
  * An instance of this class provides rendering for a volunteer registration for an event.
@@ -43,7 +44,21 @@ class Volunteer_Registration_View extends Abstract_Object_View {
 	public static function create_for_page_content( $event ) {
 		$result = new self();
 		$result->set_event( $event );
-		$result->set_object_page_type( Object_View::OBJECT_PAGE_TYPE_VOLUNTEER_REG );
+		$result->set_object_page_type( Object_View::OBJECT_PAGE_TYPE_VOLUNTEER_REGISTRATION );
+		return $result;
+	} // function
+
+	/**
+	 * A factory method to create an instance of this class to display the info window content on a calendar
+	 * @param	Event	$event		The event object shown in this view.
+	 * @return	Volunteer_Registration_View
+	 * @since	v0.1.0
+	 */
+	public static function create_for_calendar_info_window( $event, $cal_type = Calendar::CALENDAR_TYPE_VOLUNTEER_REG ) {
+		$result = new self();
+		$result->set_info_window_calendar_type( $cal_type );
+		$result->set_event( $event );
+		$result->set_title( $event->get_summary() );
 		return $result;
 	} // function
 
@@ -53,9 +68,9 @@ class Volunteer_Registration_View extends Abstract_Object_View {
 	 * @return	Volunteer_Registration_View
 	 * @since	v0.1.0
 	 */
-	public static function create_for_calendar_info_window( $event, $cal_type = Calendar::CALENDAR_TYPE_VOLUNTEER_REG ) {
+	public static function create_for_map_info_window( $event, $map_type = Map_View::MAP_TYPE_CALENDAR_EVENTS ) {
 		$result = new self();
-		$result->set_info_window_calendar_type( $cal_type );
+		$result->set_info_window_map_type( $map_type );
 		$result->set_event( $event );
 		$result->set_title( $event->get_summary() );
 		return $result;
@@ -280,19 +295,30 @@ class Volunteer_Registration_View extends Abstract_Object_View {
 			$href = Volunteer_Area::get_href_for_event_page( $event );
 			$classes = 'reg-man-rc-volunteer-area-view-registration-link reg-man-rc-icon-text-container';
 			$label_text = esc_html__( 'View / Change', 'reg-man-rc' );
-			$label = "<span class=\"dashicons dashicons-edit icon\"></span><span class=\"text\">$label_text</span>";
+			$label = "<span class=\"dashicons dashicons-welcome-write-blog icon\"></span><span class=\"text\">$label_text</span>";
 			$result = "<a href=\"$href\" class=\"$classes\">$label</a>";
 
 		} else {
 
-			// Allow volunteer to register in one click
-			// This is actually just a button, the form is rendered by the main page and submitted on the client side
-			$event_key = $event->get_key();
-			$label_text = esc_html__( 'Register Now', 'reg-man-rc' );
-			$label = "<span class=\"dashicons dashicons-welcome-write-blog icon\"></span><span class=\"text\">$label_text</span>";
-			$classes = 'reg-man-rc-volunteer-area-quick-signup-button reg-man-rc-icon-text-container';
-			$data = "data-event-key=\"$event_key\"";
-			$result = "<button type=\"button\" class=\"$classes\" $data>$label</button>";
+			if ( Settings::get_is_allow_volunteer_registration_quick_signup() ) {
+				// Allow volunteer to register in one click
+				// This is actually just a button, the form is rendered by the main page and submitted on the client side
+				$event_key = $event->get_key();
+				$label_text = esc_html__( 'Register Now', 'reg-man-rc' );
+				$label = "<span class=\"dashicons dashicons-welcome-write-blog icon\"></span><span class=\"text\">$label_text</span>";
+				$classes = 'reg-man-rc-volunteer-area-quick-signup-button reg-man-rc-icon-text-container';
+				$data = "data-event-key=\"$event_key\"";
+				$result = "<button type=\"button\" class=\"$classes\" $data>$label</button>";
+
+			} else {
+				// Provide a link to view the event page and register
+				$href = Volunteer_Area::get_href_for_event_page( $event );
+				$classes = 'reg-man-rc-volunteer-area-view-registration-link reg-man-rc-icon-text-container';
+				$label_text = esc_html__( 'View / Register', 'reg-man-rc' );
+				$label = "<span class=\"dashicons dashicons-welcome-write-blog icon\"></span><span class=\"text\">$label_text</span>";
+				$result = "<a href=\"$href\" class=\"$classes\">$label</a>";
+				
+			} // endif
 
 		} // endif
 
@@ -459,7 +485,7 @@ class Volunteer_Registration_View extends Abstract_Object_View {
 	 */
 	public static function create_volunteer_reg_details_link_item( $event ) {
 		$href = Volunteer_Area::get_href_for_event_page( $event );
-		$link_text = __( 'Volunteer event registration details', 'reg-man-rc' );
+		$link_text = __( 'More details', 'reg-man-rc' );
 		$result = List_Item::create_more_details_link_item( $href, $link_text );
 		return $result;
 	} // function

@@ -2,11 +2,10 @@
 namespace Reg_Man_RC\Control\Admin;
 
 use Reg_Man_RC\Model\Calendar;
-use Reg_Man_RC\Model\Event_Status;
 use Reg_Man_RC\Model\Event_Category;
 use Reg_Man_RC\View\Admin\Event_Category_Admin_View;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Settings;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The controller used on the backend admin interface for calendars
@@ -114,6 +113,23 @@ class Calendar_Admin_Controller {
 						// We will assign an array of formats even if the user only supplied one value
 						$format_id_array = is_array( $posted_formats ) ? $posted_formats : array( $posted_formats );
 						$calendar->set_view_format_ids_array( $format_id_array );
+					} // endif
+				} // endif
+
+				// Update the durations
+				// Make sure the selection flag is there and we're not doing a quick edit
+				// If the flag is not set then the user has no options to select, so don't delete anything
+				$durations_flag = isset( $_POST[ 'durations_selection_flag' ] ) ? TRUE : FALSE;
+				if ( $durations_flag ) {
+					// First check to see if it's set then make it an array
+					$posted_durations = isset( $_POST['duration'] ) ? $_POST['duration'] : NULL;
+					if ( empty( $posted_durations ) ) {
+						// No durations selected so set it to NULL (remove any assignment)
+						$calendar->set_duration_ids_array( NULL );
+					} else {
+						// We will assign an array of formats even if the user only supplied one value
+						$duration_id_array = is_array( $posted_durations ) ? $posted_durations : array( $posted_durations );
+						$calendar->set_duration_ids_array( $duration_id_array );
 					} // endif
 				} // endif
 

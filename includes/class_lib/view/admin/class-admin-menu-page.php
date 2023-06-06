@@ -9,11 +9,9 @@ use Reg_Man_RC\Model\Item;
 use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Volunteer_Role;
 use Reg_Man_RC\Model\Venue;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Volunteer_Registration;
 use Reg_Man_RC\Model\Volunteer;
 use Reg_Man_RC\Control\User_Role_Controller;
-use Reg_Man_RC\Model\Settings;
 
 /**
  * The custom admin menu page for the plugin
@@ -258,7 +256,7 @@ class Admin_Menu_Page {
 
 	/**
 	 * Assign the correct parent file and submenu file for my menu items
-	 * @param unknown $parent_file
+	 * @param string $parent_file
 	 * @return string
 	 */
 	public static function assign_current_submenu( $parent_file ) {

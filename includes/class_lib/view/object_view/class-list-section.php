@@ -1,7 +1,6 @@
 <?php
 namespace Reg_Man_RC\View\Object_View;
 
-use Reg_Man_RC\Model\Error_Log;
 
 /**
  * An instance of this class represents a list of details about an object like event's category, date, location etc.

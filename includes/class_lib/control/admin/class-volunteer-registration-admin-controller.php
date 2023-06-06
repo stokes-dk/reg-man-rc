@@ -6,7 +6,6 @@ use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Volunteer_Role;
 use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Volunteer;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Control\Term_Order_Controller;
 
 /**
@@ -250,7 +249,7 @@ class Volunteer_Registration_Admin_Controller {
 						" INNER JOIN {$wpdb->terms} USING ( term_id ) " .
 						" INNER JOIN {$wpdb->termmeta} USING ( term_id ) " .
 					' WHERE taxonomy = \'%1$s\'' .
-               			" AND ( wp_termmeta.meta_key = '$meta_key' OR wp_termmeta.meta_key IS NULL )" .
+			   			" AND ( wp_termmeta.meta_key = '$meta_key' OR wp_termmeta.meta_key IS NULL )" .
 					' GROUP BY object_id' .
 				') AS reg_man_rc_tax_sub_query_terms ON ( wp_posts.ID = reg_man_rc_tax_sub_query_terms.object_id )';
 

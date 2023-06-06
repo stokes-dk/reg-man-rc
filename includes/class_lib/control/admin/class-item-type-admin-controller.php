@@ -2,7 +2,6 @@
 namespace Reg_Man_RC\Control\Admin;
 
 use Reg_Man_RC\Model\Item_Type;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\Control\Term_Order_Controller;
 

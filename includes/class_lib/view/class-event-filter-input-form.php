@@ -4,6 +4,7 @@ namespace Reg_Man_RC\View;
 use Reg_Man_RC\Model\Event_Filter;
 use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Event_Category;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * An instance of this class provides an input form for an event filter
@@ -54,21 +55,31 @@ class Event_Filter_Input_Form {
 			$label = __( 'Category', 'reg-man-rc' );
 			$name = self::CATEGORY_INPUT_NAME;
 			$options = array();
-//			$all_cats = __( 'All Categories', 'reg-man-rc' );
-//			$options[ $all_cats ] = self::ALL_CATEGORIES;
-			$all_repair_cats = __( 'All Repair Event Categories', 'reg-man-rc' );
-			$options[ $all_repair_cats ] = self::REPAIR_CATEGORIES;
 			$category_array = Event_Category::get_all_event_categories();
+			$repair_category_array = array();
 			foreach ( $category_array as $category ) {
 				if ( $category->get_is_accept_item_registration() ) {
 					$options[ $category->get_name() ] = $category->get_id();
+					$repair_category_array[] = $category;
 				} // endif
 			} // endfor
+//			Error_Log::var_dump( $repair_category_array );
+			
+			// I will also add an option for "All Repair Event Categories" if that group is different from All Categories
+			if ( count( $repair_category_array ) !== count( $category_array ) ) {
+				$all_repair_cats = __( 'All Repair Event Categories', 'reg-man-rc' );
+				$options[ $all_repair_cats ] = self::REPAIR_CATEGORIES;
+			} // endif
 
+			// I will add an option for "All Categories"
+			$all_cats = __( 'All Categories', 'reg-man-rc' );
+			$options[ $all_cats ] = self::ALL_CATEGORIES;
+			
+			$selected = self::ALL_CATEGORIES;
+			
 //			$uncat_label = __( 'Uncategorized Events', 'reg-man-rc' );
 //			$options[ $uncat_label ] = self::UNCATEGORIZED;
 
-			$selected = $all_repair_cats;
 			$filter_input_list->add_select_input( $label, $name, $options, $selected );
 
 		$label = __( 'Filter Events', 'reg-man-rc' );
@@ -98,19 +109,23 @@ class Event_Filter_Input_Form {
 		$filter_year = isset( $request_data[ self::YEAR_INPUT_NAME ] ) ? $request_data[ self::YEAR_INPUT_NAME ] : NULL;
 		$filter_category_id = isset( $request_data[ self::CATEGORY_INPUT_NAME ] ) ? $request_data[ self::CATEGORY_INPUT_NAME ] : NULL;
 
-		if ( ( ! isset( $filter_year ) || ( $filter_year === self::ANY_YEAR ) ) &&
-			 ( ! isset( $filter_category_id ) || ( $filter_category_id === self::ALL_CATEGORIES ) ) ) {
+		if ( ( empty( $filter_year ) || ( $filter_year === self::ANY_YEAR ) ) &&
+			 ( empty( $filter_category_id ) || ( $filter_category_id === self::ALL_CATEGORIES ) ) ) {
 			// In this case we won't do any filtering of events
 			$filter = NULL;
 		} else {
 
 			$filter = Event_Filter::create();
 
-			if ( isset( $filter_year ) && ( $filter_year !== self::ANY_YEAR ) ) {
+			if ( ! empty( $filter_year ) && ( $filter_year !== self::ANY_YEAR ) ) {
 				$filter->set_accept_dates_in_year( $filter_year );
 			} // endif
-			if ( isset( $filter_category_id ) && ( $filter_category_id !== self::ALL_CATEGORIES ) ) {
+			if ( ! empty( $filter_category_id ) && ( $filter_category_id !== self::ALL_CATEGORIES ) ) {
 				switch( $filter_category_id ) {
+
+					case self::ALL_CATEGORIES:
+						break;
+
 					case self::REPAIR_CATEGORIES:
 						// This means show only events categorized as repair events
 						$event_categories = Event_Category::get_all_event_categories();
@@ -123,11 +138,13 @@ class Event_Filter_Input_Form {
 						$filter->set_accept_category_names( $repair_cats_array ); // Show these categories
 //						$filter->set_accept_uncategorized_events( TRUE ); // Show uncategorized ones as well since it's not clear if they are repair events
 						break;
+
 //					case self::UNCATEGORIZED:
 //						// This means show only uncategorized events
 //						$filter->set_accept_category_names( array() ); // Don't show any categories (besides uncategorized)
 //						$filter->set_accept_uncategorized_events( TRUE ); // Show uncategorized ones
 //						break;
+
 					default:
 						$category = Event_Category::get_event_category_by_id( $filter_category_id );
 						if ( isset( $category ) ) {
@@ -137,6 +154,7 @@ class Event_Filter_Input_Form {
 							$filter->set_accept_category_names( $cat_names );
 						} // endif
 						break;
+
 				} // endswitch
 			} // endif
 		} // endif

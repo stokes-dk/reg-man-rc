@@ -1,11 +1,20 @@
 /**
  * This javascript file contains the shared function to support FullCalendar for the plugin
  */
+
 jQuery( document ).ready( function( $ ) {
 
-	$( '.reg-man-rc-calendar-view' ).on( 'initialize', function( evt ) {
+	$( '.reg-man-rc-calendar-view' ).on( 'highlight-duration-button', function( evt ) {
+		var me = $( this );
+		var calendar_id = typeof me.data( 'calendar-id' ) !== 'undefined' ? me.data( 'calendar-id' ) : 'no-id'; // Defensive
+		var duration = localStorage.getItem( 'fullcalendar_initial_duration_' + calendar_id );
+		me.find( '.fc-' + duration + '-button' ).addClass( 'fc-button-active' );
+	});
+
+	$( '.reg-man-rc-calendar-view' ).on( 'initialize-calendar', function( evt ) {
 		var me = $(this);
 
+		var calendar_id = typeof me.data( 'calendar-id' ) !== 'undefined' ? me.data( 'calendar-id' ) : 'no-id'; // Defensive
 		var week_start = me.data( 'week-start' );
 		var lang = me.data( 'lang' );
 		var feed_url = me.data( 'feed-url' );
@@ -15,12 +24,26 @@ jQuery( document ).ready( function( $ ) {
 		if ( typeof me.data( 'wp-nonce' ) !== 'undefined' ) {
 			feed_params._wpnonce = me.data( 'wp-nonce' );
 		} // endif
+
 		if ( typeof me.data( 'calendar-id' ) !== 'undefined' ) {
 			feed_params.calendar_id = me.data( 'calendar-id' );
 		} // endif
 
-		var view_list = ( typeof me.data( 'views' ) !== 'undefined' ) ? me.data( 'views' ) : 'dayGridMonth';
-		var initial_view = ( typeof me.data( 'initial-view' ) !== 'undefined' ) ? me.data( 'initial-view' ) : 'dayGridMonth';
+		var view_list = ( typeof me.data( 'views' ) !== 'undefined' ) ? me.data( 'views' ) : 'grid_view';
+		var view_array = view_list.split( ',' );
+		var initial_view = localStorage.getItem( 'fullcalendar_initial_view_' + calendar_id );
+		if ( ! view_array.includes( initial_view ) ) {
+			initial_view = view_array[ 0 ];
+			localStorage.setItem( 'fullcalendar_initial_view_' + calendar_id, initial_view );
+		} // endif
+
+		var duration_list = ( typeof me.data( 'durations' ) !== 'undefined' ) ? me.data( 'durations' ) : [ 'duration_1_month' ];
+		var duration_array = duration_list.split( ',' );
+		var initial_duration = localStorage.getItem( 'fullcalendar_initial_duration_' + calendar_id );
+		if ( ! duration_array.includes( initial_duration ) ) {
+			initial_duration = duration_array[ 0 ];
+			localStorage.setItem( 'fullcalendar_initial_duration_' + calendar_id, initial_duration );
+		} // endif
 
 		week_start = ( week_start !== undefined ) ? week_start : 0; // Sunday if nothing specified
 		lang = ( lang !== undefined ) ? lang : 'en'; // English if nothing specified
@@ -29,7 +52,7 @@ jQuery( document ).ready( function( $ ) {
 		var container = me.closest( '.reg-man-rc-calendar-container' );
 		container.addClass( 'reg-man-rc-calendar-loading' ); // Make the map look busy while it's initially loading
 		var map_container = container.find( '.reg-man-rc-calendar-map-container' );
-		var has_map; // A flag indicating whether a map element is present in the calendar container
+//		var has_map; // A flag indicating whether a map element is present in the calendar container
 		if ( map_container.length !== 0 ) {
 			has_map = true;
 			me.data( 'map-container', map_container );
@@ -47,41 +70,130 @@ jQuery( document ).ready( function( $ ) {
 		} // endif
 		feed_params.is_show_past_events = is_show_past_events;
 
-		var right_buttons;
-		var custom_buttons = null;
-		right_buttons = view_list.includes( ',' ) ? view_list : '';
+		var custom_buttons = {
+			duration_1_month: {
+				text: __( '1 month', 'reg-man-rc' ),
+				click: function() { me.trigger( 'duration-changed', [ 'duration_1_month' ] ); }
+			},
+			duration_2_months: {
+				text: __( '2 months', 'reg-man-rc' ),
+				click: function() { me.trigger( 'duration-changed', [ 'duration_2_months' ] ); }
+			},
+			duration_3_months: {
+				text: __( '3 months', 'reg-man-rc' ),
+				click: function() { me.trigger( 'duration-changed', [ 'duration_3_months' ] ); }
+			},
+			duration_4_months: {
+				text: __( '4 months', 'reg-man-rc' ),
+				click: function() { me.trigger( 'duration-changed', [ 'duration_4_months' ] ); }
+			},
+			duration_6_months: {
+				text: __( '6 months', 'reg-man-rc' ),
+				click: function() { me.trigger( 'duration-changed', [ 'duration_6_months' ] ); }
+			},
+			duration_12_months: {
+				text: __( '12 months', 'reg-man-rc' ),
+				click: function() { me.trigger( 'duration-changed', [ 'duration_12_months' ] ); }
+			},
+			duration_1_year: {
+				text: __( 'Calendar year', 'reg-man-rc' ),
+				click: function() { me.trigger( 'duration-changed', [ 'duration_1_year'] ); }
+			}
+		};
+		
+		var fc_duration_obj, grid_view_type;
+		// Convert the duration ID into a FullCalendar duration object
+		switch( initial_duration ) {
+
+			case 'duration_1_month':
+			default:
+				fc_duration_obj = { month: 1 };
+				grid_view_type = 'dayGridMonth';
+				break;
+
+			case 'duration_2_months':
+				fc_duration_obj = { months: 2 };
+				grid_view_type = 'multiMonth';
+				break;
+			
+			case 'duration_3_months':
+				fc_duration_obj = { months: 3 };
+				grid_view_type = 'multiMonth';
+				break;
+			
+			case 'duration_4_months':
+				fc_duration_obj = { months: 4 };
+				grid_view_type = 'multiMonth';
+				break;
+			
+			case 'duration_6_months':
+				fc_duration_obj = { months: 6 };
+				grid_view_type = 'multiMonth';
+				break;
+			
+			case 'duration_12_months':
+				fc_duration_obj = { months: 12 };
+				grid_view_type = 'multiMonth';
+				break;
+			
+			case 'duration_1_year':
+				fc_duration_obj = { year: 1 };
+				grid_view_type = 'multiMonth';
+				break;
+			
+		} // endswitch
+		
+		// Add duration buttons on the left if necessary
+		var left_buttons = 'prev,next today';
+		if ( duration_list.includes( ',' ) ) {
+			duration_buttons = duration_list;
+			left_buttons = duration_buttons + ' ' + left_buttons;
+		} // endif
+		
+		var view_buttons;
+		view_buttons = view_list.includes( ',' ) ? view_list : '';
 		
 		var calendar_args = {
 				initialView: initial_view,
+				initialDate: localStorage.getItem( 'fullcalendar_initial_date_' + calendar_id ),
 				locale: lang,
 				firstDay: week_start,
 				navLinks: false, // when true allows user to click on a day link and switch to day view
 //				aspectRatio: 1.5,
 				height: '80vh',
 				headerToolbar: {
-					left: 'prev,next', // prev,next,today
+					left: left_buttons,
 					center: 'title',
-					right: right_buttons
+					right: view_buttons
 				},
 				stickyHeaderDates: false, // Don't use sticky headers because it's not working right now
 				loading :	function( is_loading ) {
 					container.trigger( 'set-calendar-is-loading', is_loading );
 					// When we're done loading, I need to reset the flag for proper scrolling on list view
 					if ( ! is_loading ) {
-						me.find( '.fc-listMonth-view .fc-scroller' ).data( 'reg-man-rc-is-scrolled', false );
+						me.find( '.fc-list_view-view .fc-scroller' ).data( 'reg-man-rc-is-scrolled', false );
 					} // endif
+				},
+				datesSet: function( date_info ) {
+					// Called whenever the date is changed, save in local storage
+					var curr_date = new Date( date_info.view.currentStart );
+					localStorage.setItem( 'fullcalendar_initial_date_' + calendar_id, curr_date.toISOString() );
 				},
 				customButtons: custom_buttons,
 				views: {
-					dayGridMonth: {
+					grid_view: {
+						type: grid_view_type, // dayGridMonth or multiMonth depending on current duration setting
+						duration : fc_duration_obj,
 						buttonText: __( 'Calendar', 'reg-man-rc' )
 					},
-					listMonth: {
+					list_view: {
+						type: 'list',
+						duration : fc_duration_obj,
 						buttonText: __( 'List', 'reg-man-rc' )
 					},
-					custom_map_view: {
+					map_view: {
 						classNames: [ 'custom-map-view' ],
-						duration :	{ months: 1 },
+						duration : fc_duration_obj,
 						content: function( props ) {
 							// props contains currentRange and activeRange but I can't see any difference
 							var active_start_date = props.dateProfile.activeRange.start;
@@ -111,13 +223,7 @@ jQuery( document ).ready( function( $ ) {
 				},
 				viewDidMount: function( arg ) {
 					var view = arg.view;
-					
-					// Set a cookie when the view is changed
-					const date = new Date();
-					date.setTime( date.getTime() + ( 365 * 24 * 60 * 60 * 1000 ) );
-					let expires = "expires="+ date.toUTCString();
-					document.cookie = 'reg-man-rc-calendar-view' + "=" + view.type + ";" + expires + ";samesite=Lax";
-				
+					localStorage.setItem( 'fullcalendar_initial_view_' + calendar_id, view.type );
 				},
 				eventDidMount: function( calendar_entry ) {
 					var element = $( calendar_entry.el );
@@ -135,7 +241,7 @@ jQuery( document ).ready( function( $ ) {
 							});
 						}
 					});
-					if ( calendar_entry.view.type == 'listMonth' ) {
+					if ( calendar_entry.view.type == 'list_view' ) {
 						// I want to scroll the list view to today or first day in the future
 						// Note that this event occurs AFTER ALL the events are inserted into the DOM
 						// Also note that I rely on the loading event to unset my flag
@@ -165,9 +271,29 @@ jQuery( document ).ready( function( $ ) {
 		calendar.render();
 		me.data( 'calendar-obj', calendar );
 		container.find( '.reg-man-rc-calendar-legend' ).show(); // make sure to draw the legend
+		me.trigger( 'highlight-duration-button' );
 	});
 
-	$( '.reg-man-rc-calendar-view' ).trigger( 'initialize' );
+	$( '.reg-man-rc-calendar-view' ).trigger( 'initialize-calendar' );
+	
+	$( '.reg-man-rc-calendar-view' ).on( 'duration-changed', function( evt, duration ) {
+		var me = $( this );
+		var calendar_id = typeof me.data( 'calendar-id' ) !== 'undefined' ? me.data( 'calendar-id' ) : 'no-id'; // Defensive
+//		console.log( duration );
+		var calendar = me.data( 'calendar-obj' );
+		calendar.destroy();
+		
+		// Set a cookie when the duration is changed
+//		const date = new Date();
+//		date.setTime( date.getTime() + ( 365 * 24 * 60 * 60 * 1000 ) );
+//		let expires = "expires="+ date.toUTCString();
+//		document.cookie = 'reg-man-rc-calendar-duration' + "=" + duration + ";" + expires + ";samesite=Lax";
+
+//		me.data( 'initial-duration', duration );
+		localStorage.setItem( 'fullcalendar_initial_duration_' + calendar_id, duration );
+
+		me.trigger( 'initialize-calendar' );
+	});
 
 	$( '.reg-man-rc-calendar-view' ).on( 'refresh-calendar', function( evt ) {
 		var me = $( this );

@@ -1,10 +1,6 @@
 <?php
 namespace Reg_Man_RC\Control;
 
-use Reg_Man_RC\Model\Item;
-use Reg_Man_RC\Model\Error_Log;
-use Reg_Man_RC\Model\Volunteer_Registration;
-use Reg_Man_RC\Model\Volunteer;
 
 /**
  * The user role controller

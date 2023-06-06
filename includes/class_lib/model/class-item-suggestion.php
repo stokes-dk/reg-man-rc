@@ -188,7 +188,7 @@ class Item_Suggestion {
 	 *
 	 * @param	string				$item_desc		The description for the new item suggestion, e.g. "Blender"
 	 * @param	string|string[]		$alt_desc		A string or array of strings containing the alternate descriptions for the suggestion, e.g. [ 'Osterizer', 'Magic bullet' ]
-	 * @param	Item_Typoe			$item_type		The item type for the item suggestion
+	 * @param	Item_Type			$item_type		The item type for the item suggestion
 	 * @param	Fixer_Station		$fixer_station	The fixer station for item suggestion
 	 * @return	Item_Suggestion|NULL
 	 */
@@ -444,17 +444,13 @@ class Item_Suggestion {
 				'exclude_from_search'	=> TRUE, // exclude from regular search results?
 				'publicly_queryable'	=> FALSE, // is it queryable? e.g. ?post_type=item
 				'show_ui'				=> TRUE, // is there a default UI for managing these in wp-admin?
-				'show_in_rest'			=> TRUE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
+				'show_in_rest'			=> FALSE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
 				'show_in_nav_menus'		=> FALSE, // available for selection in navigation menus?
 				'show_in_menu'			=> Admin_Menu_Page::get_CPT_show_in_menu( $capability_plural ), // Where to show in admin menu? The main menu page will determine this
 				'show_in_admin_bar'		=> FALSE, // Whether to include this post type in the admin bar
 				'menu_position'			=> 5, // Menu order position.
 				'menu_icon'				=> 'dashicons-lightbulb',
 				'hierarchical'			=> FALSE, // Can each post have a parent?
-/**
- * supports options are	'title', 'editor' (post content), 'author', 'thumbnail', 'excerpt', 'trackbacks',
- *							'custom-fields', 'comments', 'revisions', 'page-attributes', 'post-formats'
- */
 				'supports'				=> array( 'title' ),
 				'taxonomies'			=> array(
 												Item_Type::TAXONOMY_NAME,

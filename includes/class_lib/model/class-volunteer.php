@@ -29,7 +29,7 @@ class Volunteer {
 
 	// An access key can be used to identify a volunteer for things like getting their events feed
 	// The key is generated and stored in postmeta so that we can use it to retrieve a volunteer from the db
-	const ACCESS_KEY_META_KEY				= self::POST_TYPE . '-access-key';
+//	const ACCESS_KEY_META_KEY				= self::POST_TYPE . '-access-key';
 
 	// We use a side table to store personal info about the volunteer include full name and email
 	const VOLUNTEER_SIDE_TABLE_NAME		= 'reg_man_rc_volunteer';
@@ -44,7 +44,8 @@ class Volunteer {
 	private $public_name; // The name used for the volunteer when shown in public places, e.g. "Dave S"
 	private $full_name; // The volunteer's full name, e.g. "Dave Stokes"
 	private $email; // Optional, the volunteer's email address
-	private $access_key; // An identifier that can be used to access this volunteer, e.g. to get their events feed
+	private $wp_user; // Optional, the registered user associated with this volunteer
+//	private $access_key; // An identifier that can be used to access this volunteer, e.g. to get their events feed
 	private $has_public_profile; // A flag indicating whether this volunteer has a public profile page
 	private $preferred_roles; // An array of Volunteer_Role objects indicating which roles this volunteer prefers
 	private $preferred_fixer_station; // A Fixer_Station object indicating which station this fixer prefers
@@ -125,9 +126,10 @@ class Volunteer {
 		if ( ! isset( self::$CURRENT_VOLUNTEER ) ) {
 			// Get the email from the cookie
 			$volunteer_email = self::get_volunteer_email_cookie();
+			
 			if ( ! empty( $volunteer_email ) ) {
 				// Get the volunteer from the email
-				$is_login_required = self::get_is_login_required_for_email( $volunteer_email );
+				$is_login_required = self::get_is_exist_registered_user_for_email( $volunteer_email );
 				if ( $is_login_required ) {
 					// If this volunteer requires a login then make sure they are logged in
 					if ( is_user_logged_in() ) {
@@ -219,11 +221,6 @@ class Volunteer {
 	/**
 	 * Get a volunteer record by their email address
 	 * @param	string		$email			The email address of the volunteer to be retrieved
-	 * @param	boolean		$is_store_email TRUE if the email address should be stored in the resulting object.
-	 *  The result does not contain private information like the email address unless the current logged-in WP user has authority to view it.
-	 *  However, under certain circumstances, like logging in to the volunteer area, the user may have already
-	 *  supplied the email address and it is convenient to just store it in the volunteer object.
-	 *  T
 	 * @return	Volunteer|NULL	The volunteer with the specified email address, or NULL if the record is not found
 	 * @since 	v0.1.0
 	 */
@@ -245,13 +242,39 @@ class Volunteer {
 		return $result;
 	} // function
 
-
+	/**
+	 * Get a volunteer record by their full name
+	 * @param	string		$full_name		The full name of the volunteer to be retrieved
+	 * @return	Volunteer|NULL	The volunteer with the specified full name,
+	 *  or NULL if the volunteer is not found
+	 * @since 	v0.1.0
+	 */
+	public static function get_volunteer_by_full_name( $full_name ) {
+		global $wpdb;
+		$full_name = trim( $full_name );
+		if ( empty( $full_name ) ) {
+			$result = NULL;
+		} else {
+			// I will look in the side table for the specified email then use the post id to create the Volunteer object
+			$table = $wpdb->prefix . self::VOLUNTEER_SIDE_TABLE_NAME;
+			$query = "SELECT post_id FROM $table WHERE full_name=%s AND full_name IS NOT NULL AND full_name != ''";
+			//	Error_Log::var_dump( $query, $email );
+			$stmt = $wpdb->prepare( $query, $full_name );
+			$data = $wpdb->get_row( $stmt, OBJECT );
+			$post_id = isset( $data ) ? $data->post_id : NULL;
+			$result = self::get_volunteer_by_id( $post_id );
+		} // endif
+		return $result;
+	} // function
+	
+	
 	/**
 	 * Get the volunteer whose access key is the one specified.
 	 *
 	 * @param	int|string	$access_key		The access key of the volunteer who acts as proxy
 	 * @return	Volunteer	The volunteers whose access key was specified
 	 */
+/* FIXME - NOT USED
 	private static function get_volunteer_by_access_key( $access_key ) {
 		$result = array();
 		$statuses = self::get_visible_statuses();
@@ -282,7 +305,7 @@ class Volunteer {
 		return $result;
 
 	} // function
-
+*/
 
 
 	/**
@@ -478,12 +501,29 @@ class Volunteer {
 	} // function
 
 	/**
+	 * Get the WP_User object for this volunteer. 
+	 * If the caller does not have the capability to read private Volunteer records then this will return NULL.
+	 * If there is no associated user for this volunteer then this will return FALSE.
+	 * @return \WP_User|NULL|FALSE
+	 */
+	public function get_wp_user() {
+		if ( ! isset( $this->wp_user ) ) {
+			$capability = 'read_private_' . User_Role_Controller::VOLUNTEER_CAPABILITY_TYPE_PLURAL;
+			if ( is_admin() && current_user_can( $capability ) && ! empty( $this->email ) ) {
+				$this->wp_user = get_user_by( 'email', $this->email );
+			} // endif
+		} // endif
+		return $this->wp_user;
+	} // function
+
+	/**
 	 * Get the access key for the volunteer
 	 * @return	string		The access key for this volunteer.
 	 * The access key uniquely identifies a volunteer in a way that is hard to guess and does not openly expose
 	 *  the volunteer's email address.
 	 * @since	v0.1.0
 	 */
+/* FIXME - not currently used but could be useful for creating an events feed for a volunteer
 	public function get_access_key() {
 		if ( ! isset( $this->access_key ) ) {
 			$val = get_post_meta( $this->get_post_id(), self::ACCESS_KEY_META_KEY, $single = TRUE );
@@ -496,11 +536,12 @@ class Volunteer {
 		} // endif
 		return $this->access_key;
 	} // function
-
+*/
 
 	/**
-	 * Get a flag indicating whether the volunteer with the specified email address requires a login with password
-	 *  to access the volunteer area.
+	 * Get a flag indicating whether the volunteer with the specified email has a corresponding 
+	 *  registered user ID and password.
+	 * If so, the password is required to access the volunteer area.
 	 * The result is TRUE when there is a WP user with the same email address otherwise FALSE.
 	 * Note that this is not an instance method because the volunteer's email is not always available inside the instance,
 	 *  for example when there is not logged in user or the user does not have sufficient admin authority.
@@ -508,7 +549,7 @@ class Volunteer {
 	 * @return	boolean			A flag set to TRUE when the volunteer must provide a password to acces the volunteer area, FALSE otherwise
 	 * @since	v0.1.0
 	 */
-	public static function get_is_login_required_for_email( $email ) {
+	public static function get_is_exist_registered_user_for_email( $email ) {
 		$wp_user = ! empty( $email ) ? get_user_by( 'email', $email ) : FALSE;
 		$result = ! empty( $wp_user );
 		return $result;
@@ -554,23 +595,27 @@ class Volunteer {
 
 	private function get_partially_obscured_email() {
 		$email = $this->email;
-		$parts = explode( '@', $email, 2 );
-		$name = $parts[0];
-		$domain = isset( $parts[1] ) ? '@' . $parts[1]  : '';
-
-		$name_len = strlen( $name );
-		if ( $name_len == 0 ) {
-		    $masked_name = '';
-		} elseif ( $name_len == 1 ) {
-		    $masked_name = '*';
-		} elseif ( $name_len == 2 ) {
-		    $masked_name = substr( $name, 0, 1 ) . '*';
+		if ( empty( $email ) ) {
+			$result = '';
 		} else {
-		    $len  = ceil( $name_len / 2 ) - 1;
-		    $masked_name = substr( $name, 0, $len ) . str_repeat( '*', $name_len - $len - 1 ) . substr( $name, $name_len - 1, 1 );
+			$parts = explode( '@', $email, 2 );
+			$name = $parts[0];
+			$domain = isset( $parts[1] ) ? '@' . $parts[1]  : '';
+	
+			$name_len = strlen( $name );
+			if ( $name_len == 0 ) {
+				$masked_name = '';
+			} elseif ( $name_len == 1 ) {
+				$masked_name = '*';
+			} elseif ( $name_len == 2 ) {
+				$masked_name = substr( $name, 0, 1 ) . '*';
+			} else {
+				$len  = ceil( $name_len / 2 ) - 1;
+				$masked_name = substr( $name, 0, $len ) . str_repeat( '*', $name_len - $len - 1 ) . substr( $name, $name_len - 1, 1 );
+			} // endif
+	
+			$result =  $masked_name . $domain;
 		} // endif
-
-		$result =  $masked_name . $domain;
 
 		return $result;
 	} // function
@@ -805,7 +850,7 @@ class Volunteer {
 				'menu_name'				=> __( 'Fixers & Volunteers', 'reg-man-rc' )
 		);
 
-		$icon = 'dashicons-groups';
+		$icon = 'dashicons-admin-users';
 		$capability_singular = User_Role_Controller::VOLUNTEER_CAPABILITY_TYPE_SINGULAR;
 		$capability_plural = User_Role_Controller::VOLUNTEER_CAPABILITY_TYPE_PLURAL;
 		$args = array(
@@ -815,6 +860,8 @@ class Volunteer {
 				'exclude_from_search'	=> TRUE, // exclude from regular search results?
 				'publicly_queryable'	=> TRUE, // is it queryable? e.g. ?post_type=item
 				'show_ui'				=> TRUE, // is there a default UI for managing these in wp-admin?
+				// Note that only public volunteer records will show up in the REST API, and never any personal data
+				// But some people may want to publish volunteer profiles and use the Block Editor
 				'show_in_rest'			=> TRUE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
 				'show_in_nav_menus'		=> TRUE, // available for selection in navigation menus?
 				'show_in_menu'			=> Admin_Menu_Page::get_CPT_show_in_menu( $capability_plural ), // Where to show in admin menu? The main menu page will determine this
