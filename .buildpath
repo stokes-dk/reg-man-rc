@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <buildpath>
-	<buildpathentry external="true" kind="lib" path="/Applications/XAMPP/xamppfiles/htdocs/rc_reg_dev/wp-includes"/>
 	<buildpathentry kind="src" path=""/>
 	<buildpathentry kind="con" path="org.eclipse.php.core.LANGUAGE"/>
+	<buildpathentry external="true" kind="lib" path="/Applications/XAMPP/xamppfiles/htdocs/rc_reg_dev/wp-includes"/>
+	<buildpathentry external="true" kind="lib" path="/Applications/XAMPP/xamppfiles/htdocs/rc_reg_dev/wp-admin"/>
 </buildpath>

@@ -1,6 +1,8 @@
 <?php
 namespace Reg_Man_RC\Model\Stats;
 
+use Reg_Man_RC\Model\Events_Collection;
+
 /**
  * An instance of this class represents stats about how many volunteers of a particular group attended an event or events.
  * This class is used to represent fixer and non-fixer volunteers.
@@ -18,12 +20,12 @@ class Volunteer_Stats {
 
 	/**
 	 * Get the Volunteer_Stats object for the total of all fixers for the events specified
-	 * @param string[] $event_keys_array
+	 * @param Events_Collection $events_collection
 	 * @return Volunteer_Stats
 	 */
-	public static function get_total_fixer_stats_for_event_keys_array( $event_keys_array ) {
+	public static function get_total_fixer_stats_for_events_collection( $events_collection ) {
 		$group_by = Volunteer_Stats_Collection::GROUP_BY_TOTAL_FIXERS;
-		$stats_collection = Volunteer_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
+		$stats_collection = Volunteer_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
 		$stats_array = array_values( $stats_collection->get_all_stats_array() );
 		$result = isset( $stats_array[ 0 ] ) ? $stats_array[ 0 ] : self::create( '', 0, 0 ); // Defensive
 		return $result;
@@ -31,12 +33,12 @@ class Volunteer_Stats {
 
 	/**
 	 * Get the Volunteer_Stats object for the total of all fixers for the events specified
-	 * @param string[] $event_keys_array
+	 * @param Events_Collection $events_collection
 	 * @return Volunteer_Stats
 	 */
-	public static function get_total_non_fixer_stats_for_event_keys_array( $event_keys_array ) {
+	public static function get_total_non_fixer_stats_for_events_collection( $events_collection ) {
 		$group_by = Volunteer_Stats_Collection::GROUP_BY_TOTAL_NON_FIXERS;
-		$stats_collection = Volunteer_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
+		$stats_collection = Volunteer_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
 		$stats_array = array_values( $stats_collection->get_all_stats_array() );
 		$result = isset( $stats_array[ 0 ] ) ? $stats_array[ 0 ] : self::create( '', 0, 0 ); // Defensive
 		return $result;

@@ -4,6 +4,10 @@ namespace Reg_Man_RC\View\Admin;
 use Reg_Man_RC\Control\Admin\Table_View_Admin_Controller;
 use Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor;
 use Reg_Man_RC\Model\Event;
+use Reg_Man_RC\Model\Stats\Item_Stats_Collection;
+use Reg_Man_RC\Model\Stats\Volunteer_Stats_Collection;
+use Reg_Man_RC\Control\User_Role_Controller;
+use Reg_Man_RC\Model\Volunteer_Registration;
 
 /**
  * The administrative view for an item stats table
@@ -13,66 +17,180 @@ use Reg_Man_RC\Model\Event;
  */
 class Volunteer_Registration_Admin_Table_View {
 
-	private $is_event_column_hidden = FALSE;
-
+	private $single_event; // The event object when showing data for a single event
+	private $group_by;
+	
 	private function __construct() { }
 
-	public static function create() {
+	/**
+	 * Create an instance of this class
+	 * @param	Event	$single_event
+	 * @return Items_Admin_Table_View
+	 */
+	public static function create( $single_event = NULL ) {
 		$result = new self();
+		if ( ! empty( $single_event ) && $single_event instanceof Event ) {
+			$result->single_event = $single_event;
+			$result->group_by = 'fixer-station';
+		} else {
+			$result->group_by = '';
+		} // endif
 		return $result;
-	} // function
-
-	private function get_is_event_column_hidden() {
-		return $this->is_event_column_hidden;
 	} // function
 	
 	/**
-	 * Set a flag to indicate whether the event column should be hidden
-	 * @param boolean $is_event_column_hidden
+	 * Get the Event object when this table is showing data for a single event
+	 * @return Event
 	 */
-	public function set_is_event_column_hidden( $is_event_column_hidden ) {
-		$this->is_event_column_hidden = boolval( $is_event_column_hidden );
+	private function get_single_event() {
+		return $this->single_event;
+	} // function
+	
+	private function get_single_event_key() {
+		$single_event = $this->get_single_event();
+		return ! empty( $single_event ) ? $single_event->get_key_string() : '';
+	} // function
+	
+	private function get_is_event_column_hidden() {
+		return ! empty( $this->get_single_event() );
+	} // function
+	
+	private function get_print_page_title() {
+		$event = $this->get_single_event();
+		if ( ! empty( $event ) ) {
+			$label = $event->get_label();
+			/* Translators: %1$s is a label for an event used in the title of a page */
+			$result = __( sprintf( 'Volunteers - %1$s', $label ), 'reg-man-rc' );
+		} else {
+			$result = __( 'Volunteers', 'reg-man-rc' );
+		} // endif
+		return $result;
 	} // function
 
+	private function get_export_file_name() {
+		$event = $this->get_single_event();
+		if ( ! empty( $event ) ) {
+			$label = $event->get_label();
+			/* Translators: %1$s is a label for an event used in the title of a page */
+			$result = __( sprintf( 'Volunteers - %1$s', $label ), 'reg-man-rc' );
+		} else {
+			$result = __( 'Volunteers', 'reg-man-rc' );
+		} // endif
+		$result = sanitize_file_name( $result );
+		return $result;
+	} // function
+
+	/**
+	 * Render this view
+	 */
 	public function render() {
-		// Name (email) | Event | ISO 8601 Date | Fixer Station (apprentice) | Volunteer Roles | Comments | Attendance | Source
+		$single_event = $this->get_single_event();
 		$event_col_class = $this->get_is_event_column_hidden() ? 'col-hidden' : '';
+		// Name | email | Event | ISO 8601 Date | Fixer Station (apprentice) | Volunteer Roles | Comments | Attendance | Source
 		$rowFormat =
 			'<tr>' .
-				'<%1$s class="volunteer-name">%2$s</%1$s>' .
-				'<%1$s class="event-date-text ' . $event_col_class . '">%3$s</%1$s>' . // This column will be sorted by the next col's data
-				'<%1$s class="event-date-iso-8601 col-hidden always-hidden not-searchable">%4$s</%1$s>' . // Must be after date
-				'<%1$s class="fixer-station">%5$s</%1$s>' .
-				'<%1$s class="volunteer-roles">%6$s</%1$s>' .
-				'<%1$s class="volunteer-comments">%7$s</%1$s>' .
-				'<%1$s class="volunteer-attendance">%8$s</%1$s>' .
-				'<%1$s class="volunteer-source">%9$s</%1$s>' .
+				'<%1$s class="volunteer-display-name">%2$s</%1$s>' .
+				'<%1$s class="volunteer-email col-hidden">%3$s</%1$s>' .
+				'<%1$s class="event-date-text ' . $event_col_class . '">%4$s</%1$s>' . // This column will be sorted by the next col's data
+				'<%1$s class="event-date-iso-8601 col-hidden always-hidden not-searchable">%5$s</%1$s>' . // Must be after date
+				'<%1$s class="fixer-station">%6$s</%1$s>' .
+				'<%1$s class="volunteer-roles">%7$s</%1$s>' .
+				'<%1$s class="volunteer-comments">%8$s</%1$s>' .
+				'<%1$s class="volunteer-attendance col-hidden">%9$s</%1$s>' .
+				'<%1$s class="volunteer-source">%10$s</%1$s>' .
 			'</tr>';
 		$ajax_url = esc_url( admin_url( 'admin-ajax.php' ) );
 		$ajax_action = Table_View_Admin_Controller::AJAX_GET_DATA_ACTION;
+		$ajax_nonce = wp_create_nonce( $ajax_action );
 		$object_type = Table_View_Admin_Controller::TABLE_TYPE_VOLUNTEER_REGISTRATIONS;
+		$group_by = $this->group_by;
 		$dom_setting = '';
-
+		$print_page_title = $this->get_print_page_title();
+		$export_file_name = $this->get_export_file_name();
+		
 		$title = __( 'Fixer / Volunteer Registrations', 'reg-man-rc' );
 
-		echo '<div class="reg-man-rc-stats-table-view vol-reg-table event-filter-change-listener">';
+		$group_by_title = __( 'Group by', 'reg-man-rc' );
+		
+		echo '<div class="reg-man-rc-stats-table-view vol-reg-table row-grouping-table-view event-filter-change-listener">';
 			echo '<div class="reg-man-rc-table-loading-indicator spinner"></div>';
 			echo '<div class="heading-container">';
 				echo "<h4>$title</h4>";
+				echo '<div class="toolbar-container">';
+					echo "<label><span>$group_by_title</span>";
+						echo '<select class="group-by-select" autocomplete="off">';
+						
+							$option_format = '<option value="%2$s" %3$s data-order-by-column="%4$s">%1$s</option>';
+						
+							if ( empty( $single_event ) ) {
+								
+								// It's NOT a single event, so allow grouping by event
+								$group_col_class = 'event-date-text';
+								$order_col_class = 'event-date-iso-8601';
+								$sel = selected( $group_by, $group_col_class, FALSE );
+								$title = __( 'Event', 'reg-man-rc' );
+								printf( $option_format, $title, $group_col_class, $sel, $order_col_class );
+								
+							} // endif
+
+							$group_col_class = 'fixer-station';
+							$order_col_class = $group_col_class;
+							$sel = selected( $group_by, $group_col_class, FALSE );
+							$title = __( 'Fixer Station', 'reg-man-rc' );
+							printf( $option_format, $title, $group_col_class, $sel, $order_col_class );
+
+							$group_col_class = 'volunteer-roles';
+							$order_col_class = $group_col_class;
+							$sel = selected( $group_by, $group_col_class, FALSE );
+							$title = __( 'Volunteer Role', 'reg-man-rc' );
+							printf( $option_format, $title, $group_col_class, $sel, $order_col_class );
+							
+							$group_col_class = '';
+							$order_col_class = $group_col_class;
+							$sel = selected( $group_by, $group_col_class, FALSE );
+							$title = __( '[None]', 'reg-man-rc' );
+							printf( $option_format, $title, $group_col_class, $sel, $order_col_class );
+							
+						echo '</select>';
+					echo '</label>';
+				echo '</div>';
+				
 			echo '</div>';
 
 			echo '<div class="datatable-container admin-stats-table-container">';
+			
+				$data_array = array();
+				$data_array[] = "data-ajax-url=\"$ajax_url\"";
+				$data_array[] = "data-ajax-action=\"$ajax_action\"";
+				$data_array[] = "data-ajax-nonce=\"$ajax_nonce\"";
+				$data_array[] = "data-table-type=\"$object_type\"";
+				if ( ! empty( $single_event ) ) {
+					$single_event_key = $this->get_single_event_key();
+					$data_array[] = "data-event-key=\"$single_event_key\"";
+					$data_array[] = 'data-supplemental-data-button-class="supplemental-volunteers-button"';
+					// Add Emails button if the current user has the authority
+					if ( $single_event->get_is_current_user_able_to_view_registered_volunteer_emails() ) {
+						$data_array[] = 'data-email-list-button-class="volunteer-reg-email-list-button"';
+					} // endif
+				} // endif
+				$data_array[] = "data-print-page-title=\"$print_page_title\"";
+				$data_array[] = "data-export-file-name=\"$export_file_name\"";
+				$data_array[] = "data-scope=\"\"";
+				$data_array[] = "data-dom-setting=\"$dom_setting\"";
+				$data_array[] = "data-row-group-column-class-name=\"$group_by\"";
+				
+				$data = implode( ' ', $data_array );
+				
 				// Using inline style width 100% allows Datatables to calculate the proper width, css doesn't work
-				echo '<table class="datatable admin-stats-table vol-reg-admin-table" style="width:100%"' .
-					" data-ajax-url=\"$ajax_url\" data-ajax-action=\"$ajax_action\" " .
-					" data-table-type=\"$object_type\" data-group-by=\"\" " .
-					" data-scope=\"\"" .
-					" data-dom-setting=\"$dom_setting\">";
+				echo "<table class=\"datatable admin-stats-table vol-reg-admin-table\" style=\"width:100%\" $data>";
 				echo '<thead>';
 
+		// Name | email | Event | ISO 8601 Date | Fixer Station (apprentice) | Volunteer Roles | Comments | Attendance | Source
+				
 				printf( $rowFormat,
 								'th',
-								esc_html__( 'Volunteer Name (email)',			'reg-man-rc' ),
+								esc_html__( 'Name',								'reg-man-rc' ),
+								esc_html__( 'Email',							'reg-man-rc' ),
 								esc_html__( 'Event',							'reg-man-rc' ),
 								esc_html__( 'Numeric Event Date & Time',		'reg-man-rc' ), // Will be hidden
 								esc_html__( 'Fixer Station',					'reg-man-rc' ),
@@ -87,8 +205,55 @@ class Volunteer_Registration_Admin_Table_View {
 				echo '</table>';
 			echo '</div>';
 		echo '</div>';
+		
+		// Render my email list dialog
+		$this->render_volunteer_emails_dialog();
+		
 	} // function
 
+	
+	/**
+	 * Render the dialog for volunteer emails
+	 * @param Event $event
+	 */
+	private function render_volunteer_emails_dialog() {
+		$single_event = $this->get_single_event();
+		if ( ! empty( $single_event ) && $single_event->get_is_current_user_able_to_view_registered_volunteer_emails() ) {
+			$title = __( 'Registered Volunteers Email Address List', 'reg-man-rc' );
+	
+			$emails_array = $single_event->get_registered_volunteer_emails();
+			echo "<div class=\"email-list-dialog volunteer-reg-email-list-dialog dialog-container\" title=\"$title\">";
+			
+			if ( empty( $emails_array ) ) {
+				
+				$msg = __( 'No volunteers are registered for this event', 'reg-man-rc' );
+				echo '<p>';
+					echo $msg;
+				echo '</p>';
+				
+			} else {
+
+				$msg = __( 'For the privacy of our volunteers please remember to <b>blind copy</b> these email addresses in your note', 'reg-man-rc' );
+				echo '<p>';
+					echo $msg;
+				echo '</p>';
+				
+				// I think the comma separator for email addresses is universal and should not be translated
+				$list = implode( ', ', $emails_array );
+				
+				echo '<p class="reg-man-rc-email-list">';
+					echo $list;
+				echo '</p>';
+				
+			} // endif
+			
+			echo '</div>';
+
+		} // endif
+	} // function
+	
+	
+	
 	/**
 	 * Get the table data array for the specified array of Volunteer_Registration_Descriptor objects
 	 *
@@ -102,22 +267,14 @@ class Volunteer_Registration_Admin_Table_View {
 		$em_dash = __( '—', 'reg-man-rc' ); // an em-dash is used by Wordpress for empty fields
 		$source_unknown_text = __( '[source not specified]', 'reg-man-rc' );
 		$events[] = array(); // There will be a huge amount of duplication in the events so just save the ones I find
-// Name (email) | Event | Fixer Station (apprentice) | Volunteer Roles | Attendance | Source | ISO 8601 Date
-		foreach( $vol_reg_desc_array as $vol_reg_desc ) {
-			$name = $vol_reg_desc->get_volunteer_full_name();
-			$email = $vol_reg_desc->get_volunteer_email();
-			if ( ! empty( $email ) ) {
-				/* Translators: %1$s is a person's name, %2$s is their email address */
-				$name_text = sprintf( __( '%1$s (%2$s)', 'reg-man-rc' ), $name, $email );
-			} else {
-				if ( ! empty( $name ) ) {
-					$name_text = $name;
-				} else {
-					$name_text = $em_dash;
-				} // endif
-			} // endif
 
-			$event_key = $vol_reg_desc->get_event_key();
+		foreach( $vol_reg_desc_array as $vol_reg_desc ) {
+			$name = $vol_reg_desc->get_volunteer_display_name();
+			$name_text = ! empty( $name ) ? $name : $em_dash;
+			$email = $vol_reg_desc->get_volunteer_email();
+			$email_text = ! empty( $email ) ? $email : $em_dash;
+
+			$event_key = $vol_reg_desc->get_event_key_string();
 			$event_text = $event_key; // As a last resort we'll just show the key
 			$event_date_iso_8601 = '';
 			if ( ! empty( $event_key ) ) {
@@ -168,8 +325,11 @@ class Volunteer_Registration_Admin_Table_View {
 			$source = $vol_reg_desc->get_volunteer_registration_descriptor_source();
 			$source_text = isset( $source ) ? $source : $source_unknown_text;
 
+		// Name | email | Event | ISO 8601 Date | Fixer Station (apprentice) | Volunteer Roles | Comments | Attendance | Source
+			
 			$row = array();
 			$row[] = $name_text;
+			$row[] = $email_text;
 			$row[] = $event_text;
 			$row[] = $event_date_iso_8601;
 			$row[] = $fixer_station_text;

@@ -11,6 +11,7 @@ use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\Control\Admin\Fixer_Station_Admin_Controller;
 use Reg_Man_RC\Model\Item_Suggestion;
 use Reg_Man_RC\View\Form_Input_List;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The administrative view for fixer station
@@ -161,7 +162,7 @@ class Fixer_Station_Admin_View {
 				'</tr>';
 
 			echo '<p>';
-				$label = __( 'The following are typical fixer stations you may choose to create to help get you started quickly', 'reg-man-rc' );
+				$label = __( 'The following are typical fixer stations', 'reg-man-rc' );
 				echo '<b>' . esc_html( $label ) . '</b>';
 			echo '</p>';
 
@@ -186,6 +187,7 @@ class Fixer_Station_Admin_View {
 						$name = esc_html( $default[ 'name' ] );
 						$desc = esc_html( $default[ 'description' ] );
 						$colour = $default[ 'colour' ];
+						// TODO: Do I need to support multiple icons here???
 						$icon_input_name = "icon_id[$index]";
 						$icon_attach_id = $default[ 'icon_id' ];
 						$icon_url = isset( $icon_attach_id ) ? wp_get_attachment_image_url( $icon_attach_id ) : NULL;
@@ -228,6 +230,45 @@ class Fixer_Station_Admin_View {
 	} // function
 
 	/**
+	 * Render the icon input field for the fixer station
+	 * @param	Fixer_Station		$fixer_station	The fixer station whose input field is being rendered or NULL if no station.
+	 */
+	private static function render_icon_input_field( $input_name, $attach_id = NULL, $img_url = NULL ) {
+		echo '<div class="media-library-select-container fixer-station-icon">';
+
+			$img = isset( $img_url ) ? "<img src=\"$img_url\">" : '';
+			echo "<div class=\"media-library-img-container\">$img</div>";
+
+			$value = isset( $attach_id ) ? $attach_id : '';
+
+			$class = 'media-library-attachment-id'; // needed in js to find the input
+			echo "<input type=\"hidden\" class=\"$class\" name=\"$input_name\" value=\"$value\">";
+
+			$button_format = '<button type="button" name="%2$s" id="%3$s" class="%4$s">%1$s</button>';
+/*
+			$button_label = __( 'Select…', 'reg-man-rc' );
+			$input_id = 'fixer-station-icon-select';
+			$input_name = 'fixer-station-icon-select';
+			$classes = 'media-library-launch media-library-select button'; // "button" is for Wordpress styling
+			printf( $button_format, $button_label, $input_name, $input_id, $classes );
+
+			$button_label = __( 'Change…', 'reg-man-rc' );
+			$input_id = 'fixer-station-icon-change';
+			$input_name = 'fixer-station-icon-change';
+			$classes = 'media-library-launch media-library-change button'; // "button" is for Wordpress styling
+			printf( $button_format, $button_label, $input_name, $input_id, $classes );
+
+			$button_label = __( 'Remove', 'reg-man-rc' );
+			$input_id = 'fixer-station-icon-remove';
+			$input_name = 'fixer-station-icon-remove';
+			$classes = 'media-library-remove button'; // "button" is for Wordpress styling
+			printf( $button_format, $button_label, $input_name, $input_id, $classes );
+*/
+		echo '</div>';
+	} // function
+
+	
+	/**
 	 * Render the metabox for the specified post
 	 * @param \WP_Post $post
 	 */
@@ -249,7 +290,7 @@ class Fixer_Station_Admin_View {
 				break;
 
 			case Internal_Event_Descriptor::POST_TYPE:
-				$event = Internal_Event_Descriptor::get_internal_event_descriptor_by_event_id( $post->ID );
+				$event = Internal_Event_Descriptor::get_internal_event_descriptor_by_id( $post->ID );
 				$selected_id_array = array();
 				$stations = isset( $event ) ? $event->get_event_fixer_station_array() : Fixer_Station::get_all_fixer_stations();
 				foreach ( $stations as $station ) {
@@ -270,7 +311,7 @@ class Fixer_Station_Admin_View {
 			case Volunteer_Registration::POST_TYPE:
 				$reg = Volunteer_Registration::get_registration_by_id( $post->ID );
 				$fixer_station = ( ! empty( $reg ) ) ? $reg->get_fixer_station() : NULL;
-				$selected = ( !empty( $fixer_station ) ) ? $fixer_station->get_id() : NULL;
+				$selected = ( ! empty( $fixer_station ) ) ? $fixer_station->get_id() : NULL;
 				$is_apprentice = ( ! empty( $reg ) ) ? $reg->get_is_fixer_apprentice() : FALSE;
 				self::render_input_for_volunteer_registration( $selected, $is_apprentice );
 				break;
@@ -278,84 +319,49 @@ class Fixer_Station_Admin_View {
 		} // endswitch
 	} // function
 
-	public function render_input_for_item_type( $selected_id ) {
-		$none_label = __( 'None', 'reg-man-rc' );
-		$none_value = '0';
-		$this->render_radio_buttons( $selected_id, $none_label, $none_value );
-	} // function
-
 	private function render_input_for_item( $selected_id ) {
 		echo '<div class="reg-man-rc-item fixer-station-metabox reg-man-rc-metabox">';
-			$default_name = __( '-- Please Select --', 'reg-man-rc' );
-			$default_value = '-1';
-			$this->render_select( $selected_id, $default_name, $default_value, $is_required = TRUE );
-		echo '</div>';
+			$this->render_radio_buttons( $selected_id );
+			echo '</div>';
 	} // function
 
 	private function render_input_for_item_suggestion( $selected_id ) {
 		echo '<div class="reg-man-rc-item-suggestion fixer-station-metabox reg-man-rc-metabox">';
-			$default_name = __( '-- Please Select --', 'reg-man-rc' );
-			$default_value = '-1';
-			$this->render_select( $selected_id, $default_name, $default_value, $is_required = TRUE );
+			$this->render_radio_buttons( $selected_id );
 		echo '</div>';
 	} // function
 
 	private function render_input_for_volunteer( $selected_id, $is_apprentice ) {
-		// I will use the same inputs here as for a volunteer event registration
-		$this->render_input_for_volunteer_registration( $selected_id, $is_apprentice );
+		$none_label = __( 'None (this volunteer is not a fixer)', 'reg-man-rc' );
+		$this->render_radio_inputs_for_volunteer( $selected_id, $is_apprentice, $none_label );
 	} // function
 
 	private function render_input_for_volunteer_registration( $selected_id, $is_apprentice ) {
 		$none_label = __( 'None (will not fix items at this event)', 'reg-man-rc' );
+		$this->render_radio_inputs_for_volunteer( $selected_id, $is_apprentice, $none_label );
+	} // function
+
+	private function render_radio_inputs_for_volunteer( $selected_id, $is_apprentice, $none_label ) {
+
 		$none_value = '0';
 		$this->render_radio_buttons( $selected_id, $none_label, $none_value );
+		
 		$id = 'reg-man-rc-vol-reg-is-apprentice';
 		$text = __( 'Apprentice Fixer', 'reg-man-rc' );
 		$checked = $is_apprentice ? 'checked="checked"' : '';
+		
 		echo "<div class=\"$id\">"; // I will re-use the same ID as the class for this group
 			echo "<input type=\"checkbox\" id=\"$id\" name=\"is_apprentice\" value=\"TRUE\" $checked>";
 			echo "<label for=\"$id\">$text</label>";
 		echo '</div>';
-	} // function
-
-	private function render_select( $selected_id, $default_name = NULL, $default_value = NULL, $is_required = FALSE ) {
-
-		$stations = Fixer_Station::get_all_fixer_stations();
-		if ( empty( $stations ) ) {
-			$text = __( 'No fixer stations are defined', 'reg-man-rc' );
-			echo "<span>$text</span>";
-
-		} else {
-
-			// We need a flag to distinguish the case where no fixer stations were chosen by the user
-			//  versus the case where no inputs were presented at all like in quick edit mode
-			echo '<input type="hidden" name="fixer_station_selection_flag" value="TRUE">';
-
-			$input_name = esc_attr( self::INPUT_NAME );
-			$input_id = esc_attr( self::INPUT_ID );
-			$required = $is_required ? 'required="required"' : '';
-			echo "<select id=\"$input_id\" name=\"$input_name\" $required>";
-				if ( $default_name !== NULL ) {
-					$selected = selected( NULL, $selected_id, $echo = FALSE );
-					$html_name = esc_html( $default_name );
-					$disabled = $is_required ? 'disabled="disabled"' : '';
-					echo "<option value=\"$default_value\" $disabled $selected>$html_name</option>";
-				} // endif
-				foreach ( $stations as $fixer_station ) {
-					$id = $fixer_station->get_id();
-					$name = $fixer_station->get_name();
-					$html_name = esc_html( $name );
-					$selected = selected( $id, $selected_id, $echo = FALSE );
-					echo "<option value=\"$id\" $selected>$html_name</option>";
-				} // endfor
-			echo '</select>';
-		} // endif
+		
 	} // function
 
 	private function render_radio_buttons( $selected_id, $default_name = NULL, $default_value = NULL  ) {
 
 		$stations = Fixer_Station::get_all_fixer_stations();
 		if ( empty( $stations ) ) {
+			
 			$text = __( 'No fixer stations are defined', 'reg-man-rc' );
 			echo "<span>$text</span>";
 
@@ -366,13 +372,21 @@ class Fixer_Station_Admin_View {
 			echo '<input type="hidden" name="fixer_station_selection_flag" value="TRUE">';
 
 			$input_name = esc_attr( self::INPUT_NAME );
-			$format = '<div><label title="%1$s"><input type="radio" name="' . $input_name . '" value="%2$s" %3$s><span>%4$s</span></label></div>';
+			$format =
+					'<div>' .
+						'<label title="%1$s" class="reg-man-rc-metabox-radio-label">' . 
+							'<input type="radio" name="' . $input_name . '" value="%2$s" %3$s required="required">' . 
+							'<span>%4$s</span>' .
+						'</label>' .
+					'</div>';
+			
 			if ( $default_name !== NULL ) {
 				$html_name = esc_html( $default_name );
 				$attr_name = esc_attr( $default_name );
 				$checked = checked( NULL, $selected_id, $echo = FALSE );
 				printf( $format, $attr_name, $default_value, $checked, $html_name );
 			} // endif
+			
 			foreach ( $stations as $fixer_station ) {
 				$id = $fixer_station->get_id();
 				$name = $fixer_station->get_name();
@@ -381,7 +395,9 @@ class Fixer_Station_Admin_View {
 				$checked = checked( $id, $selected_id, $echo = FALSE );
 				printf( $format, $attr_name, $id, $checked, $html_name );
 			} // endfor
+			
 		} // endif
+		
 	} // function
 
 	private function render_checkboxes_for_event( $selected_id_array, $is_non_repair ) {
@@ -409,7 +425,7 @@ class Fixer_Station_Admin_View {
 					$value = $fixer_station->get_id();
 					$is_checked = in_array( $value, $selected_id_array );
 					$hint = '';
-					$classes = '';
+					$classes = 'reg-man-rc-metabox-radio-label';
 					$is_required = FALSE;
 					$addn_attrs = $is_non_repair ? 'disabled="disabled"' : '';
 					$input_list->add_checkbox_input( $label, $name, $value, $is_checked, $hint, $classes, $is_required, $addn_attrs );
@@ -463,41 +479,57 @@ class Fixer_Station_Admin_View {
 		} // endif
 	} // function
 
+
 	/**
-	 * Render the icon input field for the fixer station
+	 * Render the icon inputs for the fixer station
 	 * @param	Fixer_Station		$fixer_station	The fixer station whose input field is being rendered or NULL if no station.
 	 */
-	private static function render_icon_input_field( $input_name, $attach_id = NULL, $img_url = NULL ) {
-		echo '<div class="media-library-select-container fixer-station-icon">';
+	private static function render_icon_inputs( $fixer_station = NULL ) {
+		
+		echo '<div class="media-library-select-container fixer-station-icons">';
 
-			$img = isset( $img_url ) ? "<img src=\"$img_url\">" : '';
-			echo "<div class=\"media-library-img-container\">$img</div>";
+			$icon_format = '<span class="icon dashicons dashicons-%1$s"></span>';
+			$text_format = '<span class="text">%1$s</span>';
+			/* Translators: %1$s is an icon, %2$s is text */
+			$button_label_format = _x( '%1$s%2$s', 'A button label with an icon and text', 'reg-man-rc' );
+			$button_format =
+			  '<button type="button" name="%2$s" id="%3$s" class="%4$s reg-man-rc-icon-text-container">%1$s</button>';
 
-			$value = isset( $attach_id ) ? $attach_id : '';
-
-			$class = 'media-library-attachment-id'; // needed in js to find the input
-			echo "<input type=\"hidden\" class=\"$class\" name=\"$input_name\" value=\"$value\">";
-
-			$button_format = '<button type="button" name="%2$s" id="%3$s" class="%4$s">%1$s</button>';
-
-			$button_label = __( 'Select…', 'reg-man-rc' );
-			$input_id = 'fixer-station-icon-select';
-			$input_name = 'fixer-station-icon-select';
-			$classes = 'media-library-launch media-library-select button'; // "button" is for Wordpress styling
-			printf( $button_format, $button_label, $input_name, $input_id, $classes );
-
-			$button_label = __( 'Change…', 'reg-man-rc' );
-			$input_id = 'fixer-station-icon-change';
-			$input_name = 'fixer-station-icon-change';
-			$classes = 'media-library-launch media-library-change button'; // "button" is for Wordpress styling
-			printf( $button_format, $button_label, $input_name, $input_id, $classes );
-
-			$button_label = __( 'Remove', 'reg-man-rc' );
+			$button_text = sprintf( $text_format, __( 'Remove', 'reg-man-rc' ) );
+			$icon = sprintf( $icon_format, 'no' );
+			$button_label = sprintf( $button_label_format, $icon, $button_text );
 			$input_id = 'fixer-station-icon-remove';
 			$input_name = 'fixer-station-icon-remove';
 			$classes = 'media-library-remove button'; // "button" is for Wordpress styling
-			printf( $button_format, $button_label, $input_name, $input_id, $classes );
+			$remove_button = sprintf( $button_format, $button_label, $input_name, $input_id, $classes );
 
+			$button_text = sprintf( $text_format, __( 'Add&hellip;', 'reg-man-rc' ) );
+			$icon = sprintf( $icon_format, 'plus-alt' );
+			$button_label = sprintf( $button_label_format, $icon, $button_text );
+			$input_id = 'fixer-station-icon-add';
+			$input_name = 'fixer-station-icon-add';
+			$classes = 'media-library-launch media-library-select button'; // "button" is for Wordpress styling
+			$add_button = sprintf( $button_format, $button_label, $input_name, $input_id, $classes );
+			
+			$item_format =
+				'<li class="%3$s">' .
+					'%1$s' . "$remove_button" .
+					'<input type="hidden" %4$s name="media-library-attachment-id[]" value="%2$s">' . 
+				'</li>';
+			
+			echo '<ul class="fixer-station-icons-list object-view-details-fixer-station-list">';
+				printf( $item_format, '', '', 'media-library-select-container-clone-item', 'disabled="disabled"' );
+				$image_attachment_array = isset( $fixer_station ) ? $fixer_station->get_icon_image_attachment_array() : array();
+				foreach( $image_attachment_array as $image_attachment ) {
+					$id = $image_attachment->get_attachment_id();
+					$img = $image_attachment->get_thumbnail_img_element();
+					printf( $item_format, $img, $id, '', '' );
+				} // endfor
+			echo '</ul>';
+
+			echo $add_button;
+			
+			
 		echo '</div>';
 	} // function
 
@@ -507,8 +539,8 @@ class Fixer_Station_Admin_View {
 		//  for example if an Item type is moved from one fixer station to another.
 		//  Wordpress uses Ajax and only inserts the new row into the table leaving the remaining data incorrect
 
-		$label = __( 'Icon', 'reg-man-rc' );
-		$desc = __( 'Select the icon used to represent this fixer station.', 'reg-man-rc' );
+		$label = __( 'Icons', 'reg-man-rc' );
+		$desc = __( 'Select the icons used to represent this fixer station.', 'reg-man-rc' );
 		echo '<div class="form-field">';
 			echo "<label for=\"\">";
 				echo $label;
@@ -516,8 +548,8 @@ class Fixer_Station_Admin_View {
 			// To distinguish quick edit or user removing the attachment ID I need to
 			//  pass a hidden marker to flag that the icon should be modified
 			echo '<input type="hidden" name="fixer-station-icon-selection" value="TRUE">';
-			$input_name = 'media-library-attachment-id';
-			self::render_icon_input_field( $input_name );
+			self::render_icon_inputs();
+			
 			echo '<p class="description">';
 				echo $desc;
 			echo '</p>';
@@ -540,13 +572,18 @@ class Fixer_Station_Admin_View {
 	} // function
 
 
+	/**
+	 * Render the fields for editing the term
+	 * @param \WP_Term	$term
+	 * @param string	$taxonomy_slug
+	 */
 	public static function render_edit_term_admin_fields( $term, $taxonomy_slug ) {
 
 		$fixer_station = Fixer_Station::get_fixer_station_by_id( $term->term_id );
 
 		// Icon
-		$label = __( 'Icon', 'reg-man-rc' );
-		$desc = __( 'Select the icon used to represent this fixer station.', 'reg-man-rc' );
+		$label = __( 'Icons', 'reg-man-rc' );
+		$desc = __( 'Select the icons used to represent this fixer station.', 'reg-man-rc' );
 		echo '<tr class="form-field term-group-wrap">';
 			echo '<th scope="row">';
 				echo "<label for=\"\">";
@@ -558,11 +595,7 @@ class Fixer_Station_Admin_View {
 			// To distinguish quick edit or user removing the attachment ID I need to
 			//  pass a hidden marker to flag that the icon should be modified
 			echo '<input type="hidden" name="fixer-station-icon-selection" value="TRUE">';
-			$attach_id = isset( $fixer_station ) ? $fixer_station->get_icon_attachment_id() : NULL;
-			$img_url = isset( $fixer_station ) ? $fixer_station->get_icon_url() : NULL;
-			$input_name = 'media-library-attachment-id';
-			self::render_icon_input_field( $input_name, $attach_id, $img_url );
-
+			self::render_icon_inputs( $fixer_station );
 			echo '<p class="description">';
 					echo $desc;
 				echo '</p>';
@@ -589,41 +622,6 @@ class Fixer_Station_Admin_View {
 			echo '</td>';
 		echo '</tr>';
 
-		// Item Types
-/* FIXME - I don't think we need this
-		$types = Item_Type::get_all_item_types();
-		// If there are no item types to choose from then don't display this input
-		if ( !empty( $types ) ) {
-			$selected_item_types = !empty( $fixer_station ) ? $fixer_station->get_item_types_array() : NULL;
-			$selected_id_array = array();
-			foreach ( $selected_item_types as $item_type ) {
-				$selected_id_array[] = $item_type->get_id();
-			} // endfor
-			$label = __( 'Item Types', 'reg-man-rc' );
-			$legend = __( 'Select item types for this fixer station', 'reg-man-rc' );
-			$desc = __( 'Make this the default fixer station for items of these types.', 'reg-man-rc' );
-			echo '<tr class="form-field term-group-wrap">';
-				echo '<th scope="row">';
-					echo '<label for="item-types-input">';
-						echo $label;
-					echo '</label>';
-				echo '</th>';
-				echo '<td>';
-					// I can't update the item types in the quick editor so I have to add a special marker
-					// here to indicate that the item types should be updated during normal editing.
-					// This will be absent during quick editing so in that case the item types won't be modified
-					echo '<input type="hidden" name="update_item_types" value="TRUE">';
-					echo '<fieldset class="reg-man-rc-admin-fieldset" id="item-types-input">';
-						echo "<legend>$legend</legend>";
-						self::render_item_types_select( $types, $selected_id_array );
-					echo '</fieldset>';
-					echo '<p class="description">';
-						echo $desc;
-					echo '</p>';
-				echo '</td>';
-			echo '</div>';
-		} // endif
-*/
 		// External names
 		if ( Settings::get_is_show_external_names() ) {
 			$input_id = 'fixer-station-ext-names-input';
@@ -674,9 +672,8 @@ class Fixer_Station_Admin_View {
 				'cb'						=> $columns['cb'],
 				'name'						=> $columns['name'],
 				'description'				=> $columns['description'],
-				'icon'						=> __( 'Icon', 'reg-man-rc' ),
+				'icons'						=> __( 'Icons', 'reg-man-rc' ),
 				'colour'					=> __( 'Colour', 'reg-man-rc' ),
-//				'item_types'				=> __( 'Item Types', 'reg-man-rc' ),
 				'ext_names'					=> __( 'Alternate Names', 'reg-man-rc' ),
 				'item_count'				=> __( 'Items', 'reg-man-rc' ),
 				'event_count'				=> __( 'Events', 'reg-man-rc' ),
@@ -691,32 +688,31 @@ class Fixer_Station_Admin_View {
 	} // function
 
 	public static function filter_admin_UI_column_values( $content, $column_name, $term_id ) {
+		
 		$em_dash = __( '—', 'reg-man-rc' ); // an em-dash is used by Wordpress for empty fields
 		$count_format = '<div class="tax-term-count"><a href="edit.php?%1$s=%2$s&post_type=%3$s">%4$s</a></div>';
 		$fixer_station = Fixer_Station::get_fixer_station_by_id( $term_id );
+		
 		switch ( $column_name ) {
-			case 'item_types':
-				$types_array = ! empty( $fixer_station ) ? $fixer_station->get_item_types_array() : array();
-				$item_type_names_array = array();
-				foreach ( $types_array as $item_type ) {
-					$item_type_names_array[] = $item_type->get_name();
-				} // endfor
-				$val = ! empty( $item_type_names_array ) ? implode( ', ', $item_type_names_array ) : $em_dash;
-				$content .= esc_attr( $val );
-				break;
-			case 'icon':
+			
+			case 'icons':
 				if ( ! empty( $fixer_station ) ) {
-					$url = $fixer_station->get_icon_url();
-					if ( ! empty( $url ) ) {
-						$val = "<span class=\"reg-man-rc-fixer-station-term-list-icon\"><img src=\"$url\"></span>";
+					$image_attachment_array = $fixer_station->get_icon_image_attachment_array();
+					if ( ! empty( $image_attachment_array ) ) {
+						$val = '<ul class="object-view-details-fixer-station-list">';
+						foreach( $image_attachment_array as $image_attachment ) {
+							$val .= '<li>' . $image_attachment->get_thumbnail_figure_element() . '</li>';
+						} // endfor
+						$val .= '</ul>';
 					} else {
-						$screen_reader_name = __( 'No icon', 'reg-man-rc' );
+						$screen_reader_name = __( 'No icons', 'reg-man-rc' );
 						$val = '<span aria-hidden="true" class="reg-man-rc-fixer-station-term-list-no-icon">' . $em_dash . '</span>';
 						$val .= "<span class=\"screen-reader-text\">$screen_reader_name</span>";
 					} // endif
 					$content .= $val;
 				} // endif
 				break;
+				
 			case 'ext_names':
 				if ( ! empty( $fixer_station ) ) {
 					$ext_names = $fixer_station->get_external_names();
@@ -731,6 +727,7 @@ class Fixer_Station_Admin_View {
 					$content .= $val;
 				} // endif
 				break;
+				
 			case 'colour':
 				if ( ! empty( $fixer_station ) ) {
 					$colour = $fixer_station->get_colour();
@@ -744,6 +741,7 @@ class Fixer_Station_Admin_View {
 					$content .= $val;
 				} // endif
 				break;
+				
 			case 'item_count':
 				if ( ! empty( $fixer_station ) ) {
 					$count = $fixer_station->get_item_count();
@@ -754,6 +752,7 @@ class Fixer_Station_Admin_View {
 					$content .= $val;
 				} // endif
 				break;
+				
 			case 'event_count':
 				if ( ! empty( $fixer_station ) ) {
 					$count = $fixer_station->get_internal_event_descriptor_count();
@@ -764,6 +763,7 @@ class Fixer_Station_Admin_View {
 					$content .= $val;
 				} // endif
 				break;
+				
 			case 'fixer_count':
 				if ( ! empty( $fixer_station ) ) {
 					$count = $fixer_station->get_fixer_count();
@@ -774,8 +774,72 @@ class Fixer_Station_Admin_View {
 					$content .= $val;
 				} // endif
 				break;
+				
 		} // endswitch
+		
 		return $content;
+		
 	} // function
 
+	/**
+	 * Get the set of tabs to be shown in the help for this taxonomy
+	 * @return array
+	 */
+	public static function get_help_tabs() {
+		$result = array(
+			array(
+				'id'		=> 'reg-man-rc-about',
+				'title'		=> __( 'About', 'reg-man-rc' ),
+				'content'	=> self::get_about_content(),
+			),
+		);
+		return $result;
+	} // function
+
+	/**
+	 * Get the html content shown to the administrator in the "About" help for this taxonomy
+	 * @return string
+	 */
+	private static function get_about_content() {
+		ob_start();
+			$heading = __( 'About fixer stations', 'reg-man-rc' );
+			echo "<h2>$heading</h2>";
+			echo '<p>';
+				$msg = __(
+					'A fixer station is an area at an event for fixers who repair certain kinds of items;' .
+					' for example, Appliances & Housewares.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'When an item is registered at an event it will be assigned to a fixer station. ' .
+					' For example, a lamp would normally be assigned to the Appliances & Housewares fixer station. ',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'When you create an event you will specify which fixer stations it will have' .
+					' and the event description on the website will list those stations.' .
+					' This lets visitors know what kinds of items to bring to an event,' .
+					' and it lets volunteers know what kinds of fixers are needed.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'Fixer stations are colour coded for display in statistical charts.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			$result = ob_get_clean();
+		return $result;
+	} // function
+
+	
 } // class

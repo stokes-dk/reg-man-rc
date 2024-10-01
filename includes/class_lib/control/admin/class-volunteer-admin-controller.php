@@ -4,6 +4,10 @@ namespace Reg_Man_RC\Control\Admin;
 use Reg_Man_RC\Model\Volunteer;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Volunteer_Role;
+use Reg_Man_RC\Control\User_Role_Controller;
+use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Model\Ajax_Form_Response;
+use Reg_Man_RC\View\Admin\Remove_Volunteer_Form;
 
 /**
  * The volunteer controller
@@ -14,7 +18,13 @@ use Reg_Man_RC\Model\Volunteer_Role;
  *
  */
 class Volunteer_Admin_Controller {
-
+	
+	const GET_REMOVE_FORM_CONTENT	= 'reg_man_rc_volunteer_get_remove_form_content';
+	const REMOVE_VOLUNTEER			= 'reg_man_rc_remove_volunteer';
+	
+	/**
+	 * Register this view
+	 */
 	public static function register() {
 
 		// Add an action hook to upate our custom fields when a post is saved
@@ -22,12 +32,67 @@ class Volunteer_Admin_Controller {
 
 		// Tell WP how to do the filtering for my taxonomies
 		add_action( 'pre_get_posts', array( __CLASS__, 'modify_query_for_filters' ) );
-
-		// Add an action listener for post delete so that I can clean up any orphaned volunteer side table records
-		add_action( 'before_delete_post', array( __CLASS__, 'handle_before_delete_post' ), 10, 2 );
+		
+		add_action( 'wp_ajax_' . self::GET_REMOVE_FORM_CONTENT, array( __CLASS__, 'get_remove_form_content' ) );
 
 	} // function
 
+	
+	/**
+	 * Handle an AJAX request to get the remove form content for a specific record.
+	 *
+	 * @return	void
+	 */
+	public static function get_remove_form_content() {
+
+		$form_response = Ajax_Form_Response::create();
+		
+		// The form data is serialized and put into the formData post argument that Wordpress will pass to me
+		// I need to deserialze it into a regular associative array
+		$serialized_form_data = isset( $_REQUEST[ 'formData' ] ) ? $_REQUEST[ 'formData' ] : NULL;
+		$form_data = array();
+		parse_str( $serialized_form_data, $form_data );
+
+		$nonce				= isset( $form_data[ '_wpnonce' ] )		? $form_data[ '_wpnonce' ] : '';
+		$record_id			= isset( $form_data[ 'record-id' ] )	? $form_data[ 'record-id' ] : NULL;
+		
+//		Error_Log::var_dump( $form_data, $nonce, $record_id );
+		$is_valid_nonce = wp_verify_nonce( $nonce, self::GET_REMOVE_FORM_CONTENT );
+		$volunteer = Volunteer::get_volunteer_by_id( $record_id );
+		
+		if ( ! $is_valid_nonce || empty( $volunteer ) ) {
+
+			if ( ! $is_valid_nonce ) {
+				$err_msg = __( 'Your security token has expired.  Please refresh the page and try again.', 'reg-man-rc' );
+				$form_response->add_error( '_wpnonce', '', $err_msg );
+			} // endif
+
+			if ( empty( $volunteer ) ) {
+				if ( empty( $record_id ) ) {
+					$err_msg = sprintf( __( 'No volunteer ID was specified.', 'reg-man-rc' ), $record_id );
+					$form_response->add_error( 'record-id', '', $err_msg );
+				} else {
+					/* Translators: %1$s is a volunteer ID */
+					$err_msg = sprintf( __( 'The volunteer could not be found with ID %1$s.', 'reg-man-rc' ), $record_id );
+					$form_response->add_error( 'record-id', '', $err_msg );
+				} // endif
+			} // endif
+
+		} else {
+			
+			// TODO: This is work in progress to replace "Trash"
+			$view = Remove_Volunteer_Form::create( $volunteer );
+			$content = $view->get_remove_form_content();
+			
+			$form_response->set_html_data( $content );
+			
+		} // endif
+		
+		echo json_encode( $form_response->jsonSerialize() );
+		wp_die(); // THIS IS REQUIRED!
+		
+	} // class
+	
 	/**
 	 * Handle a post save event for my post type
 	 *
@@ -47,28 +112,21 @@ class Volunteer_Admin_Controller {
 			$volunteer = Volunteer::get_volunteer_by_id( $post_id );
 			if ( ! empty( $volunteer ) ) {
 
-				// Update the public profile setting
-				if ( isset( $_POST[ 'volunteer_is_public_selection_flag' ] ) ) {
-					$val = isset( $_POST[ 'volunteer_public_profile' ] ) ? $_POST[ 'volunteer_public_profile' ] : 'FALSE';
-					$new_status = ( $val == 'TRUE' ) ? 'publish' : 'private';
-					// I need to remove the action to call this method so it does not loop infinitely
-					remove_action( 'save_post_' . Volunteer::POST_TYPE, array( __CLASS__, 'handle_post_save' ) );
-					if ( $is_update ) {
-						// Change the status of this post if we're doing an updated
-						$args = array(
-							'ID' 			=> $post_id,
-							'post_status'	=> $new_status
-						);
-					} else {
-						// If we're not doing an update then let the status be draft
-						$args = array(
-							'ID' 			=> $post_id,
-							'post_status'	=> 'draft'
-						);
-					} // endif
-					wp_update_post( $args );
-				} // endif
+				// Update the post status (privacy setting)
+				$new_status = 'private'; // Always private status
+				
+				// I need to remove this action from save_post to avoid an infinite loop
+				remove_action( 'save_post_' . Volunteer::POST_TYPE, array( __CLASS__, 'handle_post_save' ) );
 
+				// Modify the post status
+				wp_update_post( array(
+					'ID' 			=> $post_id,
+					'post_status'	=> $new_status
+				) );
+				
+				// Add the action back
+				add_action( 'save_post_' . Volunteer::POST_TYPE, array( __CLASS__, 'handle_post_save' ), 10, 3 );
+					
 				// Update the fixer station
 				if ( isset( $_POST[ 'fixer_station_selection_flag' ] ) ) {
 					$fixer_station_id = isset( $_POST[ 'fixer_station' ] ) ? $_POST[ 'fixer_station' ] : 0;
@@ -150,22 +208,6 @@ class Volunteer_Admin_Controller {
 
 		return $query;
 
-	} // function
-
-	/**
-	 * Handle cleanup when deleting my custom post and make sure there are no orphaned volunteer side table records
-	 * @param	int			$post_id	The ID of the post being deleted
-	 * @param	\WP_Post	$post		The post being deleted
-	 * @return	void
-	 * @since	v0.1.0
-	 */
-	public static function handle_before_delete_post( $post_id, $post ) {
-		if ( $post->post_type === Volunteer::POST_TYPE ) {
-			$volunteer = Volunteer::get_volunteer_by_id( $post_id );
-			if ( isset( $volunteer ) ) {
-				$volunteer->delete_personal_info();
-			} // endif
-		} // endif
 	} // function
 
 } // class

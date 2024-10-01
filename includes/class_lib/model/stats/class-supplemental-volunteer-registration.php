@@ -19,7 +19,7 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 
 	const SUPPLEMENTAL_VOLUNTEERS_TABLE_NAME		= 'reg_man_rc_sup_volunteers';
 
-	private $event_key;
+	private $event_key_string;
 	private $assigned_fixer_station;
 	private $is_fixer_apprentice;
 	private $assigned_volunteer_roles_array;
@@ -36,30 +36,39 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 	 */
 	public static function get_all_supplemental_volunteer_registrations( $event_keys_array ) {
 
+		global $wpdb;
 		$result = array();
-		if ( is_array( $event_keys_array ) && count( $event_keys_array ) > 0 ) {
-			global $wpdb;
-			$table = $wpdb->prefix . self::SUPPLEMENTAL_VOLUNTEERS_TABLE_NAME;
-
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_VOLUNTEERS_TABLE_NAME;
+		$cols = 'id, event_key, role_id, station_id, head_count, apprentice_count ';
+		
 //	Error_Log::var_dump( $event_keys_array );
-			$cols = 'id, event_key, role_id, station_id, head_count, apprentice_count ';
+		if ( is_array( $event_keys_array ) && count( $event_keys_array ) > 0 ) {
+
 			$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
 			$placehold_string = implode( ', ', $placeholder_array );
 			$where_clause = "( event_key IN ( $placehold_string ) )";
 
 			$query = "SELECT $cols FROM $table WHERE $where_clause";
-			$stmt = $wpdb->prepare( $query, $event_keys_array );
-			$desc_data_arrays = $wpdb->get_results( $stmt, ARRAY_A );
+			$query = $wpdb->prepare( $query, $event_keys_array );
+
+		} else {
+			
+			$query = "SELECT $cols FROM $table";
+			
+		} // endif
+
+		$desc_data_arrays = $wpdb->get_results( $query, ARRAY_A );
 //	Error_Log::var_dump( $query, $desc_data_arrays );
 
-			foreach ( $desc_data_arrays as $data_array ) {
-				$inst_array = self::create_instance_array_from_data_array( $data_array );
-				if ( ! empty( $inst_array ) ) {
-					$result = array_merge( $result, $inst_array );
-				} // endif
-			} // endfor
-		} // endif
+		foreach ( $desc_data_arrays as $data_array ) {
+			$inst_array = self::create_instance_array_from_data_array( $data_array );
+			if ( ! empty( $inst_array ) ) {
+				$result = array_merge( $result, $inst_array );
+			} // endif
+		} // endfor
+
 		return $result;
+
 	} // function
 
 	/**
@@ -107,7 +116,7 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 		if ( $non_appr_count > 0 ) {
 			for ( $index = 0; $index < $non_appr_count; $index++  ) {
 				$curr = new self();
-				$curr->event_key = $event_key;
+				$curr->event_key_string = $event_key;
 				$curr->assigned_fixer_station = $station_name;
 				$curr->assigned_volunteer_roles_array = $role_name_array;
 				$curr->is_fixer_apprentice = FALSE;
@@ -119,7 +128,7 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 		if ( $appr_count > 0 ) {
 			for ( $index = 0; $index < $appr_count; $index++ ) {
 				$curr = new self();
-				$curr->event_key = $event_key;
+				$curr->event_key_string = $event_key;
 				$curr->assigned_fixer_station = $station_name;
 				$curr->assigned_volunteer_roles_array = $role_name_array;
 				$curr->is_fixer_apprentice = TRUE;
@@ -134,44 +143,46 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 
 	/**
 	 * Get the supplemental volunteer group stats for the specified events and grouped in the specified way
-	 * @param	Event_Key[]		$event_key_array	An array of event keys whose group stats are to be returned
+	 * @param	Event_Key[]		$event_keys_array	An array of event keys whose group stats are to be returned
 	 * @param	string			$group_by			One of the "GROUP_BY" constants from Volunteer_Stats_Collection
 	 * @return Volunteer_Stats[]	An array of instances of Volunteer_Stats describing the volunteers and their related head counts.
 	 */
-	public static function get_supplemental_group_stats_array( $event_key_array, $group_by ) {
+	public static function get_supplemental_group_stats_array( $event_keys_array, $group_by ) {
 
+		global $wpdb;
 		$result = array(); // Start with an empty set and then add to it
-		if ( is_array( $event_key_array) && ( count( $event_key_array ) > 0 ) ) {
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_VOLUNTEERS_TABLE_NAME;
+		
+		switch( $group_by ) {
 
-			global $wpdb;
-			$table = $wpdb->prefix . self::SUPPLEMENTAL_VOLUNTEERS_TABLE_NAME;
-			switch( $group_by ) {
+			case Volunteer_Stats_Collection::GROUP_BY_EVENT:
+				$name_col = 'event_key';
+				break;
 
-				case Volunteer_Stats_Collection::GROUP_BY_EVENT:
-					$name_col = 'event_key';
-					break;
+			case Volunteer_Stats_Collection::GROUP_BY_VOLUNTEER_ROLE:
+				$name_col = 'role_id';
+				break;
 
-				case Volunteer_Stats_Collection::GROUP_BY_VOLUNTEER_ROLE:
-					$name_col = 'role_id';
-					break;
+			case Volunteer_Stats_Collection::GROUP_BY_FIXER_STATION:
+				$name_col = 'station_id';
+				break;
 
-				case Volunteer_Stats_Collection::GROUP_BY_FIXER_STATION:
-					$name_col = 'station_id';
-					break;
+			case Volunteer_Stats_Collection::GROUP_BY_TOTAL_FIXERS:
+			case Volunteer_Stats_Collection::GROUP_BY_TOTAL_NON_FIXERS:
+			case Volunteer_Stats_Collection::GROUP_BY_TOTAL:
+			default:
+				$name_col = "''"; // must be a quoted string for SQL otherwise illegal column name
+				break;
 
-				case Volunteer_Stats_Collection::GROUP_BY_TOTAL_FIXERS:
-				case Volunteer_Stats_Collection::GROUP_BY_TOTAL_NON_FIXERS:
-				case Volunteer_Stats_Collection::GROUP_BY_TOTAL:
-				default:
-					$name_col = "''"; // must be a quoted string for SQL otherwise illegal column name
-					break;
+		} // endswitch
+		
+		$cols = "$name_col as name, " .
+				'SUM( head_count ) as head_count, ' .
+				'SUM( apprentice_count ) as apprentice_count ';
+		
+		if ( is_array( $event_keys_array ) && ( count( $event_keys_array ) > 0 ) ) {
 
-			} // endswitch
-
-			$cols = "$name_col as name, " .
-					'SUM( head_count ) as head_count, ' .
-					'SUM( apprentice_count ) as apprentice_count ';
-			$placeholder_array = array_fill( 0, count( $event_key_array ), '%s' );
+			$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
 			$placehold_string = implode( ', ', $placeholder_array );
 			$where_clause = "( event_key IN ( $placehold_string ) )";
 
@@ -186,15 +197,23 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 
 			$query = "SELECT $cols FROM $table WHERE $where_clause GROUP BY name";
 //	Error_Log::var_dump( $query );
-			$stmt = $wpdb->prepare( $query, $event_key_array );
-			$data_array = $wpdb->get_results( $stmt, OBJECT_K );
+			$query = $wpdb->prepare( $query, $event_keys_array );
+			
+		} else {
+			
+			$query = "SELECT $cols FROM $table GROUP BY name";
+			
+		} // endif
+			
+		$data_array = $wpdb->get_results( $query, OBJECT_K );
 //	Error_Log::var_dump( $query, $data_array );
 
-			foreach( $data_array as $name => $obj ) {
-				$result[ $name ] = Volunteer_Stats::create( $name, $obj->head_count, $obj->apprentice_count );
-			} // endfor
-		} // endif
+		foreach( $data_array as $name => $obj ) {
+			$result[ $name ] = Volunteer_Stats::create( $name, $obj->head_count, $obj->apprentice_count );
+		} // endfor
+
 		return $result;
+			
 	} // function
 
 	/**
@@ -306,6 +325,58 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 		return $result;
 	} // function
 
+	
+	/**
+	 * Get an array of event key for supplemental volunteers registered to events in the specified date range
+	 * @param string $min_key_date_string
+	 * @param string $max_key_date_string
+	 * @return string[]
+	 */
+	public static function get_event_key_strings_for_volunteer_registrations_in_date_range( $min_key_date_string, $max_key_date_string ) {
+		
+		global $wpdb;
+		
+		$result = array();
+
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_VOLUNTEERS_TABLE_NAME;
+		
+		$where_parts_array = array();
+		$where_args_array = array();
+
+		if ( ! empty( $min_key_date_string ) ) {
+			$where_parts_array[] = ' ( event_key >= %s ) ';
+			$where_args_array[] = $min_key_date_string;
+		} // endif
+		
+		if ( ! empty( $max_key_date_string ) ) {
+			$where_parts_array[] = ' ( event_key <= %s ) ';
+			$where_args_array[] = $max_key_date_string;
+		} // endif
+		
+		if ( ! empty( $where_parts_array ) ) {
+			$where_clause = ' WHERE ( ' . implode( ' AND ', $where_parts_array ) . ' ) ';
+		} else {
+			$where_clause = '';
+		} // endif
+		
+		$query = "SELECT DISTINCT event_key FROM $table $where_clause";
+//	Error_Log::var_dump( $query, $where_args_array );
+		
+		if ( count( $where_args_array ) > 0 )  {
+			$query = $wpdb->prepare( $query, $where_args_array );
+		} // endif
+		$data_array = $wpdb->get_results( $query, OBJECT );
+
+		foreach ( $data_array as $reg_data ) {
+			$result[] = $reg_data->event_key;
+		} // endif
+		
+//	Error_Log::var_dump( $result );
+		return $result;
+		
+	} // function
+	
+	
 	/**
 	 * Perform the necessary steps for this class when the plugin is activated.
 	 * For this class this means conditionally creating its database table using dbDelta().
@@ -351,6 +422,16 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 // The following methods provide the implementation for Volunteer_Registration_Descriptor
 
 	/**
+	 * Get the most descriptive name available to this user in the current context for display purposes.
+	 * If we're rendering the admin interface and the user can view the full name then
+	 *   it will be returned (if known), otherwise the public name is used
+	 * @return string
+	 */
+	public function get_volunteer_display_name() {
+		return '';
+	} // function
+
+	/**
 	 * Get the volunteer's name as a single string.
 	 * To protect the volunteer's privacy their full name is never shown in public.
 	 * The full name is used only if we are rendering the administrative interface.
@@ -378,8 +459,8 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 	 * @return	string|NULL		The key for the event for this volunteer registration
 	 * @since	v0.1.0
 	 */
-	public function get_event_key() {
-		return $this->event_key;
+	public function get_event_key_string() {
+		return $this->event_key_string;
 	} // function
 
 	/**
@@ -401,8 +482,8 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 	 */
 	public function get_event() {
 		if ( ! isset( $this->event ) ) {
-			if ( isset( $this->event_key ) ) {
-				$this->event = Event::get_event_by_key( $this->event_key );
+			if ( isset( $this->event_key_string ) ) {
+				$this->event = Event::get_event_by_key( $this->event_key_string );
 			} // endif
 		} // endif
 		return $this->event;

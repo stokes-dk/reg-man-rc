@@ -38,8 +38,27 @@ class Calendar_Admin_Controller {
 			// Don't do anything during an autosave
 			return;
 		} else {
-			$calendar = Calendar::get_calendar_by_id( $post_id );
+			$calendar = Calendar::get_calendar_by_post_id( $post_id );
 			if ( !empty( $calendar ) ) {
+
+				// Update the iCal feed settings
+				// Make sure the selection flag is there and we're not doing a quick edit
+				// If the flag is not set then the user has no options, so don't delete anything
+				$feed_flag = isset( $_POST[ 'ical_feed_flag' ] ) ? TRUE : FALSE;
+				if ( $feed_flag ) {
+					$has_feed		= isset( $_POST[ 'has-ical-feed' ] )	? ( $_POST[ 'has-ical-feed' ] == '1' )	: FALSE;
+					$feed_name		= isset( $_POST[ 'ical-feed-name' ] )	? trim( $_POST[ 'ical-feed-name' ] )	: NULL;
+					$has_subscribe	= isset( $_POST[ 'has-ical-feed-subscribe-button' ] );
+					if ( $has_feed && ! empty( $feed_name ) ) {
+						$calendar->set_icalendar_feed_name( $feed_name );
+					} else {
+						$calendar->set_icalendar_feed_name( NULL ); // Remove the feed name (and thus the feed)
+					} // endif
+					flush_rewrite_rules(); // This needs to be done before the feed can be used
+					if ( $has_feed ) {
+						$calendar->set_icalendar_is_show_subscribe_button( $has_subscribe );
+					} // endif
+				} // endif
 
 				// Update the event status
 				// Make sure the selection flag is there and we're not doing a quick edit

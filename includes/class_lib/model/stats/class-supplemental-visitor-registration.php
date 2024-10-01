@@ -16,7 +16,7 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 
 	const SUPPLEMENTAL_VISITOR_REG_TABLE_NAME		= 'reg_man_rc_sup_visitors';
 
-	private $event_key;
+	private $event_key_string;
 	private $is_first_event;
 
 	/**
@@ -30,29 +30,38 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 	 */
 	public static function get_all_supplemental_visitor_registrations( $event_keys_array ) {
 
+		global $wpdb;
 		$result = array();
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_VISITOR_REG_TABLE_NAME;
+		$cols = 'id, event_key, first_time_count, returning_count, unreported_count ';
+		
 		if ( is_array( $event_keys_array ) && count( $event_keys_array ) > 0 ) {
-			global $wpdb;
-			$table = $wpdb->prefix . self::SUPPLEMENTAL_VISITOR_REG_TABLE_NAME;
 
-			$cols = 'id, event_key, first_time_count, returning_count, unreported_count ';
 			$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
 			$placehold_string = implode( ', ', $placeholder_array );
 			$where_clause = "( event_key IN ( $placehold_string ) )";
 
 			$query = "SELECT $cols FROM $table WHERE $where_clause";
-			$stmt = $wpdb->prepare( $query, $event_keys_array );
-			$desc_data_arrays = $wpdb->get_results( $stmt, ARRAY_A );
-	//Error_Log::var_dump( $query, $desc_data_arrays );
+			$query = $wpdb->prepare( $query, $event_keys_array );
 
-			foreach ( $desc_data_arrays as $data_array ) {
-				$inst_array = self::create_instance_array_from_data_array( $data_array );
-				if ( ! empty( $inst_array ) ) {
-					$result = array_merge( $result, $inst_array );
-				} // endif
-			} // endfor
+		} else {
+
+			$query = "SELECT $cols FROM $table";
+			
 		} // endif
+			
+		$desc_data_arrays = $wpdb->get_results( $query, ARRAY_A );
+// Error_Log::var_dump( $query, $desc_data_arrays );
+
+		foreach ( $desc_data_arrays as $data_array ) {
+			$inst_array = self::create_instance_array_from_data_array( $data_array );
+			if ( ! empty( $inst_array ) ) {
+				$result = array_merge( $result, $inst_array );
+			} // endif
+		} // endfor
+
 		return $result;
+		
 	} // function
 
 	/**
@@ -91,7 +100,7 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 		if ( $first_count > 0 ) {
 			for ( $index = 0; $index < $first_count; $index++  ) {
 				$curr = new self();
-				$curr->event_key = $event_key;
+				$curr->event_key_string = $event_key;
 				$curr->is_first_event = TRUE;
 				$result[] = $curr;
 			} // endfor
@@ -101,7 +110,7 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 		if ( $return_count > 0 ) {
 			for ( $index = 0; $index < $return_count; $index++ ) {
 				$curr = new self();
-				$curr->event_key = $event_key;
+				$curr->event_key_string = $event_key;
 				$curr->is_first_event = FALSE;
 				$result[] = $curr;
 			} // endfor
@@ -111,7 +120,7 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 		if ( $unknown_count > 0 ) {
 			for ( $index = 0; $index < $unknown_count; $index++ ) {
 				$curr = new self();
-				$curr->event_key = $event_key;
+				$curr->event_key_string = $event_key;
 				$curr->is_first_event = NULL;
 				$result[] = $curr;
 			} // endfor
@@ -124,59 +133,66 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 
 	/**
 	 * Get the supplemental visitor group stats for the specified events and grouped in the specified way
-	 * @param	Event_Key[]		$event_key_array	An array of event keys whose group stats are to be returned
+	 * @param	Event_Key[]		$event_keys_array	An array of event keys whose group stats are to be returned
 	 * @param	string			$group_by			One of the "GROUP_BY" constants from Visitor_Stats_Collection
 	 * @return	Volunteer_Stats[]	An array of instances of Volunteer_Stats describing the volunteers and their related head counts.
 	 */
-	public static function get_supplemental_group_stats_array( $event_key_array, $group_by ) {
+	public static function get_supplemental_group_stats_array( $event_keys_array, $group_by ) {
 
-		$result = array(); // Start with an empty set and then add to it
-		if ( is_array( $event_key_array) && ( count( $event_key_array ) > 0 ) ) {
+		global $wpdb;
+		$result = array();
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_VISITOR_REG_TABLE_NAME;
 
-			global $wpdb;
-			$result = array();
-			$table = $wpdb->prefix . self::SUPPLEMENTAL_VISITOR_REG_TABLE_NAME;
-			switch ( $group_by ) {
-				case Visitor_Stats_Collection::GROUP_BY_EVENT:
-					$name_col = 'event_key';
-					break;
-				default:
-					$name_col = "''";
-					break;
-			} // endswitch
-			$cols = "$name_col AS name, " .
-					'COALESCE( first_time_count, 0 ) AS first_count, ' . // Convert NULL into 0
-					'COALESCE( returning_count, 0 ) AS return_count, ' .
-					'COALESCE( unreported_count,  0 ) AS unrep_count ';
+		switch ( $group_by ) {
+			
+			case Visitor_Stats_Collection::GROUP_BY_EVENT:
+				$name_col = 'event_key';
+				break;
+				
+			default:
+				$name_col = "''";
+				break;
+				
+		} // endswitch
+		
+		$cols = "$name_col AS name, " .
+				'COALESCE( first_time_count, 0 ) AS first_count, ' . // Convert NULL into 0
+				'COALESCE( returning_count, 0 ) AS return_count, ' .
+				'COALESCE( unreported_count,  0 ) AS unrep_count ';
 
-			if ( empty( $event_key_array ) ) {
-				$where_clause = '1'; // get everything
-			} else {
-				$placeholder_array = array_fill( 0, count( $event_key_array ), '%s' );
-				$placeholders = implode( ',', $placeholder_array );
-				$where_clause = "event_key IN ( $placeholders )";
-			} // endif
+		if ( is_array( $event_keys_array ) && ( count( $event_keys_array ) > 0 ) ) {
+
+			$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
+			$placeholders = implode( ',', $placeholder_array );
+			$where_clause = "event_key IN ( $placeholders )";
 
 			$query = "SELECT $cols FROM $table WHERE $where_clause GROUP BY name";
-			$stmt = $wpdb->prepare( $query, $event_key_array );
-			$data_array = $wpdb->get_results( $stmt, ARRAY_A );
-//Error_Log::var_dump( $query, $event_key_array, $data_array );
+			$query = $wpdb->prepare( $query, $event_keys_array );
 
-			if ( is_array( $data_array ) ) {
-				$email_count = 0; // We have no info about email addresses
-				$join_count = 0; //  or joining the mailing list
-				foreach ( $data_array as $data ) {
-					$name			= isset( $data[ 'name' ] )			? $data[ 'name' ]			: ''; //$em_dash;
-//					$visitor_count	= isset( $data[ 'visitor_count' ] )	? $data[ 'visitor_count' ] 	: 0;
-					$first_count	= isset( $data[ 'first_count' ] )	? $data[ 'first_count' ] 	: 0;
-					$return_count	= isset( $data[ 'return_count' ] )	? $data[ 'return_count' ] 	: 0;
-					$unknown_count	= isset( $data[ 'unrep_count' ] )	? $data[ 'unrep_count' ]	: 0;
-					$instance = Visitor_Stats::create( $name, $first_count, $return_count, $unknown_count, $email_count, $join_count );
-					$result[ $name ] = $instance;
-				} // endfor
-			} // endif
+		} else {
+
+			$query = "SELECT $cols FROM $table GROUP BY name";
+			
 		} // endif
+
+		$data_array = $wpdb->get_results( $query, ARRAY_A );
+		//Error_Log::var_dump( $query, $event_keys_array, $data_array );
+
+		if ( is_array( $data_array ) ) {
+			$email_count = 0; // We have no info about email addresses
+			$join_count = 0; //  or joining the mailing list
+			foreach ( $data_array as $data ) {
+				$name			= isset( $data[ 'name' ] )			? $data[ 'name' ]			: '';
+				$first_count	= isset( $data[ 'first_count' ] )	? $data[ 'first_count' ] 	: 0;
+				$return_count	= isset( $data[ 'return_count' ] )	? $data[ 'return_count' ] 	: 0;
+				$unknown_count	= isset( $data[ 'unrep_count' ] )	? $data[ 'unrep_count' ]	: 0;
+				$instance = Visitor_Stats::create( $name, $first_count, $return_count, $unknown_count, $email_count, $join_count );
+				$result[ $name ] = $instance;
+			} // endfor
+		} // endif
+		
 		return $result;
+		
 	} // function
 
 	/**
@@ -236,6 +252,57 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 
 		return $result;
 	} // function
+	
+	/**
+	 * Get an array of event keys for supplemental visitors at events in the specified date range
+	 * @param string $min_key_date_string
+	 * @param string $max_key_date_string
+	 * @return string[]
+	 */
+	public static function get_event_key_strings_for_visitor_registrations_in_date_range( $min_key_date_string, $max_key_date_string ) {
+		
+		global $wpdb;
+		
+		$result = array();
+
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_VISITOR_REG_TABLE_NAME;
+		
+		$where_parts_array = array();
+		$where_args_array = array();
+
+		if ( ! empty( $min_key_date_string ) ) {
+			$where_parts_array[] = ' ( event_key >= %s ) ';
+			$where_args_array[] = $min_key_date_string;
+		} // endif
+		
+		if ( ! empty( $max_key_date_string ) ) {
+			$where_parts_array[] = ' ( event_key <= %s ) ';
+			$where_args_array[] = $max_key_date_string;
+		} // endif
+		
+		if ( ! empty( $where_parts_array ) ) {
+			$where_clause = ' WHERE ( ' . implode( ' AND ', $where_parts_array ) . ' ) ';
+		} else {
+			$where_clause = '';
+		} // endif
+		
+		$query = "SELECT DISTINCT event_key FROM $table $where_clause";
+		
+		if ( count( $where_args_array ) > 0 )  {
+			$query = $wpdb->prepare( $query, $where_args_array );
+		} // endif
+		$data_array = $wpdb->get_results( $query, OBJECT );
+
+		foreach ( $data_array as $reg_data ) {
+			$result[] = $reg_data->event_key;
+		} // endif
+		
+//	Error_Log::var_dump( $result );
+		return $result;
+		
+	} // function
+	
+	
 
 	/**
 	 * Perform the necessary steps for this class when the plugin is activated.
@@ -287,11 +354,20 @@ class Supplemental_Visitor_Registration implements Visitor_Registration_Descript
 	 * @return	string|NULL		The key for the event
 	 * @since	v0.1.0
 	 */
-	public function get_event_key() {
-		return $this->event_key;
+	public function get_event_key_string() {
+		return $this->event_key_string;
 	} // function
 
-
+	/**
+	 * Get the most descriptive name available to this user in the current context for display purposes.
+	 * If we're rendering the admin interface and the user can view the full name then
+	 *   it will be returned (if known), otherwise the public name is used
+	 * @return string
+	 */
+	public function get_display_name() {
+		return '';
+	} // function
+	
 	/**
 	 * Get the visitor's name as a single string.
 	 * To protect the visitor's privacy their full name is never shown in public.

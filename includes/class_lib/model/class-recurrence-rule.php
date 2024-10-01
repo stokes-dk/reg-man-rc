@@ -135,12 +135,26 @@ class Recurrence_Rule {
 		} // endtry
 	} // function
 
+	/**
+	 * Get the until date and time
+	 * @return \DateTimeInterface|NULL
+	 */
+	public function get_until( ) {
+		$result = $this->get_rule()->getUntil();
+		return $result;
+	} // function
+
 	public function set_until( $until ) {
 		$this->get_rule()->setUntil( $until );
 	} // function
 
 	public function set_count( $count ) {
 		$this->get_rule()->setCount( $count );
+	} // function
+
+	public function get_interval( ) {
+		$result = $this->get_rule()->getInterval();
+		return $result;
 	} // function
 
 	public function set_interval( $interval ) {
@@ -159,14 +173,28 @@ class Recurrence_Rule {
 	 * Set the days of the week the recurring event should fall on.
 	 * @param string[]	$by_day_array	An array of strings representing some subset of the days of the week.
 	 * Use the following shortforms for the days:
-	 * SU => Sunday, MO => Monday, TU => Tuesday, WE => Wednesday, TH => Thursday, FR => Friday, SA => Saturday
+	 * SU = Sunday, MO = Monday, TU = Tuesday, WE = Wednesday, TH = Thursday, FR = Friday, SA = Saturday
 	 */
 	public function set_by_day( $by_day_array ) {
 		try {
-			$this->get_rule()->setByDay( $by_day_array );
+			if ( ! empty( $by_day_array ) && is_array( $by_day_array ) ) {
+				$this->get_rule()->setByDay( $by_day_array );
+			} // endif
 		} catch ( \Exception $exc ) {
 			Error_Log::log_exception( $exc->getMessage(), $exc );
 		} // endtry
+	} // function
+	
+	/**
+	 * Get the array of days of the week this event recurs on
+	 * @return array
+	 */
+	public function get_by_day() {
+		$result = $this->get_rule()->getByDay();
+		if ( ! is_array( $result ) ) {
+			$result = array(); // Don't return NULL
+		} // endif
+		return $result;
 	} // function
 
 	/**
@@ -176,10 +204,24 @@ class Recurrence_Rule {
 	 */
 	public function set_by_month( $by_month_array ) {
 		try {
-			$this->get_rule()->setByMonth( $by_month_array );
+			if ( ! empty( $by_month_array ) && is_array( $by_month_array ) ) {
+				$this->get_rule()->setByMonth( $by_month_array );
+			} // endif
 		} catch ( \Exception $exc ) {
 			Error_Log::log_exception( $exc->getMessage(), $exc );
 		} // endtry
+	} // function
+
+	/**
+	 * Get the array of months of the year the recurring event falls on.
+	 * @return array
+	 */
+	public function get_by_month() {
+		$result = $this->get_rule()->getByMonth();
+		if ( ! is_array( $result ) ) {
+			$result = array(); // Don't return NULL
+		} // endif
+		return $result;
 	} // function
 
 	/**
@@ -189,9 +231,8 @@ class Recurrence_Rule {
 	 * For example "the first and last Friday of every month" could be represented as:
 	 *   RRULE:FREQ=MONTHLY;BYDAY=FR;BYSETPOS=1,-1
 	 * In this case call set_by_position( array( 1, -1 ) ) and set_by_day( array ( 'FR' ) );
-	 * @param array	$by_set_position_array	An array of strings representing some subset of the days of the week.
-	 * Use the following shortforms for the days:
-	 * SU => Sunday, MO => Monday, TU => Tuesday, WE => Wednesday, TH => Thursday, FR => Friday, SA => Saturday
+	 * @param array	$by_set_position_array	An array of integers, each corresponding to the nth
+     *  occurrence within the set of events specified by the rule.
 	 */
 	public function set_by_position( $by_set_position_array ) {
 		$this->get_rule()->setBySetPosition( $by_set_position_array );

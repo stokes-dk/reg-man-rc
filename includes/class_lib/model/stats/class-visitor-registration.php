@@ -18,11 +18,13 @@ use Reg_Man_RC\Model\Error_Log;
  */
 class Visitor_Registration implements Visitor_Registration_Descriptor {
 
-	private $event_key; // The key for the event that the visitor attended
+	private $event_key_string; // The key for the event that the visitor attended
+	private $display_name; // The displayable name for this visitor
 	private $public_name; // Name used when shown in public places like on a whiteboard of registered items, e.g. "Dave S Toaster"
 	private $full_name; // The visitor's full name, e.g. "Dave Stokes"
 	private $email; // Optional, the visitor's email address
-	private $partially_obscured_email;
+	private $wp_user; // Optional, the registered user associated with this volunteer
+	private $is_instance_for_current_wp_user; // TRUE if this visitor represents the current WP User
 	private $is_join_mail_list; // Set to TRUE if the visitor wants to join the mailing list for the repair cafe
 	private $is_first_event; // Set to TRUE if this is the visitor's first event, FALSE if returning, or NULL if not known
 	private $item_count;
@@ -45,7 +47,7 @@ class Visitor_Registration implements Visitor_Registration_Descriptor {
 	private static function instantiate_from_data( $data ) {
 //		Error_Log::var_dump( $data );
 		$result = new self();
-		$result->event_key			= isset( $data->event_key )			? $data->event_key : NULL;
+		$result->event_key_string	= isset( $data->event_key )			? $data->event_key : NULL;
 		$result->full_name			= isset( $data->full_name )			? $data->full_name : NULL;
 		$result->public_name		= isset( $data->public_name )		? $data->public_name : NULL;
 		$result->email				= isset( $data->email )				? $data->email : NULL;
@@ -70,13 +72,18 @@ class Visitor_Registration implements Visitor_Registration_Descriptor {
 	 *  at any of the specified events.
 	 * @since 	v0.1.0
 	 */
-	// That is supposed to count as two visitors with two records in the result.  Is that what we get?
 	public static function get_visitor_registrations( $event_keys_array, $visitor = NULL ) {
-		if ( is_array( $event_keys_array) && ( count( $event_keys_array ) == 0) ) {
+		
+		if ( is_array( $event_keys_array ) && ( count( $event_keys_array ) == 0) ) {
+			
 			$result = array(); // The request is for an empty set of events so return an empty set
+			
 		} else {
+
+			// Otherwise, the request is for ALL events (event keys array is NULL) or some subset
+
 			global $wpdb;
-			$visitor_table = $wpdb->prefix . Visitor::VISITOR_SIDE_TABLE_NAME;
+
 			$item_post_type = Item::POST_TYPE;
 			$visitor_meta_key = Item::VISITOR_META_KEY;
 			$event_meta_key = Item::EVENT_META_KEY;
@@ -86,27 +93,8 @@ class Visitor_Registration implements Visitor_Registration_Descriptor {
 			/*
 			 * Visitor registrations are derived from items registered at events.  These are custom posts.
 			 * We need to join the Item posts with post meta to get the event and visitor,
-			 * we need to join the visitor side table to get the visitor's full name and email,
 			 * we need to join again with post meta to get the visitor's first event and flag for joining the mailing list,
 			 * and we need to join the posts table to get the visitor's public name from the visitor post.
-			 * 
-			 * SELECT 
-			 *  count( * ) AS item_count,
-			 *  visitor_side_table.full_name AS full_name,
-			 *  event_meta.meta_value AS event_key,
-			 *  visitor_side_table.email,
-			 *  CASE WHEN ( first_event_meta.meta_value IS NOT NULL AND first_event_meta.meta_value != '' AND first_event_meta.meta_value = event_meta.meta_value ) THEN 1 ELSE 0 END as is_first_event,
-			 *  CASE WHEN ( is_join_meta.meta_value IS NOT NULL AND first_event_meta.meta_value != '' ) THEN 1 ELSE 0 END as is_join_mail_list,
-			 *  FROM  wp_posts AS p  
-			 *		LEFT JOIN wp_postmeta AS visitor_meta ON p.ID = visitor_meta.post_id AND visitor_meta.meta_key = 'reg-man-rc-item-visitor'  
-			 *		LEFT JOIN wp_reg_man_rc_visitor AS visitor_side_table ON visitor_meta.meta_value = visitor_side_table.post_id  
-			 *		LEFT JOIN wp_postmeta AS event_meta ON p.ID = event_meta.post_id AND event_meta.meta_key = 'reg-man-rc-item-event'  
-			 *		LEFT JOIN wp_postmeta AS first_event_meta ON first_event_meta.post_id = visitor_meta.meta_value AND first_event_meta.meta_key = 'reg-man-rc-visitor-first-event'
-			 *		LEFT JOIN wp_postmeta AS is_join_meta ON is_join_meta.post_id = visitor_meta.meta_value AND is_join_meta.meta_key = 'reg-man-rc-visitor-is-join-mail-list'
-			 *		LEFT JOIN wp_posts AS visitor_posts ON visitor_posts.ID = visitor_meta.meta_value
-			 *	WHERE  ( post_type = 'reg-man-rc-item' )
-			 *	AND ( event_meta.meta_value IN ( $event_keys_array ) ) 
-			 *	GROUP BY visitor_meta.meta_value, event_key;
 			 */
 
 			$select =
@@ -117,34 +105,22 @@ class Visitor_Registration implements Visitor_Registration_Descriptor {
 				"CASE WHEN ( first_event_meta.meta_value IS NOT NULL AND first_event_meta.meta_value != '' AND first_event_meta.meta_value = event_meta.meta_value ) THEN 1 ELSE 0 END as is_first_event, " .
 				"CASE WHEN ( is_join_meta.meta_value IS NOT NULL AND is_join_meta.meta_value != '' ) THEN 1 ELSE 0 END as is_join_mail_list";
 
-			// Users who can read private items can also read the visitors full name and email address
-			$capability = 'read_private_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
-			if ( current_user_can( $capability ) ) {
-				$select .=
-					', ' .
-					'visitor_side_table.full_name AS full_name, ' .
-					'visitor_side_table.email AS email';
-			} else {
-				$select .=
-					', ' .
-					'visitor_posts.post_title AS full_name, ' .
-					"'' AS email";
-		} // endif
-
 			$from = "FROM {$wpdb->posts} AS posts";
-			$join1 = "LEFT JOIN {$wpdb->postmeta} AS visitor_meta ON posts.ID = visitor_meta.post_id AND visitor_meta.meta_key = '$visitor_meta_key'";
-			$join2 = "LEFT JOIN $visitor_table AS visitor_side_table ON visitor_meta.meta_value = visitor_side_table.post_id";
-			$join3 = "LEFT JOIN {$wpdb->postmeta} AS event_meta ON posts.ID = event_meta.post_id AND event_meta.meta_key = '$event_meta_key'";
-			$join4 = "LEFT JOIN {$wpdb->postmeta} AS first_event_meta ON first_event_meta.post_id = visitor_meta.meta_value AND first_event_meta.meta_key = '$first_event_meta_key'";
-			$join5 = "LEFT JOIN {$wpdb->postmeta} AS is_join_meta ON is_join_meta.post_id = visitor_meta.meta_value  AND is_join_meta.meta_key = '$is_join_meta_key'";
-			$join6 = "LEFT JOIN {$wpdb->posts} AS visitor_posts ON visitor_posts.ID = visitor_meta.meta_value";
+
+			$join_array = array();
+			$join_array[] = "LEFT JOIN {$wpdb->postmeta} AS visitor_meta ON posts.ID = visitor_meta.post_id AND visitor_meta.meta_key = '$visitor_meta_key'";
+			$join_array[] = "LEFT JOIN {$wpdb->postmeta} AS event_meta ON posts.ID = event_meta.post_id AND event_meta.meta_key = '$event_meta_key'";
+			$join_array[] = "LEFT JOIN {$wpdb->postmeta} AS first_event_meta ON first_event_meta.post_id = visitor_meta.meta_value AND first_event_meta.meta_key = '$first_event_meta_key'";
+			$join_array[] = "LEFT JOIN {$wpdb->postmeta} AS is_join_meta ON is_join_meta.post_id = visitor_meta.meta_value  AND is_join_meta.meta_key = '$is_join_meta_key'";
+			$join_array[] = "LEFT JOIN {$wpdb->posts} AS visitor_posts ON visitor_posts.ID = visitor_meta.meta_value";
+			$joins = implode( ' ', $join_array );
 			
 			$where = "WHERE posts.post_type = '$item_post_type' AND posts.post_status = 'publish' ";
 			$group_by = 'GROUP BY visitor_meta.meta_value, event_meta.meta_value';
 			
 			if ( ! is_array( $event_keys_array ) && ! isset( $visitor ) ) {
 				// We are getting all registrations for all events and all visitors so no need to prepare the statement
-				$stmt = "$select $from $join1 $join2 $join3 $join4 $join5 $join6 $where $group_by";
+				$stmt = "$select $from $joins $where $group_by";
 			} else {
 				if ( is_array( $event_keys_array ) ) {
 					$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
@@ -159,7 +135,7 @@ class Visitor_Registration implements Visitor_Registration_Descriptor {
 					$where .= " AND visitor_meta.meta_value = '%s' ";
 					$args_array[] = $visitor_id;
 				} // endif
-				$stmt = $wpdb->prepare( "$select $from $join1 $join2 $join3 $join4 $join5 $join6 $where $group_by", $args_array );
+				$stmt = $wpdb->prepare( "$select $from $joins $where $group_by", $args_array );
 			} // endif
 
 //			Error_Log::var_dump( $stmt );
@@ -176,49 +152,43 @@ class Visitor_Registration implements Visitor_Registration_Descriptor {
 	} // function
 
 	/**
-	 * Returns a default version of the visitor's public name based on the full name specified
-	 * @param	string	$full_name
-	 * @return	string
-	 */
-	public static function get_default_public_name( $full_name ) {
-		$parts = explode( ' ', $full_name ); // find space between first and last names
-		if ( count( $parts ) > 1 ) {
-			// When there are two or more names (separated by space) use first name plus last initial
-			$last_initial = substr( $parts[1], 0, 1 );
-			$result = $parts[ 0 ] . ' ' . $last_initial;
-		} else {
-			$result = $full_name; // give up and just use the full name
-		} // endif
-		return $result;
-	} // function
-
-
-	/**
 	 * Get the key for the event that the visitor attended
 	 * @return	string|NULL		The key for the event
 	 * @since	v0.1.0
 	 */
-	public function get_event_key() {
-		return $this->event_key;
+	public function get_event_key_string() {
+		return $this->event_key_string;
 	} // function
 
 	/**
-	 * Get the visitor's name as a single string.
-	 * To protect the visitor's privacy their full name is returned only if we are rendering the administrative interface.
-	 *
-	 * @return	string
-	 * @since	v0.1.0
+	 * Get the most descriptive name available to this user in the current context for display purposes.
+	 * If we're rendering the admin interface and the user can view the full name then
+	 *   it will be returned (if known), otherwise the public name is used
+	 * @return string
 	 */
-	public function get_full_name() {
-		$capability = 'read_private_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
-		if ( current_user_can( $capability ) && ! empty( $this->full_name ) ) {
-			$result = $this->full_name;
-		} else {
-			$result = $this->get_public_name();
-		} // endif
-		return $result;
-	} // function
+	public function get_display_name() {
+		
+		if ( ! isset( $this->display_name ) ) {
+			if ( is_admin() && current_user_can( 'read_private_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ) {
+			
+				$this->display_name = ! empty( $this->full_name ) ? $this->full_name : $this->public_name;
+				
+			} else {
+				
+				$this->display_name = $this->public_name;
+				
+			} // endif
+			
+			if ( empty( $this->display_name ) ) {
+				$this->display_name =  __( '[No name]', 'reg-man-rc' );
+			} // endif
 
+		} // endif
+		
+		return $this->display_name;
+
+	} // function
+	
 	/**
 	 * Get the visitor's public name
 	 * @return	string
@@ -229,25 +199,86 @@ class Visitor_Registration implements Visitor_Registration_Descriptor {
 	} // function
 
 	/**
+	 * Get the visitor's name as a single string.
+	 * To protect the visitor's privacy their full name is returned only to users who can view it
+	 *
+	 * @return	string
+	 * @since	v0.1.0
+	 */
+	public function get_full_name() {
+		
+		// Users viewing their own record or users with read private capability can see the full name
+		if ( current_user_can( 'edit_others_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ||
+				$this->get_is_instance_for_current_wp_user() ) {
+		
+			// This user can edit anyone's record OR this record belongs to this user
+			$result = ! empty( $this->full_name ) ? $this->full_name : $this->get_public_name();
+			
+		} else {
+			
+			$result = $this->get_public_name();
+			
+		} // endif
+		
+		return $result;
+
+	} // function
+
+	/**
 	 * Get the visitor's email, if supplied
 	 * @return	string|NULL		The visitor's email address if it is known, NULL otherwise
 	 * @since	v0.1.0
 	 */
 	public function get_email() {
-		$capability = 'read_private_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
-		return ( current_user_can( $capability ) ) ? $this->email : $this->get_partially_obscured_email();
+		
+		if ( current_user_can( 'edit_others_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ||
+				$this->get_is_instance_for_current_wp_user() ) {
+
+			$result = $this->email;
+			
+		} else {
+			
+			$result = NULL;
+			
+		} // endif
+		
+		return $result;
+		
 	} // function
 
 	/**
-	 * Get a partially obscured email address for this visitor. E.g. stok*****@yahoo.ca
-	 * @return string
+	 * Get a boolean indicating whether this instance represents the current WP User.
+	 * Note that a WP User should be able to see the details of their own Visitor record.
+	 * This function is used to implement that behaviour.
+	 * @return	boolean	TRUE if the current WP User is represented by this instance, FALSE otherwise
+	 * @since	v0.5.0
 	 */
-	private function get_partially_obscured_email() {
-		if ( ! isset( $this->partially_obscured_email ) ) {
-			$email = $this->get_email();
-			$this->partially_obscured_email = Visitor::get_partially_obscured_form_of_email( $email );
+	private function get_is_instance_for_current_wp_user() {
+		if ( ! isset( $this->is_instance_for_current_wp_user ) ) {
+			$current_user_id = get_current_user_id(); // User's ID or 0 if not logged in
+			if ( empty( $current_user_id ) ) {
+				$this->is_instance_for_current_wp_user = FALSE;
+			} else {
+				$visitor_user = $this->get_wp_user();
+				$this->is_instance_for_current_wp_user = ! empty( $visitor_user )  ? ( $visitor_user->ID === $current_user_id ) : FALSE;
+			} // endif
 		} // endif
-		return $this->partially_obscured_email;
+		return $this->is_instance_for_current_wp_user;
+	} // function
+
+	/**
+	 * Get the WP_User object for this visitor. 
+	 * If there is no associated user for this visitor then this will return NULL.
+	 * @return \WP_User|NULL|FALSE
+	 */
+	private function get_wp_user() {
+		if ( ! isset( $this->wp_user ) ) {
+//			Error_Log::var_dump( $this->email );
+			if ( ! empty( $this->email ) ) {
+				$this->wp_user = get_user_by( 'email', $this->email );
+			} // endif
+		} // endif
+		return $this->wp_user;
 	} // function
 
 	/**
@@ -286,13 +317,14 @@ class Visitor_Registration implements Visitor_Registration_Descriptor {
 	 */
 	public function get_label() {
 
-		$capability = 'read_private_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
+		$capability = 'read_private_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL;
 		if ( current_user_can( $capability ) ) {
 
 			$name = $this->get_full_name();
 			if ( empty( $name ) ) {
 				$name = __( '[No name provided]', 'reg-man-rc' ); // Just in case they provide no name, this shouldn't happen
 			} // endif
+			
 			$email = $this->get_email();
 			if ( empty( $email ) ) {
 				$email = __( '[No email]', 'reg-man-rc' ); // Just in case they provide no email, this happens often

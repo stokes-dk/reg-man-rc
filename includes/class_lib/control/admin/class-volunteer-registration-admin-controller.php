@@ -7,6 +7,7 @@ use Reg_Man_RC\Model\Volunteer_Role;
 use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Volunteer;
 use Reg_Man_RC\Control\Term_Order_Controller;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The volunteer controller
@@ -51,7 +52,7 @@ class Volunteer_Registration_Admin_Controller {
 
 				// Update the event
 				if ( isset( $_POST[ 'volunteer_reg_event_input_flag' ] ) ) {
-					$event_key = isset( $_POST[ 'volunteer_event' ] ) ? $_POST[ 'volunteer_event' ] : 0;
+					$event_key = isset( $_POST[ 'volunteer_registration_event' ] ) ? $_POST[ 'volunteer_registration_event' ] : 0;
 					$event_key = wp_unslash( $event_key );
 					$event = ! empty( $event_key ) ? Event::get_event_by_key( $event_key ) : NULL;
 					$registration->set_event( $event );
@@ -59,28 +60,44 @@ class Volunteer_Registration_Admin_Controller {
 
 				// Update the volunteer
 				if ( isset( $_POST[ 'volunteer_reg_volunteer_input_flag' ] ) ) {
+					
+					// Get the volunteer ID for this registration
 					$id = isset( $_POST[ 'volunteer_registration_volunteer' ] ) ? $_POST[ 'volunteer_registration_volunteer' ] : 0;
+
 					if ( $id == '-1' ) {
+
 						// This means that we are adding a new volunteer
 						$public_name  = isset( $_POST[ 'volunteer_public_name' ] ) ? $_POST[ 'volunteer_public_name' ] : '';
 						$full_name  = isset( $_POST[ 'volunteer_full_name' ] ) ? $_POST[ 'volunteer_full_name' ] : NULL;
 						$email  = isset( $_POST[ 'volunteer_email' ] ) ? $_POST[ 'volunteer_email' ] : NULL;
 						$volunteer = Volunteer::create_new_volunteer( $public_name, $full_name, $email );
+						
 					} else {
+						
 						$volunteer = ! empty( $id ) ? Volunteer::get_volunteer_by_id( $id ) : NULL;
+						
+						if ( isset( $_POST[ 'volunteer_reg_volunteer_details_update_flag' ] ) ) {
+							
+							// This means that the user is updating the details of the volunteer
+
+							$public_name  = isset( $_POST[ 'volunteer_public_name' ] ) ? $_POST[ 'volunteer_public_name' ] : '';
+							$full_name  = isset( $_POST[ 'volunteer_full_name' ] ) ? $_POST[ 'volunteer_full_name' ] : NULL;
+							// Note that the email cannot be changed
+							
+							$volunteer->set_public_name( $public_name );
+							$volunteer->set_full_name( $full_name );
+							
+						} // endif
+						
 					} // endif
-					if ( isset( $volunteer ) && isset( $post ) ) {
-						// Save the volunteer's public name as the post title to make the data a little more readable
-						// Unhook this function so it doesn't loop infinitely
-						remove_action( 'save_post_' . Volunteer_Registration::POST_TYPE, array( __CLASS__, 'handle_post_save' ) );
-						// Set the post status to draft since it doesn't have a valid item type
-						$post_data = array(
-							'ID'			=> $post_id,
-							'post_title'	=> $volunteer->get_public_name(),
-						);
-						wp_update_post( $post_data );
+
+					if ( ! isset( $_POST[ 'volunteer_reg_volunteer_details_update_flag' ] ) ) {
+						
+						// Assign the volunteer, if we are not updating
+						$registration->set_volunteer( $volunteer );
+						
 					} // endif
-					$registration->set_volunteer( $volunteer );
+					
 				} // endif
 
 				// Update the fixer station

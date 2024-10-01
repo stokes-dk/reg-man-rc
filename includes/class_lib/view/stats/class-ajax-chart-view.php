@@ -92,6 +92,8 @@ class Ajax_Chart_View {
 		$fields_array[] = '<input type="hidden" name="' . Event_Filter_Input_Form::YEAR_INPUT_NAME . '" value="" autocomplete="off">';
 		// Category
 		$fields_array[] = '<input type="hidden" name="' . Event_Filter_Input_Form::CATEGORY_INPUT_NAME . '" value="" autocomplete="off">';
+		// Author
+		$fields_array[] = '<input type="hidden" name="' . Event_Filter_Input_Form::EVENT_AUTHOR_INPUT_NAME . '" value="" autocomplete="off">';
 		// Type
 		$fields_array[] = '<input type="hidden" name="chart_type" value="' . esc_attr( $chart_type ) . '" autocomplete="off">';
 

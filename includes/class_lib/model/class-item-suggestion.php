@@ -58,43 +58,32 @@ class Item_Suggestion {
 	 * @return	Item_Suggestion[]
 	 */
 	public static function get_all_item_suggestions() {
+	
 		$result = array();
-		$statuses = self::get_visible_statuses();
-		$post_array = get_posts( array(
-						'post_type'				=> self::POST_TYPE,
-						'post_status'			=> $statuses,
-						'posts_per_page'		=> -1, // get all
-						'orderby'				=> 'post_title',
-						'order'					=> 'ASC',
-						'ignore_sticky_posts'	=> 1 // TRUE here means do not move sticky posts to the start of the result set
-		) );
+
+		$args = array(
+				'post_type'				=> self::POST_TYPE,
+				'posts_per_page'		=> -1, // get all
+				'orderby'				=> 'post_title',
+				'order'					=> 'ASC',
+				'ignore_sticky_posts'	=> 1 // TRUE here means do not move sticky posts to the start of the result set
+		);
+
+		$query = new \WP_Query( $args );
+		$post_array = $query->posts;
+
 		foreach ( $post_array as $post ) {
 			$item_suggestion = self::instantiate_from_post( $post );
 			if ( $item_suggestion !== NULL ) {
 				$result[] = $item_suggestion;
 			} // endif
 		} // endfor
-		return $result;
-	} // function
 
-	/**
-	 * Get an array of post statuses that indicates what is visible to the current user.
-	 * @param boolean	$is_look_in_trash	A flag set to TRUE if posts in trash should be visible.
-	 * @return string[]
-	 */
-	private static function get_visible_statuses( $is_look_in_trash = FALSE ) {
-		$capability = 'read_private_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
-		if ( current_user_can( $capability ) ) {
-			$result = array( 'publish', 'pending', 'draft', 'future', 'private', 'inherit' ); // don't get auto-draft
-			if ( $is_look_in_trash ) {
-				$result[] = 'trash';
-			} // endif
-		} else {
-			$result = array( 'publish' );
-		} // endif
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
-	} // function
 
+	} // function
 
 	/**
 	 * Get a single item suggestion using its ID
@@ -107,22 +96,7 @@ class Item_Suggestion {
 	 */
 	public static function get_item_suggestion_by_id( $item_suggestion_id ) {
 		$post = get_post( $item_suggestion_id );
-		if ( $post !== NULL ) {
-			$post_type = $post->post_type; // make sure that the given post is the right type, there's no reason it shouldn't be
-			if ( $post_type == self::POST_TYPE ) {
-				$status = $post->post_status;
-				$visible = self::get_visible_statuses();
-				if ( in_array( $status, $visible ) ) {
-					$result = self::instantiate_from_post( $post );
-				} else {
-					$result = NULL; // The post status is not visible in the currenct context
-				} // endif
-			} else {
-				$result = NULL;
-			} // endif
-		} else {
-			$result = NULL;
-		} // endif
+		$result = self::instantiate_from_post( $post );
 		return $result;
 	} // function
 
@@ -435,8 +409,8 @@ class Item_Suggestion {
 				'parent_item_colon'		=> '',
 				'menu_name'				=> __('Item Suggestions', 'reg-man-rc')
 		);
-		$capability_singular = User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_SINGULAR;
-		$capability_plural = User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
+		$capability_singular = User_Role_Controller::ITEM_SUGGESTION_CAPABILITY_TYPE_SINGULAR;
+		$capability_plural = User_Role_Controller::ITEM_SUGGESTION_CAPABILITY_TYPE_PLURAL;
 		$args = array(
 				'labels'				=> $labels,
 				'description'			=> 'Item Suggestions', // Internal description, not visible externally
@@ -448,7 +422,7 @@ class Item_Suggestion {
 				'show_in_nav_menus'		=> FALSE, // available for selection in navigation menus?
 				'show_in_menu'			=> Admin_Menu_Page::get_CPT_show_in_menu( $capability_plural ), // Where to show in admin menu? The main menu page will determine this
 				'show_in_admin_bar'		=> FALSE, // Whether to include this post type in the admin bar
-				'menu_position'			=> 5, // Menu order position.
+				'menu_position'			=> Admin_Menu_Page::get_menu_position(), // Menu order position
 				'menu_icon'				=> 'dashicons-lightbulb',
 				'hierarchical'			=> FALSE, // Can each post have a parent?
 				'supports'				=> array( 'title' ),
@@ -478,62 +452,6 @@ class Item_Suggestion {
 				$post_type->labels->all_items .= $notification_bubble;
 			} // endif
 		} // endif
-	} // function
-
-
-	/**
-	 * Get the html content shown to the administrator in the "About" help for this post type
-	 * @return string
-	 */
-	public static function get_about_content() {
-		ob_start();
-			$heading = __( 'About item suggestions', 'reg-man-rc' );
-			echo "<h2>$heading</h2>";
-			echo '<p>';
-				$msg = __(
-					'Item suggestions help reduce typing when registering new items.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'When you register an item and begin typing the description, the system' .
-					' will find and display matching item suggestions.' .
-					'  For example, if you type "light" the system may show item suggestions like "Lamp", "Bike light" and "Nightlight".',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'An item suggestion contains a description like "Lamp",' .
-					' a comma-separated list of alternate descriptions like "Light, Desk lamp",' .
-					' a default item type like "Electrical / Electronic",' .
-					' and a default fixer station for the item like "Appliances & Housewares".',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'Item suggestions will pop up when a user begins typing an item description during registration.' .
-					'  Selecting a suggestion will fill in the fields for the item.' .
-					'  After selection the fields may be modified if necessary.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'Because item suggestions refer to fixer stations and item types, you should create those first ' .
-					' before creating your item suggestions.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			$result = ob_get_clean();
-		return $result;
 	} // function
 
 	/**

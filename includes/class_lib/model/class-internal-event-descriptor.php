@@ -5,6 +5,9 @@ use Reg_Man_RC\View\Admin\Admin_Menu_Page;
 use Reg_Man_RC\Control\User_Role_Controller;
 use Reg_Man_RC\View\Map_View;
 use Reg_Man_RC\View\Event_Descriptor_View;
+use Reg_Man_RC\Model\Stats\Volunteer_Stats_Collection;
+use Reg_Man_RC\Model\Stats\Visitor_Stats_Collection;
+use Reg_Man_RC\Model\Stats\Item_Stats_Collection;
 
 /**
  * Describes a single event or a collection of recurring events defined internally by this plugin.
@@ -19,21 +22,27 @@ use Reg_Man_RC\View\Event_Descriptor_View;
  */
 class Internal_Event_Descriptor implements Event_Descriptor {
 
-	const POST_TYPE					= 'reg-man-rc-event';
-	const EVENT_PROVIDER_ID			= 'rmrc';
+	const POST_TYPE							= 'reg-man-rc-event';
+	const EVENT_PROVIDER_ID					= 'rmrc';
 
-	const STATUS_META_KEY			= self::POST_TYPE . '-status';
-	const START_META_KEY			= self::POST_TYPE . '-start';
-	const END_META_KEY				= self::POST_TYPE . '-end';
-	const VENUE_META_KEY			= self::POST_TYPE . '-venue';
-	const NON_REPAIR_EVENT_META_KEY	= self::POST_TYPE . '-is-non-repair-event';
-
-	private static $RRULE_META_KEY		= self::POST_TYPE . '-rrule';
-	private static $EXDATES_META_KEY	= self::POST_TYPE . '-exdates';
-	private static $RDATES_META_KEY		= self::POST_TYPE . '-rdates';
+	const UID_META_KEY						= self::POST_TYPE . '-uid';
+	const STATUS_META_KEY					= self::POST_TYPE . '-status';
+	const START_META_KEY					= self::POST_TYPE . '-start';
+	const END_META_KEY						= self::POST_TYPE . '-end';
+	const VENUE_META_KEY					= self::POST_TYPE . '-venue';
+	const NON_REPAIR_EVENT_META_KEY			= self::POST_TYPE . '-is-non-repair-event';
+	const VOLUNTEER_PRE_REG_NOTE_META_KEY	= self::POST_TYPE . '-volunteer-pre-reg-note';
+	
+	const RRULE_META_KEY					= self::POST_TYPE . '-rrule';
+//	const EXDATES_META_KEY					= self::POST_TYPE . '-exdates';
+//	const RDATES_META_KEY					= self::POST_TYPE . '-rdates';
+	const CANCEL_DATES_META_KEY				= self::POST_TYPE . '-cancel-dates';
+	
+	const DATE_DB_FORMAT					= 'Y-m-d H:i:s'; // This is how we format dates to store in the database
 
 	private static $UTC_TIMEZONE; // We use UTC timezone for all DateTime objects stored in the database
-	private static $DATE_DB_FORMAT = 'Y-m-d H:i:s'; // This is how we format dates to store in the database
+	
+	private static $EVENT_EDITORS_ARRAY;
 
 	private $uid;
 	private $post;
@@ -50,6 +59,7 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	private $categories; // An array of names of categories as required by Event_Descriptor (similar to VEVENT)
 	private $is_non_repair_event; // A flag set to TRUE if items will not be repaired at this event
 	private $fixer_stations; // An array of fixer stations assigned to this event
+	private $volunteer_pre_reg_note; // Note from the organizer shown only in the volunteer area before registration
 	private $url; // The url for this event
 	private $rrule; // The text version of the recurrence rule provided upon instantiation
 	private $recurrence_rule; // The object representation of the recurrence rule
@@ -57,8 +67,18 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	private $exclusion_date_time_array; // an array of DateTime objects representing the exclusion dates for a recurring event
 	private $rdates; // inclusion dates and times as a string
 	private $inclusion_date_time_array; // an array of DateTime objects representing the dates to be added to a recurring event
+	private $cancel_date_strings_array; // An array of recurring event dates marked as cancelled
+	private $cancel_date_times_array; // An array of DateTime objects representing the cancelled dates for a recurring event
 	private $map_marker_colour; // The colour for the marker used to mark this event on a map
 
+	private $events_collection; // Used to determine stats like number of items
+	private $total_item_stats_collection;
+	private $total_visitor_stats_collection;
+	private $total_volunteer_stats_collection;
+	private $total_items_count;
+	private $total_visitors_count;
+	private $total_volunteers_count;
+	
 	/**
 	 * Instantiate and return a new instance of this class using the specified post data
 	 *
@@ -76,6 +96,136 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	} // function
 
 	/**
+	 * Create a new internal event descriptor
+	 *
+	 * @param	string				$event_summary		The summary (or title) of the event
+	 * @param	\DateTime			$start_date_time	The event start date and time
+	 * @param	\DateTime			$end_date_time		The event end date and time
+	 * @param	Event_Category[]	$category_array		An array of categories for the event
+	 * @return	Visitor|null
+	 */
+	public static function create_internal_event_descriptor( $event_summary, $start_date_time, $end_date_time, $category_array = NULL ) {
+
+		$args = array(
+				'post_title'	=> $event_summary,
+				'post_status'	=> 'publish',
+				'post_type'		=> self::POST_TYPE,
+		);
+
+		$post_id = wp_insert_post( $args, $wp_error = TRUE );
+
+		if ( $post_id instanceof \WP_Error ) {
+			
+			Error_Log::log_wp_error( __( 'Unable to create new inernal event descriptor', 'reg-man-rc' ), $post_id );
+			$result = NULL;
+			
+		} else {
+			
+			$post = get_post( $post_id );
+			$result = self::instantiate_from_post( $post );
+			
+			if ( ! empty( $result ) ) {
+
+				$result->set_event_start_date_time( $start_date_time );
+				$result->set_event_end_date_time( $end_date_time );
+				if ( ! empty( $category_array ) ) {
+					$result->set_event_category_array( $category_array );
+				} // endif
+
+			} // endif
+			
+		} // endif
+
+		return $result;
+
+	} // function
+	
+	/**
+	 * Determine if the current user is allowed to duplicate the event descriptor for the specified post
+	 * @param \WP_Post $post
+	 */
+	public static function current_user_can_duplicate( $event_descriptor_id ) {
+		$create_cap = 'create_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL;
+		$edit_source_cap = 'edit_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_SINGULAR;
+		$result = ( current_user_can( $create_cap ) && current_user_can( $edit_source_cap, $event_descriptor_id ) );
+		return $result;
+	} // function
+	
+	/**
+	 * Create a duplicate of the specified event descriptor
+	 * @param	Internal_Event_Descriptor $source_event_descriptor
+	 * @return	Internal_Event_Descriptor
+	 */
+	public static function create_duplicate_event_descriptor( $source_event_descriptor ) {
+		$result = NULL;
+		
+		if ( ( $source_event_descriptor instanceof Internal_Event_Descriptor )
+				&& self::current_user_can_duplicate( $source_event_descriptor->get_post_id() ) ) {
+			
+			$post = $source_event_descriptor->get_post();
+			$post_id = $post->ID;
+//			Error_Log::var_dump( $post_id, $post->post_title );
+
+			// Insert the new post with the same values and draft status
+			$args = array(
+					'comment_status' => $post->comment_status,
+					'ping_status'    => $post->ping_status,
+					'post_author'    => $post->post_author,
+					'post_content'   => $post->post_content,
+					'post_excerpt'   => $post->post_excerpt,
+					'post_name'      => $post->post_name,
+					'post_parent'    => $post->post_parent,
+					'post_password'  => $post->post_password,
+					'post_status'    => 'draft',
+					'post_title'     => $post->post_title,
+					'post_type'      => $post->post_type,
+					'to_ping'        => $post->to_ping,
+					'menu_order'     => $post->menu_order
+			);			
+			
+			$new_post_id = wp_insert_post( $args );
+			
+			// Copy the taxonomies over
+			$taxonomies = get_object_taxonomies( get_post_type( $post ) ); // returns array of taxonomy names for post type, ex array("category", "post_tag");
+			foreach ( $taxonomies as $taxonomy ) {
+				$post_terms = wp_get_object_terms( $post_id, $taxonomy, array( 'fields' => 'slugs' ) );
+				wp_set_object_terms( $new_post_id, $post_terms, $taxonomy, false );
+			} // endif
+			
+			// Copy the metadata over
+			
+			// We should NOT copy over the UID!!!
+			$ignore_meta_key_array = array(
+					'_wp_old_slug',
+					Internal_Event_Descriptor::UID_META_KEY,
+			);
+			$post_meta = get_post_meta( $post_id );
+			if ( $post_meta ) {
+	
+				foreach ( $post_meta as $meta_key => $meta_values ) {
+
+					if ( in_array( $meta_key, $ignore_meta_key_array ) ) {
+						continue;
+					} // endif
+	
+					foreach ( $meta_values as $meta_value ) {
+						add_post_meta( $new_post_id, $meta_key, $meta_value );
+					} // endfor
+					
+				} // endfor
+				
+			} // endif
+			
+			// Construct the new object from the new post so we can return it
+			$new_post = get_post( $new_post_id );
+			$result = self::instantiate_from_post( $new_post );
+			
+		} // endif
+		
+		return $result;
+	} // function
+	
+	/**
 	 * Get all events defined internally
 	 *
 	 * This method will return an array of instances of this class describing all events defined under this plugin
@@ -83,21 +233,41 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	 * @return \Reg_Man_RC\Model\Internal_Event_Descriptor[]
 	 */
 	public static function get_all_internal_event_descriptors() {
+
 		$result = array();
-		$statuses = self::get_visible_statuses();
-		$post_array = get_posts( array(
-						'post_type'				=> self::POST_TYPE,
-						'post_status'			=> $statuses,
-						'posts_per_page'		=> -1, // get all
-						'ignore_sticky_posts'	=> 1 // TRUE here means do not move sticky posts to the start of the result set
-		) );
+		
+		$args = array(
+				'post_type'				=> self::POST_TYPE,
+				'posts_per_page'		=> -1, // get all
+				'ignore_sticky_posts'	=> 1 // TRUE here means do not move sticky posts to the start of the result set
+		);
+		
+		// The admin calendar should show draft events (at least the current user's own drafts)
+		// But the admin calendar events are retrieved via JSON feed which is a non-admin context
+		//  so WP_Query uses post_type = 'publish' ONLY
+		// To include draft events in the admin calendar, we'll modify the post_status argument here
+		//  for users who have authorization to create events
+		// Individual calendars will determine which of the resulting events to show
+
+		if ( current_user_can( 'create_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+			$args[ 'post_status' ] = array( 'publish', 'private', 'future', 'draft', 'pending' );
+		} // endif
+
+		$query = new \WP_Query( $args );
+		$post_array = $query->posts;
+
+//		Error_Log::var_dump( get_current_user(), is_admin() );
 		foreach ( $post_array as $post ) {
 			$event = self::instantiate_from_post( $post );
 			if ( $event !== NULL ) {
 				$result[] = $event;
 			} // endif
 		} // endfor
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+
 		return $result;
+
 	} // function
 
 	/**
@@ -109,14 +279,12 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	 * @return	Internal_Event_Descriptor[]
 	 */
 	public static function get_internal_event_descriptors_for_event_category( $event_category_id ) {
+
 		$result = array();
-		$statuses = self::get_visible_statuses();
+
 		$args = array(
 				'post_type'				=> self::POST_TYPE,
-				'post_status'			=> $statuses,
 				'posts_per_page'		=> -1, // get all
-//				'orderby'				=> 'post_title',
-//				'order'					=> 'ASC',
 				'ignore_sticky_posts'	=> 1, // TRUE here means do not move sticky posts to the start of the result set
 				'tax_query' => array(
 						array(
@@ -128,14 +296,17 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 		);
 
 		$query = new \WP_Query( $args );
-		$posts = $query->posts;
-		foreach ( $posts as $post ) {
+		$post_array = $query->posts;
+
+		foreach ( $post_array as $post ) {
 			$instance = self::instantiate_from_post( $post );
 			if ( $instance !== NULL ) {
 				$result[] = $instance;
 			} // endif
 		} // endfor
-		wp_reset_postdata(); // Required after using WP_Query()
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
 
 	} // function
@@ -150,10 +321,9 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	 */
 	public static function get_internal_event_descriptors_for_venue( $venue_id ) {
 		$result = array();
-		$statuses = self::get_visible_statuses();
+
 		$args = array(
 				'post_type'				=> self::POST_TYPE,
-				'post_status'			=> $statuses,
 				'posts_per_page'		=> -1, // get all
 				'ignore_sticky_posts'	=> 1, // TRUE here means do not move sticky posts to the start of the result set
 				'meta_key'				=> self::VENUE_META_KEY,
@@ -174,100 +344,104 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 				$result[] = $instance;
 			} // endif
 		} // endfor
-		wp_reset_postdata(); // Required after using WP_Query()
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
 
 	} // function
 
 	/**
-	 * Get an array of post statuses that indicates what is visible to the current user.
-	 * @param boolean	$is_look_in_trash	A flag set to TRUE if posts in trash should be visible.
-	 * @return string[]
+	 * Get a count of internal event descriptors for whose venue is the one specified.
+	 *
+	 * @param	int|string	$venue_id	The ID of the venue whose descriptors are to be returned
+	 * @return	int
 	 */
-	private static function get_visible_statuses( $is_look_in_trash = FALSE ) {
-		$capability = 'read_private_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL;
-		if ( current_user_can( $capability ) ) {
-			$result = array( 'publish', 'pending', 'draft', 'future', 'private', 'inherit' ); // don't get auto-draft
-			if ( $is_look_in_trash ) {
-				$result[] = 'trash';
-			} // endif
-		} else {
-			$result = array( 'publish' );
-		} // endif
+	public static function get_count_internal_event_descriptors_for_venue( $venue_id ) {
+		$result = array();
+
+		$args = array(
+				'post_type'				=> self::POST_TYPE,
+				'posts_per_page'		=> -1, // get all
+				'ignore_sticky_posts'	=> 1, // TRUE here means do not move sticky posts to the start of the result set
+				'meta_key'				=> self::VENUE_META_KEY,
+				'meta_query'			=> array(
+							array(
+									'key'		=> self::VENUE_META_KEY,
+									'value'		=> $venue_id,
+									'compare'	=> '=',
+							)
+				)
+		);
+
+		$query = new \WP_Query( $args );
+		$result = $query->found_posts;
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
+
 	} // function
 
 	/**
-	 * Get a single internal event descriptor using its event ID (i.e. post ID), e.g. 2456
+	 * Get a single internal event descriptor using its ID (i.e. post ID), e.g. 2456
 	 *
 	 * This method will return a single instance of this class describing the event specified by the event ID.
 	 * If the event is not found, this method will return NULL
 	 *
+	 * @param string|int	$event_desc_id	The ID for the event descriptor
 	 * @return \Reg_Man_RC\Model\Internal_Event_Descriptor
 	 */
-	public static function get_internal_event_descriptor_by_event_id( $event_id ) {
-		$post = ! empty( $event_id ) ? get_post( $event_id ) : NULL;
-		if ( $post !== NULL ) {
-			$post_type = $post->post_type; // make sure that the given post is the right type, there's no reason it shouldn't be
-			if ( $post_type == self::POST_TYPE ) {
-				$status = $post->post_status;
-				$visible = self::get_visible_statuses();
-				if ( in_array( $status, $visible ) ) {
-					$result = self::instantiate_from_post( $post );
-				} else {
-					$result = NULL; // The post status is not visible in the currenct context
-				} // endif
+	public static function get_internal_event_descriptor_by_id( $event_desc_id ) {
+
+		$result = NULL;
+
+		$post = ! empty( $event_desc_id ) ? get_post( $event_desc_id ) : NULL;
+		
+		// I want this to behave in the same way get_all_internal_event_desc does
+		// get_post() will normally return a post of any status including trash
+		// I want to make sure that posts with status that's not visible are not returned
+		if ( ! empty( $post ) ) {
+			$post_status = $post->post_status;
+			if ( current_user_can( 'create_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+				$visible_statuses = array( 'publish', 'private', 'future', 'draft', 'pending' );
 			} else {
-				$result = NULL; // The post is not the right type
+				$visible_statuses = array( 'publish' );
 			} // endif
-		} else {
-			$result = NULL; // The post can't be found
+		
+			if ( in_array( $post_status, $visible_statuses ) ) {
+				$result = self::instantiate_from_post( $post );
+			} // endif
 		} // endif
+		
+//		Error_Log::var_dump( $event_desc_id, ! empty( $post ), ! empty( $result ) );
 		return $result;
+
 	} // function
 
 	/**
-	 * Get an array of strings representing the years in which events are scheduled.
-	 *
-	 * @return string[]		An array of strings indicating years in which events are scheduled.
-	 * Each string contains a 4-digit year, e.g. '2021'
+	 * Get an array of display names keyed by user ID for the users who have edit capability for internal events
+	 * @return string[][]	An array of display names keyed by user ID, e.g. [ 1 => 'Dave', 2 => 'Lisa' ] 
 	 */
-/* FIXME - This is not used!
-	public static function get_internal_event_descriptor_years_list() {
-		global $wpdb;
-		$meta = $wpdb->postmeta;
-		$start_key = self::START_META_KEY;
-		$query = "SELECT DISTINCT( DATE_FORMAT( meta_value, '%Y' ) ) FROM `$meta` WHERE meta_key = '$start_key' ORDER BY meta_value DESC";
-		$data_array = $wpdb->get_results( $query, OBJECT );
-		$result = array();
-		foreach ( $data_array as $data ) {
-			$result[] = $data;
+	public static function get_event_editors_array() {
+		
+		if ( ! isset( self::$EVENT_EDITORS_ARRAY ) ) {
+			
+			$args = array( 'fields' => array( 'ID', 'display_name' ) );
+			$all_users = get_users( $args );
+			self::$EVENT_EDITORS_ARRAY = array();
+			$capability = 'edit_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL;
+			foreach( $all_users as $user ) {
+				if ( user_can( $user->ID, $capability ) ) {
+					self::$EVENT_EDITORS_ARRAY[ $user->ID ] = $user->display_name;
+				} // endif
+			} // endfor
+	//		Error_Log::var_dump( $event_editors );
+			
 		} // endif
-		return $result;
+		return self::$EVENT_EDITORS_ARRAY;
 	} // function
-*/
 	
-	/**
-	 * Get an array of strings representing the months in which events are scheduled.
-	 *
-	 * @return string[]		An array of strings indicating months in which events are scheduled.
-	 * Each string is in the format of [4-digit year]-[1 or 2-digit Month], e.g. '2021-5'
-	 */
-/* FIXME - This is not used!
-	public static function get_internal_event_descriptor_months_list() {
-		global $wpdb;
-		$meta = $wpdb->postmeta;
-		$start_key = self::START_META_KEY;
-		$query = "SELECT DISTINCT( DATE_FORMAT( meta_value, '%Y-%m' ) ) FROM `$meta` WHERE meta_key = '$start_key' ORDER BY meta_value DESC";
-		$data_array = $wpdb->get_results( $query, OBJECT );
-		$result = array();
-		foreach ( $data_array as $data ) {
-			$result[] = $data;
-		} // endif
-		return $result;
-	} // function
-*/
-
 	/**
 	 * Get the post object for this event.
 	 * @return	\WP_Post	The post object for this event
@@ -304,6 +478,10 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 		return ( $this->get_post()->post_password !== '' ) ? TRUE : FALSE;
 	} // function
 
+	/**
+	 * Get the array of event objects for this descriptor
+	 * @return Event[]
+	 */
 	public function get_event_object_array() {
 		if ( ! isset( $this->event_object_array ) ) {
 			$this->event_object_array = Event::get_events_array_for_event_descriptor( $this );
@@ -322,13 +500,12 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	 */
 	public function get_event_uid() {
 		if ( ! isset( $this->uid ) ) {
-			// FIXME - if this event is on a public website then the post guid will work but if the event is on a laptop
-			//  then what good is a guid that looks like "http://localhost/rc_reg_dev/?post_type=reg-man-rc-event&p=5638" ?
-			// When we have implemented a mechanism for registering satalite registration systems (a laptop) then we should
-			//  use the registration ID in the guid.  Maybe something lie,
-			//  https://repaircafetoronto.ca/reg-man-rc-sat-reg/1234/?post_type=reg-man-rc-event&p=5638
-			$post = $this->get_post();
-			$this->uid = ( ! empty( $post->guid ) ) ? $post->guid : NULL;
+			$post_id = $this->get_post_id();
+			$this->uid = get_post_meta( $post_id, self::UID_META_KEY, $single = TRUE );
+			if ( empty( $this->uid ) ) {
+				$this->uid = wp_generate_uuid4();
+				update_post_meta( $post_id, self::UID_META_KEY, $this->uid );
+			} // endif
 		} // endif
 		return $this->uid;
 	} // function
@@ -353,6 +530,15 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	} // function
 
 	/**
+	 * Get the WordPress user ID of the author of this event, if known
+	 * @return	int|string	The WordPress user ID of the author of this event if it is known, otherwise NULL or 0.
+	 * @since v0.6.0
+	 */
+	public function get_event_author_id() {
+		return $this->get_post()->post_author;
+	} // function
+	
+	/**
 	 * Get the event summary, e.g. "Repair Café at Toronto Reference Library".
 	 * @return	string		The event summary if one is assigned, otherwise NULL or empty string
 	 * @since v0.1.0
@@ -370,7 +556,8 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	private function get_event_status_id() {
 		if ( ! isset( $this->event_status_id ) ) {
 			$meta = get_post_meta( $this->get_post_id(), self::STATUS_META_KEY, $single = TRUE );
-			$this->event_status_id = ( $meta !== FALSE ) ? $meta : Event_Status::CONFIRMED;
+			// The default status is CONFIRMED if no metadata is stored
+			$this->event_status_id = ! empty( $meta  ) ? $meta : Event_Status::CONFIRMED;
 		} // endif
 		return $this->event_status_id;
 	} // function
@@ -391,6 +578,103 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 		$this->event_status_id = NULL; // allow it to be re-acquired
 	} // function
 
+	
+	/**
+	 * Get the date strings for cancelled event instances if this is a recurring event
+	 * @return string[]
+	 */
+	public function get_cancelled_event_date_strings_array() {
+		if ( ! isset( $this->cancel_date_strings_array ) ) {
+			$post_id = $this->get_post_id();
+			$this->cancel_date_strings_array = get_post_meta( $post_id, self::CANCEL_DATES_META_KEY, $single = TRUE );
+			if ( empty( $this->cancel_date_strings_array ) ) {
+				$this->cancel_date_strings_array = array();
+			} // endif
+		} // endif
+		return $this->cancel_date_strings_array;
+	} // function
+	
+	/**
+	 * Set the cancel dates for the recurring event
+	 * @param string[] $cancel_date_strings_array	An array of event dates as strings formatted as 'Ymd'
+	 * @return void
+	 */
+	public function set_cancelled_event_date_strings_array( $cancel_date_strings_array ) {
+		if ( empty( $cancel_date_strings_array ) ) {
+			delete_post_meta( $this->get_post_id(), self::CANCEL_DATES_META_KEY );
+		} else {
+			update_post_meta( $this->get_post_id(), self::CANCEL_DATES_META_KEY, $cancel_date_strings_array );
+		} // endif
+	} // function
+	
+	/**
+	 * Get the dates for cancelled events
+	 * @return \DateTime[]
+	 */
+	public function get_cancelled_event_dates() {
+		if ( ! isset( $this->cancel_date_times_array ) ) {
+			$this->cancel_date_times_array = array();
+			$local_tz = wp_timezone();
+			$cancel_date_strings = $this->get_cancelled_event_date_strings_array();
+			foreach( $cancel_date_strings as $date_string ) {
+				try {
+					
+					$date_time = new \DateTime( $date_string, $local_tz );
+					$this->cancel_date_times_array[] = $date_time;
+					
+				} catch( \Exception $exc ) {
+					
+					// Translators: %1$s is a date string 
+					$msg = sprintf( __( 'An invalid cancel event date string was stored: %1$s.', 'reg-man-rc' ), $date_string );
+					Error_Log::log_msg( $msg );
+					
+				} // endry
+			} // endfor
+		} // endif
+		return $this->cancel_date_times_array;
+	} // function
+
+	/**
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Event_Descriptor::get_event_status()
+	 */
+	public function get_event_status( $event_date = NULL ) {
+
+		// Normally, we'll return the status from the event descriptor
+		$result = $this->get_event_descriptor_status();
+
+		// If the event is cancelled then return that status regardless of the event date
+		if ( $result->get_id() !== Event_Status::CANCELLED ) {
+
+			// For a recurring event, we need to check if the specified instance has been cancelled
+			if ( $this->get_event_is_recurring() && ! empty( $event_date ) ) {
+				$date_str = $event_date->format( Event_Key::EVENT_DATE_FORMAT );
+				$cancelled_dates = $this->get_cancelled_event_date_strings_array();
+				if ( in_array( $date_str, $cancelled_dates ) ) {
+					$result = Event_Status::get_event_status_by_id( Event_Status::CANCELLED );
+				} // endif
+			} // endif
+
+		} // endif
+		
+		return $result;
+		
+	} // function
+
+	/**
+	 * Get the status assigned to the event descriptor
+	 * @return Event_Status
+	 */
+	private function get_event_descriptor_status() {
+		if ( ! isset( $this->event_status ) ) {
+			$this->event_status = Event_Status::get_event_status_by_id( $this->get_event_status_id() );
+			if ( $this->event_status === NULL ) {
+				$this->event_status = Event_Status::get_default_event_status();
+			} // endif
+		} // endif
+		return $this->event_status;
+	} // function
+
 	/**
 	 * Set the event's status.
 	 *
@@ -405,24 +689,6 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	} // function
 
 	/**
-	 * Get the event's status represented as an instance of the Event_Status class.
-	 * The default should be CONFIRMED.
-	 *
-	 * @return	Event_Status	The event's status.
-	 * @since v0.1.0
-	 */
-	// FIXME - change this to get_event_status( $recur_id ) to allow for cancelling of specific event recurrence
-	public function get_event_status() {
-		if ( !isset( $this->event_status ) ) {
-			$this->event_status = Event_Status::get_event_status_by_id( $this->get_event_status_id() );
-			if ( $this->event_status === NULL ) {
-				$this->event_status = Event_Status::get_event_status_by_id( Event_Status::get_default_event_status_id() );
-			} // endif
-		} // endif
-		return $this->event_status;
-	} // function
-
-	/**
 	 * Get the event's class represented as an instance of Event_Class.
 	 *
 	 * @return	Event_Class		The event's class.
@@ -430,7 +696,7 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	 * @since v0.1.0
 	 */
 	public function get_event_class() {
-		if ( !isset( $this->event_class ) ) {
+		if ( ! isset( $this->event_class ) ) {
 			$post_status = $this->get_post_status();
 			if ( $post_status === 'publish' ) {
 				if ( $this->get_has_post_password() ) {
@@ -446,7 +712,7 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	} // function
 
 	private static function get_utc_timezone() {
-		if ( !isset( self::$UTC_TIMEZONE ) ) {
+		if ( ! isset( self::$UTC_TIMEZONE ) ) {
 			self::$UTC_TIMEZONE = new \DateTimeZone( 'UTC' );
 		} // endif
 		return self::$UTC_TIMEZONE;
@@ -458,7 +724,7 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	 * @since v0.1.0
 	 */
 	private function get_event_dtstart() {
-		if ( !isset( $this->dtstart ) ) {
+		if ( ! isset( $this->dtstart ) ) {
 			$meta = get_post_meta( $this->get_post_id(), self::START_META_KEY, $single = TRUE );
 			$this->dtstart = ( $meta !== FALSE ) ? $meta : NULL;
 		} // endif
@@ -471,9 +737,9 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	 * @since v0.1.0
 	 */
 	public function get_event_start_date_time() {
-		if ( !isset( $this->start_date_time ) ) {
+		if ( ! isset( $this->start_date_time ) ) {
 			$dtstart = $this->get_event_dtstart();
-			if ( !empty( $dtstart ) ) {
+			if ( ! empty( $dtstart ) ) {
 				try {
 					// The date and time are stored in UTC but will be returned in local timezone
 					// So we need to create a DateTime with UTC tz then change to local tz then create immutable
@@ -503,7 +769,7 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 		} else {
 			// Convert the DateTime object's timezone to UTC for storage
 			$start_date_time->setTimezone( self::get_utc_timezone() );
-			$start_string = $start_date_time->format( self::$DATE_DB_FORMAT );
+			$start_string = $start_date_time->format( self::DATE_DB_FORMAT );
 			update_post_meta( $this->get_post_id(), self::START_META_KEY, $start_string );
 			$this->dtstart = NULL; // Allow the new start DateTime to be re-acquired
 			$this->start_date_time = NULL;
@@ -561,7 +827,7 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 		} else {
 			// Convert the DateTime object's timezone to UTC for storage
 			$end_date_time->setTimezone( self::get_utc_timezone() );
-			$end_string = $end_date_time->format( self::$DATE_DB_FORMAT );
+			$end_string = $end_date_time->format( self::DATE_DB_FORMAT );
 			update_post_meta( $this->get_post_id(), self::END_META_KEY, $end_string );
 			$this->dtend = NULL; // Allow the new start DateTime to be re-acquired
 			$this->end_date_time = NULL;
@@ -673,8 +939,12 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 			if ( ! empty( $post_cats ) ) {
 				$this->category_object_array = $post_cats;
 			} else {
+				/* DKS May 29, 2024 - we have a request to require users to select a category
+				 *  rather than assigning the default.
 				$default_cat = Event_Category::get_default_event_category();
 				$this->category_object_array = ! empty( $default_cat ) ? array( $default_cat ) : array();
+				*/
+				$this->category_object_array = array();
 			} // endif
 		} // endif
 		return $this->category_object_array;
@@ -706,10 +976,10 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	 * @since v0.1.0
 	 */
 	public function set_event_category_array( $event_category_array ) {
-		$event_id = $this->get_post_id();
-		if ( !is_array( $event_category_array ) || ( empty( $event_category_array ) ) ) {
+		$event_desc_id = $this->get_post_id();
+		if ( ! is_array( $event_category_array ) || ( empty( $event_category_array ) ) ) {
 			// If the new category array is NULL or empty then that means to unset or remove the current setting
-			wp_delete_object_term_relationships( $event_id, Event_Category::TAXONOMY_NAME );
+			wp_delete_object_term_relationships( $event_desc_id, Event_Category::TAXONOMY_NAME );
 		} else {
 			$category_id_array = array();
 			foreach ( $event_category_array as $category ) {
@@ -717,7 +987,7 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 					$category_id_array[] = intval( $category->get_id() );
 				} // endif
 			} // endfor
-			wp_set_post_terms( $event_id, $category_id_array, Event_Category::TAXONOMY_NAME );
+			wp_set_post_terms( $event_desc_id, $category_id_array, Event_Category::TAXONOMY_NAME );
 		} // endif
 		$this->category_object_array = NULL; // reset my internal vars so they can be re-acquired
 		$this->categories = NULL;
@@ -755,6 +1025,41 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 		unset( $this->is_non_repair_event ); // allow it to be re-acquired
 	} // function
 
+	
+	/**
+	 * Get the note for the event shown only in the volunteer area before registration
+	 *
+	 * @return	string
+	 * @since v0.8.7
+	 */
+	public function get_volunteer_pre_reg_note() {
+		if ( !isset( $this->volunteer_pre_reg_note ) ) {
+			$val = get_post_meta( $this->get_post_id(), self::VOLUNTEER_PRE_REG_NOTE_META_KEY, $single = TRUE );
+			$this->volunteer_pre_reg_note = ( ( $val !== FALSE ) && ( $val !== NULL ) && is_string( $val ) ) ? $val : '';
+		} // endif
+		return $this->volunteer_pre_reg_note;
+	} // function
+
+	/**
+	 * Set the note for the event shown in the volunteer area
+	 *
+	 * @param	string	$volunteer_pre_reg_note
+	 * @since v0.8.7
+	 */
+	public function set_volunteer_pre_reg_note( $volunteer_pre_reg_note ) {
+		if ( empty( $volunteer_pre_reg_note ) || ! is_string( $volunteer_pre_reg_note ) ) {
+			delete_post_meta( $this->get_post_id(), self::VOLUNTEER_PRE_REG_NOTE_META_KEY );
+		} else {
+			// Update will add the meta data if it does not exist
+			// wp_kses_post() Sanitizes content for allowed HTML tags for post content
+			$meta = wp_kses_post( $volunteer_pre_reg_note );
+			update_post_meta( $this->get_post_id(), self::VOLUNTEER_PRE_REG_NOTE_META_KEY, $meta );
+		} // endif
+		unset( $this->volunteer_pre_reg_note ); // allow it to be re-acquired
+	} // function
+
+	
+	
 	/**
 	 * Get the fixer stations for this event
 	 *
@@ -776,10 +1081,10 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	 * @since v0.1.0
 	 */
 	public function set_event_fixer_station_array( $fixer_station_array ) {
-		$event_id = $this->get_post_id();
+		$event_desc_id = $this->get_post_id();
 		if ( !is_array( $fixer_station_array ) || ( empty( $fixer_station_array ) ) ) {
 			// If the new fixer station array is NULL or empty then that means to unset or remove the current setting
-			wp_delete_object_term_relationships( $event_id, Fixer_Station::TAXONOMY_NAME );
+			wp_delete_object_term_relationships( $event_desc_id, Fixer_Station::TAXONOMY_NAME );
 		} else {
 			$station_id_array = array();
 			foreach ( $fixer_station_array as $fixer_station ) {
@@ -787,7 +1092,7 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 					$station_id_array[] = intval( $fixer_station->get_id() );
 				} // endif
 			} // endfor
-			wp_set_post_terms( $event_id, $station_id_array, Fixer_Station::TAXONOMY_NAME );
+			wp_set_post_terms( $event_desc_id, $station_id_array, Fixer_Station::TAXONOMY_NAME );
 		} // endif
 		$this->fixer_stations = NULL; // reset my internal var so it can be re-acquired
 	} // function
@@ -805,22 +1110,22 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	} // function
 
 	/**
-	 * Get the url for the event descriptor page or event recurrence page when $recur_id is specified.
-	 * @param	string|NULL	$recur_id	An event recurrence ID.
+	 * Get the url for the event descriptor page or event recurrence page when $recur_date is specified.
+	 * @param	string|NULL	$recur_date	An event recurrence date.
 	 *  When NULL or empty the result of this method is the url for the page showing the event descriptor, if such a page exists.
-	 *  If $recur_id is specified then the result is the url for the page showing the specified recurrence, if it exists.
-	 *  If no separate page exists for the event recurrence then the result is the same as when no $recur_id is specified.
+	 *  If $recur_date is specified then the result is the url for the page showing the specified recurrence, if it exists.
+	 *  If no separate page exists for the event recurrence then the result is the same as when no $recur_date is specified.
 	 * @return	string			The url for the page that shows this event descriptor or event recurrence if one exists,
 	 *  otherwise NULL or empty string.
 	 * @since v0.1.0
 	 */
-	public function get_event_page_url( $recur_id = NULL ) {
+	public function get_event_page_url( $recur_date = NULL ) {
 		$base_url = $this->get_event_descriptor_page_url();
-		if ( empty( $recur_id ) ) {
-			$result = $base_url; // There's no recur ID specified so return the URL to the descriptor page
+		if ( empty( $recur_date ) ) {
+			$result = $base_url; // There's no recur date specified so return the URL to the descriptor page
 		} else {
-			$arg_name = Event_Key::RECUR_ID_QUERY_ARG_NAME;
-			$query_arg_array = array( $arg_name => $recur_id );
+			$arg_name = Event_Key::EVENT_DATE_QUERY_ARG_NAME;
+			$query_arg_array = array( $arg_name => $recur_date );
 			$result = add_query_arg( $query_arg_array, $base_url );
 		} // endif
 		return $result;
@@ -833,12 +1138,16 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	 */
 	public function get_event_edit_url() {
 		$post_id = $this->get_post_id();
-		$base_url = admin_url( 'post.php' );
-		$query_args = array(
-				'post'		=> $post_id,
-				'action'	=> 'edit',
-		);
-		$result = add_query_arg( $query_args, $base_url );
+		if ( ! current_user_can( 'edit_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_SINGULAR, $post_id ) ) {
+			$result = NULL;
+		} else {
+			$base_url = admin_url( 'post.php' );
+			$query_args = array(
+					'post'		=> $post_id,
+					'action'	=> 'edit',
+			);
+			$result = add_query_arg( $query_args, $base_url );
+		} // endif
 		return $result;
 	} // function
 
@@ -854,7 +1163,7 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	} // endif
 
 	/**
-	 * Get the recurrence rule for a repeating events.  Non-repeating events will return NULL.
+	 * Get the recurrence rule for a repeating event.  Non-repeating events will return NULL.
 	 * @return	Recurrence_Rule	For a repeating event this method returns an instance of Recurrence_Rule that specifies how the event repeats.
 	 * For non-repeating events this method will return NULL.
 	 * @since v0.1.0
@@ -872,6 +1181,23 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 		} // endif
 		return $this->recurrence_rule;
 	} // function
+	
+	/**
+	 * Set the recurrence rule for a repeating event.  For a non-repeating events this is set to NULL.
+	 * @param	Recurrence_Rule	$recurrence_rule
+	 * @since v0.5.0
+	 */
+	public function set_event_recurrence_rule( $recurrence_rule ) {
+		if ( empty( $recurrence_rule ) ) {
+			delete_post_meta( $this->get_post_id(), self::RRULE_META_KEY );
+		} else {
+			$rrule_string = $recurrence_rule->get_as_string();
+			// Update will add the meta data if it does not exist
+			update_post_meta( $this->get_post_id(), self::RRULE_META_KEY, $rrule_string );
+		} // endif
+		unset( $this->is_non_repair_event ); // allow it to be re-acquired
+		
+	} // funciton
 
 	/**
 	 * Get the RRULE text representation, e.g. 'FREQ=MONTHLY;BYMONTHDAY=1;INTERVAL=1'
@@ -881,7 +1207,7 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	 */
 	private function get_rrule() {
 		if ( !isset( $this->rrule ) ) {
-			$meta = get_post_meta( $this->get_post_id(), self::$RRULE_META_KEY, $single = TRUE );
+			$meta = get_post_meta( $this->get_post_id(), self::RRULE_META_KEY, $single = TRUE );
 			$this->rrule = ( $meta !== FALSE ) ? $meta : NULL;
 		} // endif
 		return $this->rrule;
@@ -1065,6 +1391,95 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 		return $result;
 	} // function
 
+	
+	private function get_events_collection() {
+		if ( ! isset( $this->events_collection ) ) {
+			$this->events_collection = Events_Collection::create_for_events_array( $this->get_event_object_array() );
+		} // endif
+		return $this->events_collection;
+	} // function
+	
+	/**
+	 * Get the Item_Stats_Collection object for this event grouped by total
+	 * @return Item_Stats_Collection
+	 */
+	public function get_total_item_stats_collection() {
+		if ( ! isset( $this->total_item_stats_collection ) ) {
+			$events_collection = $this->get_events_collection();
+			$group_by = Item_Stats_Collection::GROUP_BY_TOTAL;
+			$this->total_item_stats_collection = Item_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
+		} // endif
+		return $this->total_item_stats_collection;
+	} // function
+	
+	/**
+	 * Get the Visitor_Stats_Collection object for this event grouped by total
+	 * @return Visitor_Stats_Collection
+	 */
+	public function get_total_visitor_stats_collection() {
+		if ( ! isset( $this->total_visitor_stats_collection ) ) {
+			$events_collection = $this->get_events_collection();
+			$group_by = Visitor_Stats_Collection::GROUP_BY_TOTAL;
+			$this->total_visitor_stats_collection = Visitor_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
+		} // endif
+		return $this->total_visitor_stats_collection;
+	} // function
+	
+	/**
+	 * Get the Volunteer_Stats_Collection object for this event grouped by total
+	 * @return Volunteer_Stats_Collection
+	 */
+	public function get_total_volunteer_stats_collection() {
+		if ( ! isset( $this->total_volunteer_stats_collection ) ) {
+			$events_collection = $this->get_events_collection();
+			$group_by = Volunteer_Stats_Collection::GROUP_BY_TOTAL;
+			$this->total_volunteer_stats_collection = Volunteer_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
+		} // endif
+		return $this->total_volunteer_stats_collection;
+	} // function
+	
+	/**
+	 * Get the total count of items for this event
+	 * @return int
+	 */
+	public function get_total_items_count() {
+		if ( ! isset( $this->total_items_count ) ) {
+			$stats_collection = $this->get_total_item_stats_collection();
+			$totals_array = array_values( $stats_collection->get_all_stats_array() );
+			$total_stats = isset( $totals_array[ 0 ] ) ? $totals_array[ 0 ] : NULL;
+			$this->total_items_count = isset( $total_stats ) ? $total_stats->get_item_count() : 0;			
+		} // endif
+		return $this->total_items_count;
+	} // function
+
+	/**
+	 * Get the total count of visitors for this event
+	 * @return int
+	 */
+	public function get_total_visitors_count() {
+		if ( ! isset( $this->total_visitors_count ) ) {
+			$stats_collection = $this->get_total_visitor_stats_collection();
+			$totals_array = array_values( $stats_collection->get_all_stats_array() );
+			$total_stats = isset( $totals_array[ 0 ] ) ? $totals_array[ 0 ] : NULL;
+			$this->total_visitors_count = isset( $total_stats ) ? $total_stats->get_visitor_count() : 0;			
+		} // endif
+		return $this->total_visitors_count;
+	} // function
+
+	/**
+	 * Get the total count of volunteers for to this event
+	 * @return int
+	 */
+	public function get_total_volunteers_count() {
+		if ( ! isset( $this->total_volunteers_count ) ) {
+			$stats_collection = $this->get_total_volunteer_stats_collection();
+			$totals_array = array_values( $stats_collection->get_all_stats_array() );
+			$total_stats = isset( $totals_array[ 0 ] ) ? $totals_array[ 0 ] : NULL;
+			$this->total_volunteers_count = isset( $total_stats ) ? $total_stats->get_head_count() : 0;			
+		} // endif
+		return $this->total_volunteers_count;
+	} // function
+	
 
 	/**
 	 *  Register the custom post type during plugin init.
@@ -1073,26 +1488,35 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	 */
 	public static function register() {
 		$labels = array(
-				'name'					=> _x( 'Events', 'Event post type general name', 'reg-man-rc'),
-				'singular_name'			=> _x( 'Event', 'Event post type singular name', 'reg-man-rc'),
+				'name'					=> _x( 'Event Descriptions', 'Event post type general name', 'reg-man-rc'),
+				'singular_name'			=> _x( 'Event Description', 'Event post type singular name', 'reg-man-rc'),
 				'add_new'				=> __( 'Add New', 'reg-man-rc'),
-				'add_new_item'			=> __( 'Add New Event' , 'reg-man-rc' ),
-				'edit_item'				=> __( 'Edit Event', 'reg-man-rc'),
-				'new_item'				=> __( 'New Event', 'reg-man-rc'),
-				'all_items'				=> __( 'Events', 'reg-man-rc'),
-				'view_item'				=> __( 'View Event', 'reg-man-rc'),
-				'search_items'			=> __( 'Search Events', 'reg-man-rc'),
-				'not_found'				=> __( 'No events found', 'reg-man-rc'),
-				'not_found_in_trash'	=> __( 'No events found in the trash', 'reg-man-rc'),
+				'add_new_item'			=> __( 'Add New Event Description' , 'reg-man-rc' ),
+				'edit_item'				=> __( 'Edit Event Description', 'reg-man-rc'),
+				'new_item'				=> __( 'New Event Description', 'reg-man-rc'),
+				'all_items'				=> __( 'Event Descriptions', 'reg-man-rc'),
+				'view_item'				=> __( 'View Event Description', 'reg-man-rc'),
+				'search_items'			=> __( 'Search Event Descriptions', 'reg-man-rc'),
+				'not_found'				=> __( 'No event descriptions found', 'reg-man-rc'),
+				'not_found_in_trash'	=> __( 'No event descriptions found in the trash', 'reg-man-rc'),
 				'parent_item_colon'		=> '',
-				'menu_name'				=> __( 'Repair Café Events', 'reg-man-rc' )
+				'menu_name'				=> __( 'Repair Café Event Descriptions', 'reg-man-rc' )
 		);
 
 		global $wp_version;
+
 		$icon = ( version_compare( $wp_version, '5.5', '>=' ) ) ? 'dashicons-coffee' : 'dashicons-calendar';
+
+		// TODO: Right now the block editor (gutenberg) does not handle required inputs properly
+		// This could cause problems like missing recurrence rule inputs and so on
+		// For now, we'll turn it off
+		$show_in_rest = FALSE;
+		
 		$supports = array( 'title', 'editor', 'thumbnail', 'comments' );
+
 		$capability_singular = User_Role_Controller::EVENT_CAPABILITY_TYPE_SINGULAR;
 		$capability_plural = User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL;
+
 		$args = array(
 				'labels'				=> $labels,
 				'description'			=> 'Events', // Internal description, not visible externally
@@ -1100,11 +1524,11 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 				'exclude_from_search'	=> FALSE, // exclude from regular search results?
 				'publicly_queryable'	=> TRUE, // is it queryable? e.g. ?post_type=item
 				'show_ui'				=> TRUE, // is there a default UI for managing these in wp-admin?
-				'show_in_rest'			=> TRUE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
+				'show_in_rest'			=> $show_in_rest, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
 				'show_in_nav_menus'		=> FALSE, // available for selection in navigation menus?
 				'show_in_menu'			=> Admin_Menu_Page::get_CPT_show_in_menu( $capability_plural ), // Where to show in admin menu? The main menu page will determine this
 				'show_in_admin_bar'		=> TRUE, // Whether to include this post type in the admin bar
-				'menu_position'			=> 5, // Menu order position.  5 is below Posts
+				'menu_position'			=> Admin_Menu_Page::get_menu_position(), // Menu order position
 				'menu_icon'				=> $icon,
 				'hierarchical'			=> FALSE, // Can each post have a parent?
 				'supports'				=> $supports,
@@ -1114,6 +1538,7 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 				),
 				'has_archive'			=> FALSE, // is there an archive page?
 				// FIXME - I need to figure out how to show events in general, not just our internal ones
+				
 				// Rewrite determines how the public page url will look when permalinks are NOT plain.
 				// When the permalinks structure setting is "Plain" the CPT permalink will always be:
 				//   http://site/?{cpt-type-name}={this-cpt-post-id} (regardless of the setting for rewrite)
@@ -1148,13 +1573,13 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 	public static function handle_plugin_uninstall() {
 		// When the plugin is uninstalled, remove all posts of my type
 		$stati = get_post_stati(); // I need all post statuses
-		$posts = get_posts(array(
+		$posts = get_posts( array(
 				'post_type'			=> self::POST_TYPE,
 				'post_status'		=> $stati,
 				'posts_per_page'	=> -1 // get all
-		));
-		foreach ($posts as $post) {
-			wp_delete_post($post->ID);
+		) );
+		foreach ( $posts as $post ) {
+			wp_delete_post( $post->ID );
 		} // endfor
 	} // function
 

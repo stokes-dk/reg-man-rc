@@ -38,19 +38,13 @@ class Visitor_Import_Admin_View {
 
 	public static function register() {
 
-		if ( is_admin() ) {
-
-			// Add my submenu page
-//			add_action( 'admin_menu', array( __CLASS__, 'add_menu_page' ) );
+		if ( is_admin() && Visitor_Import_Admin_Controller::current_user_can_import_visitors() ) {
 
 			// Register my importer
 			add_action( 'admin_init', array( __CLASS__, 'register_importer' ) );
 
 			// Register the hook to enqueue scripts and styles as necessary
 			add_action( 'admin_enqueue_scripts', array( __CLASS__, 'handle_admin_enqueue_scripts' ) );
-
-			// Register hook to insert my import button onto the page
-//			add_action( 'manage_posts_extra_tablenav', array( __CLASS__, 'add_import_button' ) );
 
 		} // endif
 
@@ -72,69 +66,71 @@ class Visitor_Import_Admin_View {
 
 	public function render_form_contents() {
 
-			$input_list = Form_Input_List::create();
+		$input_list = Form_Input_List::create();
 
-			$attachment_id = $this->get_import_file_attachment_id();
-			$attachment_file = ! empty( $attachment_id ) ? get_attached_file( $attachment_id ) : NULL;
+		$attachment_id = $this->get_import_file_attachment_id();
+		$attachment_file = ! empty( $attachment_id ) ? get_attached_file( $attachment_id ) : NULL;
 
-			if ( empty( $attachment_file ) ) {
+		if ( empty( $attachment_file ) ) {
 
-				$label = '';
-				$desc = __( 'Use this tool to import visitor data from a CSV file.', 'reg-man-rc' );
-				$input_list->add_information( $label, $desc );
+			$label = '';
+			$desc = __( 'Use this tool to import visitor data from a CSV file.', 'reg-man-rc' );
+			$input_list->add_information( $label, $desc );
 
-				$label = __( 'The file must contain the following column headings:', 'reg-man-rc' );
-				// NOTE that the column names are always in english and not to be translated
-				$desc = 'Email, First Name, Last Name, Join Mail List?, First Event Key';
-				$input_list->add_information( $label, $desc );
+			$label = __( 'The file must contain the following column headings:', 'reg-man-rc' );
+			// NOTE that the column names are always in english and not to be translated
+			$desc = 'Email, First Name, Last Name, Join Mail List?, First Event Key';
+			$input_list->add_information( $label, $desc );
 
-				$label = '';
-				$desc = __( 'Column values are separated by a comma and optionally enclosed in double quotes.', 'reg-man-rc' );
-				$input_list->add_information( $label, $desc );
+			$label = '';
+			$desc = __( 'Column values are separated by a comma and optionally enclosed in double quotes.', 'reg-man-rc' );
+			$input_list->add_information( $label, $desc );
 
-				$label = '';
-				$desc = __( 'For the "Join Mail List?" column use "true", "yes" or "1" for TRUE and "false", "no" or "0" for FALSE.', 'reg-man-rc' );
-				$input_list->add_information( $label, $desc );
+			$label = '';
+			$desc = __( 'For the "Join Mail List?" column use "true", "yes" or "1" for TRUE, anything else for FALSE.', 'reg-man-rc' );
+			$input_list->add_information( $label, $desc );
 
-				$label = __( 'Visitor CSV import file', 'reg-man-rc' );
-				$name = 'visitor-import-file-name';
-				$hint = '';
-				$classes = '';
-				$accept = '.csv';
-				$is_required = TRUE;
-				$input_list->add_file_input( $label, $name, $hint, $classes, $is_required, $accept );
+			$label = __( 'Visitor CSV import file', 'reg-man-rc' );
+			$name = 'visitor-import-file-name';
+			$hint = '';
+			$classes = '';
+			$accept = '.csv';
+			$is_required = TRUE;
+			$input_list->add_file_input( $label, $name, $hint, $classes, $is_required, $accept );
 
-				$button_text = __( 'Continue', 'reg-man-rc' );
+			$button_text = __( 'Continue', 'reg-man-rc' );
 
-			} else {
-				$name = 'visitor-import-attachment-id';
-				$value = $attachment_id;
-				$input_list->add_hidden_input( $name, $value );
+		} else {
+			$name = 'visitor-import-attachment-id';
+			$value = $attachment_id;
+			$input_list->add_hidden_input( $name, $value );
 
-				$label = __( 'The following file was successfully uploaded', 'reg-man-rc' );
-				$file_name = basename( $attachment_file );
-				$value = "<span>$file_name</span>";
-				$input_list->add_information( $label, $value );
+			$label = __( 'The following file was successfully uploaded', 'reg-man-rc' );
+			$file_name = basename( $attachment_file );
+			$value = "<span>$file_name</span>";
+			$input_list->add_information( $label, $value );
 
-				$label = '';
-				$desc = __( 'Press the button below to import the records.', 'reg-man-rc' );
-				$input_list->add_information( $label, $desc );
+			$label = '';
+			$desc = __( 'Press the button below to import the records.', 'reg-man-rc' );
+			$input_list->add_information( $label, $desc );
 
-				$button_text = __( 'Import Visitors', 'reg-man-rc' );
+			$button_text = __( 'Import Visitors', 'reg-man-rc' );
 
-			} // endif
+		} // endif
 
-			$label = $button_text;
-			$type = 'submit';
-			$classes = 'button';
-			$input_list->add_form_button( $label, $type, $classes );
+		$label = $button_text;
+		$type = 'submit';
+		$classes = 'button';
+		$input_list->add_form_button( $label, $type, $classes );
 
-			$action = Visitor_Import_Admin_Controller::AJAX_ACTION;
-			$form = Ajax_Form::create( $action );
-			$form->add_input_list_to_form_content( $input_list );
-			$form->set_is_file_uplaod( TRUE );
+		$action = Visitor_Import_Admin_Controller::AJAX_ACTION;
+		$method = 'POST';
+		$classes = 'reg-man-rc-import-form reg-man-rc-visitor-import-form';
+		$form = Ajax_Form::create( $action, $method, $classes );
+		$form->add_input_list_to_form_content( $input_list );
+		$form->set_is_file_uplaod( TRUE );
 
-			$form->render();
+		$form->render();
 
 	} // function
 
@@ -158,8 +154,6 @@ class Visitor_Import_Admin_View {
 
 	/**
 	 * Render the page linked from the Tools > Import page.
-	 *
-	 * We have the book image import page as a submenu page under Products so this simply does a redirect to that page.
 	 *
 	 */
 	public static function render_tool_import_page() {

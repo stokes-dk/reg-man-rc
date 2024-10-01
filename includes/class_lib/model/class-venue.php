@@ -58,42 +58,30 @@ class Venue implements Map_Marker {
 	 */
 	public static function get_all_venues() {
 		$result = array();
-		$statuses = self::get_visible_statuses();
-		$post_array = get_posts( array(
-						'post_type'				=> self::POST_TYPE,
-						'post_status'			=> $statuses,
-						'posts_per_page'		=> -1, // get all
-						'orderby'				=> 'post_title',
-						'order'					=> 'ASC',
-						'ignore_sticky_posts'	=> 1 // TRUE here means do not move sticky posts to the start of the result set
-		) );
+
+		$args = array(
+				'post_type'				=> self::POST_TYPE,
+				'posts_per_page'		=> -1, // get all
+				'orderby'				=> 'post_title',
+				'order'					=> 'ASC',
+				'ignore_sticky_posts'	=> 1 // TRUE here means do not move sticky posts to the start of the result set
+		);
+
+		$query = new \WP_Query( $args );
+		$post_array = $query->posts;
+
 		foreach ( $post_array as $post ) {
 			$venue = self::instantiate_from_post( $post );
 			if ( $venue !== NULL ) {
 				$result[] = $venue;
 			} // endif
 		} // endfor
-		return $result;
-	} // function
 
-	/**
-	 * Get an array of post statuses that indicates what is visible to the current user.
-	 * @param boolean	$is_look_in_trash	A flag set to TRUE if posts in trash should be visible.
-	 * @return string[]
-	 */
-	private static function get_visible_statuses( $is_look_in_trash = FALSE ) {
-		$capability = 'read_private_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL;
-		if ( current_user_can( $capability ) ) {
-			$result = array( 'publish', 'pending', 'draft', 'future', 'private', 'inherit' ); // don't get auto-draft
-			if ( $is_look_in_trash ) {
-				$result[] = 'trash';
-			} // endif
-		} else {
-			$result = array( 'publish' );
-		} // endif
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
-	} // function
 
+	} // function
 
 	/**
 	 * Get a single venue using its venue ID
@@ -106,22 +94,7 @@ class Venue implements Map_Marker {
 	 */
 	public static function get_venue_by_id( $venue_id ) {
 		$post = get_post( $venue_id );
-		if ( $post !== NULL ) {
-			$post_type = $post->post_type; // make sure that the given post is the right type, there's no reason it shouldn't be
-			if ( $post_type == self::POST_TYPE ) {
-				$status = $post->post_status;
-				$visible = self::get_visible_statuses();
-				if ( in_array( $status, $visible ) ) {
-					$result = self::instantiate_from_post( $post );
-				} else {
-					$result = NULL; // The post status is not visible in the currenct context
-				} // endif
-			} else {
-				$result = NULL;
-			} // endif
-		} else {
-			$result = NULL;
-		} // endif
+		$result = self::instantiate_from_post( $post );
 		return $result;
 	} // function
 
@@ -133,12 +106,12 @@ class Venue implements Map_Marker {
 	 */
 	public static function get_venue_by_name( $venue_name ) {
 		$result = NULL;
+
 		if ( ! empty( $venue_name ) ) {
-			$statuses = self::get_visible_statuses();
+
 			$args = array(
 					'title'						=> $venue_name,
 					'post_type'					=> self::POST_TYPE,
-					'post_status'				=> $statuses,
 					'posts_per_page'			=> 1, // only get one
 					'ignore_sticky_posts'		=> 1, // TRUE here means do not move sticky posts to the start of the result set
 					'update_post_term_cache'	=> false,
@@ -147,14 +120,18 @@ class Venue implements Map_Marker {
 					'orderby'					=> 'post_date ID',
 					'order'						=> 'ASC',
 			);
+
 			$query = new \WP_Query( $args );
 			$posts = $query->posts;
+
 			if ( is_array( $posts ) && isset( $posts[ 0 ] ) ) {
-//				$post = get_post( $posts[ 0 ] );
 				$result = self::instantiate_from_post( $posts[ 0 ] );
 			} // endif
-			wp_reset_postdata(); // Required after using WP_Query()
+
+//			wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+
 		} // endif
+
 		return $result;
 
 	} // function
@@ -168,12 +145,13 @@ class Venue implements Map_Marker {
 	 * @return	Venue	The venue with the specified location or NULL if no venue has the specified location
 	 */
 	public static function get_venue_by_location( $location ) {
+
 		$result = NULL;
+
 		if ( ! empty( $location ) ) {
-			$statuses = self::get_visible_statuses();
+
 			$args = array(
 					'post_type'				=> self::POST_TYPE,
-					'post_status'			=> $statuses,
 					'posts_per_page'		=> 1, // only get one
 					'ignore_sticky_posts'	=> 1, // TRUE here means do not move sticky posts to the start of the result set
 					'meta_key'				=> self::$LOCATION_META_KEY,
@@ -187,12 +165,16 @@ class Venue implements Map_Marker {
 			);
 
 			$query = new \WP_Query( $args );
-			$posts = $query->posts;
-			if ( is_array( $posts ) && isset( $posts[ 0 ] ) ) {
-				$result = self::instantiate_from_post( $posts[ 0 ] );
+			$post_array = $query->posts;
+
+			if ( is_array( $post_array ) && isset( $post_array[ 0 ] ) ) {
+				$result = self::instantiate_from_post( $post_array[ 0 ] );
 			} // endif
-			wp_reset_postdata(); // Required after using WP_Query()
+
+//			wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+
 		} // endif
+
 		return $result;
 
 	} // function
@@ -204,19 +186,23 @@ class Venue implements Map_Marker {
 	/**
 	 * Create a new venue
 	 *
-	 * @param	string					$name		The name of the new venue, e.g. "Toronto Reference Libarary"
-	 * @param	string					$location	The location of the new venue, e.g. "789 Yonge St, Toronto, ON M4W 2G8"
-	 * @param	Geographic_Position		$geo		The new location for the venue
-	 * @param	int						$map_zoom	The zoom level for a map showing this venue by itself
+	 * @param	string				$name			The name of the new venue, e.g. "Toronto Reference Libarary"
+	 * @param	string				$location		The location of the new venue, e.g. "789 Yonge St, Toronto, ON M4W 2G8"
+	 * @param	string				$description	The description of the new venue
+	 * @param	Geographic_Position	$geo			The new location for the venue
+	 * @param	int					$map_zoom		The zoom level for a map showing this venue by itself
 	 * @return	Venue|null
 	 */
-	public static function create_new_venue( $name, $location, $geo = NULL, $map_zoom = NULL ) {
+	public static function create_new_venue( $name, $location = NULL, $description = NULL, $geo = NULL, $map_zoom = NULL ) {
 
 		$args = array(
 				'post_title'	=> $name,
 				'post_status'	=> 'publish',
 				'post_type'		=> self::POST_TYPE,
 		);
+		if ( ! empty( $description ) ) {
+			$args[ 'post_content' ] = $description;
+		} // endif
 
 		$post_id = wp_insert_post( $args, $wp_error = TRUE );
 
@@ -510,33 +496,34 @@ class Venue implements Map_Marker {
 				'parent_item_colon'		=> '',
 				'menu_name'				=> __('Venues', 'reg-man-rc')
 		);
-		$capability_singular = User_Role_Controller::EVENT_CAPABILITY_TYPE_SINGULAR;
-		$capability_plural = User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL;
+		$capability_singular = User_Role_Controller::VENUE_CAPABILITY_TYPE_SINGULAR;
+		$capability_plural = User_Role_Controller::VENUE_CAPABILITY_TYPE_PLURAL;
 		$args = array(
 				'labels'				=> $labels,
 				'description'			=> 'Venues', // Internal description, not visible externally
-				'public'				=> TRUE, // is it publicly visible?
-				'exclude_from_search'	=> FALSE, // exclude from regular search results?
-				'publicly_queryable'	=> TRUE, // is it queryable? e.g. ?post_type=item
+				'public'				=> FALSE, // is it publicly visible?
+				'exclude_from_search'	=> TRUE, // exclude from regular search results?
+				'publicly_queryable'	=> FALSE, // is it queryable? e.g. ?post_type=item
 				'show_ui'				=> TRUE, // is there a default UI for managing these in wp-admin?
-				'show_in_rest'			=> TRUE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
+				// TODO: Right now we must use FALSE for REST to make the autocomplete work properly in the admin UI
+				'show_in_rest'			=> FALSE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
 				'show_in_nav_menus'		=> FALSE, // available for selection in navigation menus?
 				'show_in_menu'			=> Admin_Menu_Page::get_CPT_show_in_menu( $capability_plural ), // Where to show in admin menu? The main menu page will determine this
 				'show_in_admin_bar'		=> FALSE, // Whether to include this post type in the admin bar
-				'menu_position'			=> 5, // Menu order position.
+				'menu_position'			=> Admin_Menu_Page::get_menu_position(), // Menu order position
 				'menu_icon'				=> 'dashicons-location-alt',
 				'hierarchical'			=> FALSE, // Can each post have a parent?
-/**
- * supports options are	'title', 'editor' (post content), 'author', 'thumbnail', 'excerpt', 'trackbacks',
- *							'custom-fields', 'comments', 'revisions', 'page-attributes', 'post-formats'
- */
 				'supports'				=> array( 'title', 'editor', 'thumbnail' ),
 				'taxonomies'			=> array( ),
 				'has_archive'			=> FALSE, // is there an archive page?
-				'rewrite'				=> array(
-					'slug'			=> Settings::get_venues_slug(),
-					'with_front'	=> FALSE,
-				),
+				'rewrite'				=> FALSE,
+				// TODO: Do we want to show a public page for a venue?
+/*
+					array(
+						'slug'			=> Settings::get_venues_slug(),
+						'with_front'	=> FALSE,
+					),
+*/
 				// Specifying capability_type restricts access to ONLY the roles that are granted these capabilities
 				// Removing capability_type defaults to (post) and means, for example, if you can edit posts you can edit this CPT
 				'capability_type'		=> array( $capability_singular, $capability_plural ),

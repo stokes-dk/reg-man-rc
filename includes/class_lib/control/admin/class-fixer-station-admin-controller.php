@@ -1,8 +1,9 @@
 <?php
 namespace Reg_Man_RC\Control\Admin;
 
-use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Settings;
+use Reg_Man_RC\Model\Fixer_Station;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The fixer station controller used in the admin backend
@@ -94,7 +95,7 @@ class Fixer_Station_Admin_Controller {
 						$icon_id = isset( $icon_id_array[ $index ] ) ? trim( $icon_id_array[ $index ] ) : NULL;
 						$station = Fixer_Station::create_fixer_station( $name, $desc, $colour );
 						if ( isset( $station ) ) {
-							$station->set_icon_attachment_id( $icon_id );
+							$station->set_icon_image_attachment_id_array( array( $icon_id ) );
 						} // endif
 					} // endif
 				} // endif
@@ -108,13 +109,10 @@ class Fixer_Station_Admin_Controller {
 		$fixer_station = Fixer_Station::get_fixer_station_by_id( $term_id );
 		if ( ! empty( $fixer_station ) ) {
 
-			$item_types_array = isset( $_POST['item_types'] ) ? $_POST['item_types'] : array();
-			$fixer_station->set_item_types_array( $item_types_array );
-
-			$icon_flag = isset( $_POST['fixer-station-icon-selection'] );
+			$icon_flag = isset( $_POST[ 'fixer-station-icon-selection' ] );
 			if ( $icon_flag ) {
-				$attach_id = isset( $_POST['media-library-attachment-id'] ) ? trim( $_POST['media-library-attachment-id'] ) : NULL;
-				$fixer_station->set_icon_attachment_id( $attach_id );
+				$attach_id_array = isset( $_POST[ 'media-library-attachment-id' ] ) ? $_POST['media-library-attachment-id'] : NULL;
+				$fixer_station->set_icon_image_attachment_id_array( $attach_id_array );
 			} // endif
 
 			$colour = isset( $_POST['fixer-station-colour'] ) ? trim( $_POST['fixer-station-colour'] ) : NULL;
@@ -135,17 +133,10 @@ class Fixer_Station_Admin_Controller {
 		$fixer_station = Fixer_Station::get_fixer_station_by_id( $term_id );
 		if ( ! empty( $fixer_station ) ) {
 
-			// I need to avoid changing the item types during quick edit
-			// The following marker indicates that this update is from a regular edit so go ahead and change item types
-			if ( isset( $_POST['update_item_types'] ) ) {
-				$item_types_array = isset( $_POST['item_types'] ) ? $_POST['item_types'] : array();
-				$fixer_station->set_item_types_array( $item_types_array );
-			} // endif
-
-			$icon_flag = isset( $_POST['fixer-station-icon-selection'] );
+			$icon_flag = isset( $_POST[ 'fixer-station-icon-selection' ] );
 			if ( $icon_flag ) {
-				$attach_id = isset( $_POST['media-library-attachment-id'] ) ? trim( $_POST['media-library-attachment-id'] ) : NULL;
-				$fixer_station->set_icon_attachment_id( $attach_id );
+				$attach_id_array = isset( $_POST[ 'media-library-attachment-id' ] ) ? $_POST['media-library-attachment-id'] : NULL;
+				$fixer_station->set_icon_image_attachment_id_array( $attach_id_array );
 			} // endif
 
 			$colour = isset( $_POST['fixer-station-colour'] ) ? trim( $_POST['fixer-station-colour'] ) : NULL;

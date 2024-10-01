@@ -4,6 +4,7 @@ namespace Reg_Man_RC\Model\Stats;
 use Reg_Man_RC\Model\Event_Key;
 use Reg_Man_RC\Model\Visitor;
 use Reg_Man_RC\Control\User_Role_Controller;
+use Reg_Man_RC\Model\Event;
 
 /**
  * Describes a visitor who registered (using an external system and not this plugin) one or more items at an event
@@ -15,11 +16,13 @@ use Reg_Man_RC\Control\User_Role_Controller;
  */
 class External_Visitor_Registration implements Visitor_Registration_Descriptor {
 
-	private $event_key;
+	private $event_key_string;
+	private $display_name;
 	private $full_name;
 	private $public_name;
 	private $email;
-	private $partially_obscured_email;
+	private $wp_user; // Optional, the registered user associated with this volunteer
+	private $is_instance_for_current_wp_user; // TRUE if this visitor represents the current WP User
 	private $is_first_event;
 	private $is_join_mail_list;
 	private $item_count;
@@ -34,7 +37,7 @@ class External_Visitor_Registration implements Visitor_Registration_Descriptor {
 	 * This method will return an array of instances of this class describing all visitors registered to the specified events supplied by
 	 * active add-on plugins for external visitor providers like Registration Manager for Repair Cafe Legacy data
 	 *
-	 * @param	string[]|NULL	$event_key_array	An array of event keys whose external visitor registrations are to be retrieved
+	 * @param	string[]|NULL	$event_keys_array	An array of event keys whose external visitor registrations are to be retrieved
 	 *   OR NULL if visitor registrations for all events should be retrieved.
 	 * @param	string|NULL		$email				The email address for the visitor whose external registrations are to be retrieved
 	 *   OR NULL if the email address is not known or registrations for all visitors should be retrieved
@@ -42,7 +45,7 @@ class External_Visitor_Registration implements Visitor_Registration_Descriptor {
 	 *   OR NULL if the full name is not known or registrations for all visitors should be retrieved
 	 * @return	\Reg_Man_RC\Model\Stats\External_Visitor_Registration[]
 	 */
-	public static function get_external_visitor_registrations( $event_key_array, $email = NULL, $full_name = NULL ) {
+	public static function get_external_visitor_registrations( $event_keys_array, $email = NULL, $full_name = NULL ) {
 		/**
 		 * Add all visitors defined under the external visitor data providers for the specified events
 		 *
@@ -55,14 +58,14 @@ class External_Visitor_Registration implements Visitor_Registration_Descriptor {
 		 * @param	string[][]	$desc_data_arrays	An array of string arrays where each string array provides the details of one visitor.
 		 * 	The details of the array are documented in the instantiate_from_data_array() method of this class.
 		 * @param	string[][]	$key_data_array		An array of event key descriptors whose visitors are to be returned.
-		 *  Each array element is an associative array like, array( 'rc-evt' => '1234', 'rc-prv => 'ecwd', 'rc-rcr' => '' );
+		 *  Each array element is an associative array like, array( 'rc-date' => '20230619', 'rc-evt' => '1234', 'rc-prv => 'ecwd' );
 		 */
-		if ( $event_key_array === NULL ) {
+		if ( $event_keys_array === NULL ) {
 			$key_data_array = NULL;
 		} else {
 			$key_data_array = array();
-			foreach( $event_key_array as $event_key ) {
-				$key_obj = Event_Key::create_from_string( $event_key );
+			foreach( $event_keys_array as $event_key_string ) {
+				$key_obj = Event_Key::create_from_string( $event_key_string );
 				$key_data_array[] = $key_obj->get_as_associative_array();
 			} // endfor
 		} // endif
@@ -89,13 +92,14 @@ class External_Visitor_Registration implements Visitor_Registration_Descriptor {
 	 * @param	string[]	$data_array	{
 	 * 		An associative array of strings describing the external visitor
 	 *
+	 * 		@type	string	'event-id'				The ID for the event used within its event provider domain
+	 * 		@type	string	'event-provider'		The external event provider or NULL if the event is internal to this plugin
+	 * 		@type	string	'event-date'			The event date if it is known, otherwise NULL
 	 * 		@type	string	'full-name'				The full name of the visitor if known, e.g. "David Stokes"
 	 * 		@type	string	'public-name'			The public name used for the visitor, e.g. "David S"
 	 * 		@type	string	'email'					The visitor's email address if known
-	 * 		@type	string	'first-event-id'		The ID (used within its event provider domain) for the visitor's first event if known
-	 * 		@type	string	'first-event-provider'	The external event provider or NULL if the event is internal to this plugin
-	 * 		@type	string	'first-event-recur-id'	The recurrence ID if it's a repeating event, otherwise NULL
-	 * 		@type	string	'is-join-mail-list'		"TRUE" if this visitor has asked to join the mailing list
+	 * 		@type	boolean	'is-first-event'		TRUE if this is the visitor's first event
+	 * 		@type	boolean	'is-join-mail-list'		TRUE if this visitor has asked to join the mailing list
 	 * 		@type	string	'source'				The source of this record, e.g. "legacy"
 	 * }
 	 * @return	External_Item		The External_Item object constructed from the data provided.
@@ -106,25 +110,20 @@ class External_Visitor_Registration implements Visitor_Registration_Descriptor {
 //Error_Log::var_dump( $data_array );
 
 		if ( isset( $data_array[ 'event-id' ] ) ) {
-			$event_id = $data_array[ 'event-id' ];
+			$event_desc_id = $data_array[ 'event-id' ];
 			$provider_id = isset( $data_array[ 'event-provider' ] ) ? $data_array[ 'event-provider' ] : NULL;
-			$recur_id = isset( $data_array[ 'event-recur-id' ] ) ? $data_array[ 'event-recur-id' ] : NULL;
-			$event_key = Event_Key::create( $event_id, $provider_id, $recur_id );
-			$result->event_key = $event_key->get_as_string();
+			$recur_date = isset( $data_array[ 'event-date' ] ) ? $data_array[ 'event-date' ] : NULL;
+			$event = Event::get_event_by_descriptor_id( $event_desc_id, $provider_id, $recur_date );
+			if ( isset( $event ) ) {
+//				$result->event = $event;
+				$result->event_key_string = $event->get_key_string();
+			} // endif
 		} // endif
 
 		$result->full_name		= isset( $data_array[ 'full-name' ] )		? $data_array[ 'full-name' ] : NULL;
 		$result->public_name	= isset( $data_array[ 'public-name' ] )		? $data_array[ 'public-name' ] : NULL;
 		$result->email			= isset( $data_array[ 'email' ] )			? $data_array[ 'email' ] : NULL;
-/*
-		if ( isset( $data_array[ 'first-event-id' ] ) ) {
-			$event_id = $data_array[ 'first-event-id' ];
-			$provider_id = isset( $data_array[ 'first-event-provider' ] ) ? $data_array[ 'first-event-provider' ] : NULL;
-			$recur_id = isset( $data_array[ 'first-event-recur-id' ] ) ? $data_array[ 'first-event-recur-id' ] : NULL;
-			$event_key = Event_Key::create( $event_id, $provider_id, $recur_id );
-			$result->first_event_key = $event_key->get_as_string();
-		} // endif
-*/
+
 		if ( isset( $data_array[ 'is-first-event' ] ) ) {
 			$result->is_first_event = ( 'true' == strtolower( $data_array[ 'is-first-event' ] ) );
 		} else {
@@ -149,20 +148,60 @@ class External_Visitor_Registration implements Visitor_Registration_Descriptor {
 	 * @return	string|NULL		The key for the event
 	 * @since	v0.1.0
 	 */
-	public function get_event_key() {
-		return $this->event_key;
+	public function get_event_key_string() {
+		return $this->event_key_string;
 	} // function
 
 	/**
+	 * Get the most descriptive name available to this user in the current context for display purposes.
+	 * If we're rendering the admin interface and the user can view the full name then
+	 *   it will be returned (if known), otherwise the public name is used
+	 * @return string
+	 */
+	public function get_display_name() {
+		
+		if ( ! isset( $this->display_name ) ) {
+			if ( is_admin() && current_user_can( 'read_private_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ) {
+			
+				$this->display_name = ! empty( $this->full_name ) ? $this->full_name : $this->public_name;
+				
+			} else {
+				
+				$this->display_name = $this->public_name;
+				
+			} // endif
+			
+			if ( empty( $this->display_name ) ) {
+				$this->display_name =  __( '[No name]', 'reg-man-rc' );
+			} // endif
+
+		} // endif
+		
+		return $this->display_name;
+
+	} // function
+	
+	/**
 	 * Get the visitor's name as a single string.
-	 * To protect the visitor's privacy their full name is never shown in public.
-	 * The full name is used only if we are rendering the administrative interface.
 	 *
 	 * @return	string
 	 * @since	v0.1.0
 	 */
 	public function get_full_name() {
-		return $this->full_name;
+
+		// Users who can edit others' visitor records can see the full name
+		if ( current_user_can( 'read_private_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ) {
+		
+			$result = ! empty( $this->full_name ) ? $this->full_name : $this->get_public_name();
+			
+		} else {
+			
+			$result = $this->get_public_name();
+			
+		} // endif
+		
+		return $result;
+
 	} // function
 
 	/**
@@ -187,27 +226,60 @@ class External_Visitor_Registration implements Visitor_Registration_Descriptor {
 
 	/**
 	 * Get the visitor's email, if supplied.
-	 * To protect the visitor's privacy their email is never shown in public.
-	 * The email is used only to identify returning visitors and show only if we are rendering the administrative interface.
 
 	 * @return	string|NULL		The visitor's email address if it is known, NULL otherwise
 	 * @since	v0.1.0
 	 */
 	public function get_email() {
-		$capability = 'read_private_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
-		return ( current_user_can( $capability ) ) ? $this->email : $this->get_partially_obscured_email();
+		
+		if ( current_user_can( 'edit_others_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ||
+				$this->get_is_instance_for_current_wp_user() ) {
+
+			$result = $this->email;
+			 
+		} else {
+			
+			$result = NULL;
+			
+		} // endif
+		
+		return $result;
+		
 	} // function
 
 	/**
-	 * Get a partially obscured email address for this visitor. E.g. stok*****@yahoo.ca
-	 * @return string
+	 * Get a boolean indicating whether this instance represents the current WP User.
+	 * Note that a WP User should be able to see the details of their own Visitor record.
+	 * This function is used to implement that behaviour.
+	 * @return	boolean	TRUE if the current WP User is represented by this instance, FALSE otherwise
+	 * @since	v0.5.0
 	 */
-	private function get_partially_obscured_email() {
-		if ( ! isset( $this->partially_obscured_email ) ) {
-			$email = $this->get_email();
-			$this->partially_obscured_email = Visitor::get_partially_obscured_form_of_email( $email );
+	private function get_is_instance_for_current_wp_user() {
+		if ( ! isset( $this->is_instance_for_current_wp_user ) ) {
+			$current_user_id = get_current_user_id(); // User's ID or 0 if not logged in
+			if ( empty( $current_user_id ) ) {
+				$this->is_instance_for_current_wp_user = FALSE;
+			} else {
+				$visitor_user = $this->get_wp_user();
+				$this->is_instance_for_current_wp_user = ! empty( $visitor_user )  ? ( $visitor_user->ID === $current_user_id ) : FALSE;
+			} // endif
 		} // endif
-		return $this->partially_obscured_email;
+		return $this->is_instance_for_current_wp_user;
+	} // function
+
+	/**
+	 * Get the WP_User object for this visitor. 
+	 * If there is no associated user for this visitor then this will return NULL.
+	 * @return \WP_User|NULL
+	 */
+	private function get_wp_user() {
+		if ( ! isset( $this->wp_user ) ) {
+//			Error_Log::var_dump( $this->email );
+			if ( ! empty( $this->email ) ) {
+				$this->wp_user = get_user_by( 'email', $this->email );
+			} // endif
+		} // endif
+		return $this->wp_user;
 	} // function
 
 	/**

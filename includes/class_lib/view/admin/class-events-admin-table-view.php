@@ -5,6 +5,7 @@ use Reg_Man_RC\Control\Admin\Table_View_Admin_Controller;
 use Reg_Man_RC\Model\Stats\Item_Stats;
 use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Settings;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The administrative view for a table of events.
@@ -27,6 +28,7 @@ class Events_Admin_Table_View {
 	} // function
 
 	public function render() {
+		// Event summary | Date & Time | ISO8601 Date/Time | Status | Class | Categories | Item Count | Provider | ID
 		$rowFormat =
 			'<tr>' .
 				'<%1$s class="event-summary">%2$s</%1$s>' .
@@ -41,11 +43,14 @@ class Events_Admin_Table_View {
 				'</tr>';
 		$ajax_url = esc_url( admin_url( 'admin-ajax.php' ) );
 		$ajax_action = Table_View_Admin_Controller::AJAX_GET_DATA_ACTION;
+		$ajax_nonce = wp_create_nonce( $ajax_action );
 		$object_type = Table_View_Admin_Controller::TABLE_TYPE_EVENTS;
 		$dom_setting = '';
 		$group_by = '';
 
 		$title = __( 'Events', 'reg-man-rc' );
+		$print_page_title = $title;
+		$export_file_name = $title;
 
 		echo '<div class="reg-man-rc-stats-table-view events-admin-table event-filter-change-listener">';
 			echo '<div class="reg-man-rc-table-loading-indicator spinner"></div>';
@@ -56,9 +61,12 @@ class Events_Admin_Table_View {
 			echo '<div class="datatable-container admin-stats-table-container">';
 				// Using inline style width 100% allows Datatables to calculate the proper width, css doesn't work
 				echo '<table class="datatable admin-stats-table events-admin-table" style="width:100%"' .
+					" data-ajax-nonce=\"$ajax_nonce\"" .
 					" data-ajax-url=\"$ajax_url\" data-ajax-action=\"$ajax_action\" " .
 					" data-table-type=\"$object_type\" data-group-by=\"$group_by\" " .
 					" data-scope=\"\"" .
+					" data-print-page-title=\"$print_page_title\" " .
+					" data-export-file-name=\"$export_file_name\" " .
 					" data-dom-setting=\"$dom_setting\">";
 					echo '<thead>';
 						$is_allow_multi_cats = Settings::get_is_allow_event_multiple_categories();
@@ -99,24 +107,25 @@ class Events_Admin_Table_View {
 			$key = $stats->get_group_name(); // this is the key
 			$keyed_stats[ $key ] = $stats;
 		} // endfor
-		// Name | Status | Date/Time | Location | Categories | Event Source
+		// Event summary | Date & Time | ISO8601 Date/Time | Status | Class | Categories | Item Count | Provider | ID
 		$em_dash = __( '—', 'reg-man-rc' ); // an em-dash is used by Wordpress for empty fields
-//		$local_provider = __( 'registration manager', 'reg-man-rc' );
 		$categories_glue = _x( ', ', 'A separator for the list of category names', 'reg-man-rc' );
 		foreach( $event_array as $event ) {
-			$key = $event->get_key();
+			$key = $event->get_key_string();
 			$fixed_stats = isset( $keyed_stats[ $key ] ) ? $keyed_stats[ $key ] : NULL;
 			$status = $event->get_status();
 			$class = $event->get_class();
 			$categories = $event->get_categories();
 			$categories_text = is_array( $categories ) ? implode( $categories_glue, $categories ) : $em_dash;
-//			$provider = $event->get_provider_id();
-//			$provider_text = ( $provider == Internal_Event_Descriptor::EVENT_PROVIDER_ID ) ? $local_provider : $provider;
 			$provider_text = $event->get_provider_name();
-			$event_id = $event->get_event_descriptor_id();
-			$start_date = $event->get_start_date_time_local_timezone_object();
-			$end_date = $event->get_end_date_time_local_timezone_object();
-			$date_text = Event::create_label_for_event_dates_and_times( $start_date, $end_date );
+			$event_desc_id = $event->get_event_descriptor_id();
+//			$start_date = $event->get_start_date_time_object();
+//			$end_date = $event->get_end_date_time_object();
+//			$date_text = Event::create_label_for_event_dates_and_times( $start_date, $end_date );
+//			Error_Log::var_dump( $event->get_is_placeholder_event() );
+//			if ( $event->get_is_placeholder_event() ) $date_text .= ' placeholder';
+			$date_text = $event->get_event_dates_and_times_label();
+			$start_date = $event->get_start_date_time_object();
 			$event_date_iso_8601 = isset( $start_date ) ? $start_date->format( \DateTime::ISO8601 ) : '';
 			$row = array();
 			$row[] = $event->get_summary();
@@ -127,7 +136,7 @@ class Events_Admin_Table_View {
 			$row[] = $categories_text;
 			$row[] = isset( $fixed_stats ) ? $fixed_stats->get_item_count() : $em_dash;
 			$row[] = $provider_text;
-			$row[] = $event_id;
+			$row[] = $event_desc_id;
 			$result[] = $row;
 		} // endfor
 		return $result;

@@ -51,12 +51,13 @@ class Comments_Controller {
 		 */
 		
 		$post_type = get_post_type( $post_id );
+		Error_Log::var_dump( $post_type );
 		switch( $post_type ) {
 
 			case Internal_Event_Descriptor::POST_TYPE:
-				$event_desc = Internal_Event_Descriptor::get_internal_event_descriptor_by_event_id( $post_id );
+				$event_desc = Internal_Event_Descriptor::get_internal_event_descriptor_by_id( $post_id );
 				$is_recurring = $event_desc->get_event_is_recurring();
-				Error_Log::var_dump( $is_recurring, get_query_var( Event_Key::RECUR_ID_QUERY_ARG_NAME ) );
+				Error_Log::var_dump( $is_recurring, get_query_var( Event_Key::EVENT_DATE_QUERY_ARG_NAME ) );
 				// FIXME - If this event is a repeating one then how do we tell if it's complete?  That method does not
 				//  belong in the custom post type, it belongs in the Event class
 				if ( ! isset( $event_desc )  /* || ( ! $event_desc->get_is_complete() ) */ ) {

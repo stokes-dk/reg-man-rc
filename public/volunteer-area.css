@@ -11,14 +11,28 @@
 	display: flex;
 	flex-wrap: wrap;
 	justify-content: space-between;
-	margin: 1em 0;
+	margin: 0;
 	font-size: 1.4em;
 	font-weight: 400;
+	margin-bottom: 0.5em;
 }
-.reg-man-rc-volunteer-area-header .volunteer-area-title-back-link .volunteer-area-title-back-link-icon,
-.reg-man-rc-volunteer-area-header .volunteer-area-title-back-link .volunteer-area-title-back-link-text {
-	vertical-align: middle;
+.reg-man-rc-volunteer-area-header-part {
+	flex-grow: 1;
+	margin-bottom: 0.25em;
 }
+.reg-man-rc-volunteer-area-header-menu {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	justify-content: end;
+	gap: 1em;
+	align-items: center;
+}
+.reg-man-rc-volunteer-area-header-menu-item.reg-man-rc-volunteer-area-header-menu-item-selected {
+	font-weight: bold;
+}
+
 .reg-man-rc-volunteer-area-header a {
 	text-decoration: none !important;
 }
@@ -38,6 +52,13 @@
 	margin: 0;
 	box-shadow: 5px 5px 5px #999;
 }
+.reg-man-rc-dropdown-menu-container .dropdown-menu-trigger-icon {
+	vertical-align: text-top;
+}
+.reg-man-rc-dropdown-menu-container .reg-man-rc-dropdown-menu-content {
+	margin: 0;
+	padding: 0;
+}
 .reg-man-rc-dropdown-menu-container:HOVER .reg-man-rc-dropdown-menu-content,
 .reg-man-rc-dropdown-menu-container:FOCUS .reg-man-rc-dropdown-menu-content,
 .reg-man-rc-dropdown-menu-container:ACTIVE .reg-man-rc-dropdown-menu-content {
@@ -45,6 +66,7 @@
 }
 
 .reg-man-rc-dropdown-menu-content .reg-man-rc-dropdown-menu-item {
+	margin: 0;
 	padding: 0.25em 0.5em;
 	border-bottom: 1px solid #ccc;
 }
@@ -56,7 +78,6 @@
 }
 .reg-man-rc-dropdown-menu-content .reg-man-rc-dropdown-menu-item .dashicons {
 	margin-right: 0.25em;
-	vertical-align: middle;
 	color: #999;
 }
 .reg-man-rc-dropdown-menu-content .reg-man-rc-dropdown-menu-item a {
@@ -64,8 +85,7 @@
 	text-decoration: none;
 	display: block;
 }
-.reg-man-rc-dropdown-menu-trigger .dropdown-menu-trigger-title,
-.reg-man-rc-dropdown-menu-trigger .dropdown-menu-trigger-icon {
+.reg-man-rc-dropdown-menu-item-icon, .reg-man-rc-dropdown-menu-item-text {
 	vertical-align: middle;
 }
 .reg-man-rc-dropdown-menu-content.volunteer-area-user-actions-container {
@@ -90,6 +110,8 @@
 	border: 1px solid #ccc;
 	background: #eee;
 	padding: 0.5em;
+	text-decoration: none;
+	border-radius: 0.25em;
 }
 .reg-man-rc-volunteer-registration-form .non-repair-event .volunteer-reg-form-hide-on-non-repair-event,
 .reg-man-rc-volunteer-registration-form .not-registered .volunteer-reg-form-hide-on-not-registered {
@@ -100,25 +122,25 @@
 }
 
 .volunteer-area-container {
-	--reg-man-rc-vol-reg-registered-background: #ccf;
+	--reg-man-rc-vol-reg-registered-background: #9ff;
 }
 .volunteer-area-container.vol-reg-highlight-red {
-	--reg-man-rc-vol-reg-registered-background: #fcc;
+	--reg-man-rc-vol-reg-registered-background: #f99;
 }
 .volunteer-area-container.vol-reg-highlight-green {
-	--reg-man-rc-vol-reg-registered-background: #cfc;
+	--reg-man-rc-vol-reg-registered-background: #9f9;
 }
 .volunteer-area-container.vol-reg-highlight-blue {
-	--reg-man-rc-vol-reg-registered-background: #ccf;
+	--reg-man-rc-vol-reg-registered-background: #6cf;
 }
 .volunteer-area-container.vol-reg-highlight-cyan {
-	--reg-man-rc-vol-reg-registered-background: #cff;
+	--reg-man-rc-vol-reg-registered-background: #9ff;
 }
 .volunteer-area-container.vol-reg-highlight-magenta {
-	--reg-man-rc-vol-reg-registered-background: #fcf;
+	--reg-man-rc-vol-reg-registered-background: #f9f;
 }
 .volunteer-area-container.vol-reg-highlight-yellow {
-	--reg-man-rc-vol-reg-registered-background: #ffc;
+	--reg-man-rc-vol-reg-registered-background: #ff6;
 }
 .volunteer-area-container .fc-event.vol-reg-registered,
 .volunteer-area-container .reg-man-rc-map-marker-label.vol-reg-registered,
@@ -138,12 +160,10 @@
 .reg-man-rc-volunteer-registration-form .reg-man-rc-vol-reg-preferences-info {
 	margin-bottom: 1em;
 }
-.reg-man-rc-volunteer-registration-form  .reg-man-rc-volunteer-reg-comments-button-container {
-  margin: 0 2em 0.5em;
-  display: flex;
-  justify-content: flex-end;
-}
 .reg-man-rc-volunteer-registration-form  .reg-man-rc-volunteer-reg-comments-button-container button:DISABLED {
 	opacity: 0.33;
 	cursor: not-allowed;
+}
+.reg-man-rc-volunteer-registration-form .reg-man-rc-volunteer-registration-note {
+	margin: 0.5em 0;
 }

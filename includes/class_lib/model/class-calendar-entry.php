@@ -3,6 +3,7 @@ namespace Reg_Man_RC\Model;
 
 /**
  * An instance of this interface provides the details required to create an entry on a calendar, including title, start date & time and so on.
+ * Note that currently Event is the only implementor of Calendar_Entry.
  *
  * @since v0.1.0
  *

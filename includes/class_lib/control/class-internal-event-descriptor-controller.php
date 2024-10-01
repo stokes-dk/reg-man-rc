@@ -8,6 +8,12 @@ use Reg_Man_RC\Model\Event_Status;
 use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Venue;
 use Reg_Man_RC\Model\Geographic_Position;
+use Reg_Man_RC\Model\Calendar;
+use Reg_Man_RC\View\Pub\Visitor_Reg_Manager;
+use Reg_Man_RC\Model\Recurrence_Rule;
+use Reg_Man_RC\Model\Event_Key;
+use Reg_Man_RC\Model\Settings;
+use Reg_Man_RC\Model\Event_Class;
 
 /**
  * The controller used on both the backend admin interface and front end for internal event descriptors
@@ -19,6 +25,12 @@ use Reg_Man_RC\Model\Geographic_Position;
  */
 class Internal_Event_Descriptor_Controller {
 
+	const DUPLICATE_EVENT_DESCRIPTOR_ACTION		= 'reg-man-rc-event-duplicate';
+	const GET_RECUR_EVENT_DATES_AJAX_ACTION		= 'reg-man-rc-event-get-recur-dates';
+	
+	/**
+	 * Register this controller
+	 */
 	public static function register() {
 
 		if ( is_admin() ) {
@@ -29,9 +41,19 @@ class Internal_Event_Descriptor_Controller {
 			// Check to make sure that an item type is selected and show an error message if not
 			add_action( 'edit_form_top', array( __CLASS__, 'show_edit_form_messages' ) );
 
+			// Add filter for post row actions so I can add "duplicate"
+			add_filter( 'post_row_actions', array( __CLASS__, 'handle_post_row_actions' ), 10, 2 );
+
+			// Add action to handle "duplicate"
+			add_action( 'admin_action_' . self::DUPLICATE_EVENT_DESCRIPTOR_ACTION, array( __CLASS__, 'handle_event_descriptor_duplicate' ) );
+			
 			// Add a filter to change the query for the months UI filter, we want to show event date months rather than post edit months
 			add_filter( 'pre_months_dropdown_query', array( __CLASS__, 'modify_months_dropdown_query' ), 10, 2 );
 
+			// Add handler methods for getting the event dates for a recurring event
+			add_action( 'wp_ajax_' .		self::GET_RECUR_EVENT_DATES_AJAX_ACTION, array(__CLASS__, 'handle_get_recur_event_dates_priv') );
+			add_action( 'wp_ajax_nopriv_' .	self::GET_RECUR_EVENT_DATES_AJAX_ACTION, array(__CLASS__, 'handle_ajax_no_priv') );
+			
 		} // endif
 
 		// Tell WP how to do the filtering for my taxonomies
@@ -41,7 +63,189 @@ class Internal_Event_Descriptor_Controller {
 		add_filter( 'posts_clauses', array( __CLASS__, 'filter_posts_clauses' ), 1000, 2 );
 
 	} // function
+	
+	/**
+	 * Handle a request to duplicate an event descriptor
+	 */
+	public static function handle_event_descriptor_duplicate() {
+		
+		// Get the post
+		$post_id = isset( $_GET[ 'post' ] ) ? absint( $_GET[ 'post' ] ) : NULL;
+		$event_descriptor = isset( $post_id ) ? Internal_Event_Descriptor::get_internal_event_descriptor_by_id( $post_id ) : NULL;
+		
+		if ( empty( $event_descriptor ) ) {
 
+			if ( empty( $post_id ) ) {
+				$msg = __( 'Missing post ID when trying to duplicate event descriptor', 'reg-man-rc' );
+			} else {
+				/* Translators: %1$s is an ID for an event descriptor */
+				$msg_format = __( 'Event descriptor not found for ID: %1$s', 'reg-man-rc' );
+				$msg = sprintf( $msg_format, $post_id );
+			} // endif
+			Error_Log::log_msg( $msg ); // write a message in the log
+			wp_die( $msg ); // show the user
+
+		} else {
+			
+			$result = Internal_Event_Descriptor::create_duplicate_event_descriptor( $event_descriptor );
+			if ( empty( $result ) ) {
+				
+				/* Translators: %1$s is an ID for an event descriptor */
+				$msg_format = __( 'Unable to duplicate event descriptor with ID: %1$s', 'reg-man-rc' );
+				$msg = sprintf( $msg_format, $post_id );
+				Error_Log::log_msg( $msg ); // write a message in the log
+				wp_die( $msg ); // show the user
+				
+			} else {
+				
+				// We have the new event descriptor so redirect the user to its edit page
+				$location = $result->get_event_edit_url();
+				wp_safe_redirect( $location );
+				
+			} // endif
+			
+		} // endif
+		
+	} // function
+	
+	/**
+	 * Filter the actions shown in the admin interface for a post row
+	 * @param	string[]	$actions
+	 * @param	\WP_Post	$post
+	 * @return	string[]
+	 */
+	public static function handle_post_row_actions( $actions, $post ) {
+
+		$result = $actions;
+		
+		if ( $post->post_type === Internal_Event_Descriptor::POST_TYPE ) {
+			
+			if ( Internal_Event_Descriptor::current_user_can_duplicate( $post->ID ) ) {
+
+				$action = self::DUPLICATE_EVENT_DESCRIPTOR_ACTION;
+				
+				$action_url = add_query_arg(
+					array(
+						'action' => $action,
+						'post' => $post->ID,
+					),
+					'admin.php'
+				);
+				
+				$href = wp_nonce_url( $action_url, $action );
+				$label = __( 'Duplicate', 'reg-man-rc' );
+				$title = __( 'Duplicate this event descriptor', 'reg-man-rc' );
+				
+				$result[ 'duplicate' ] = "<a href=\"$href\" title=\"$title\" rel=\"permalink\">$label</a>";
+
+			} // endif
+			
+			if ( $post->post_status === 'draft' ) {
+				unset( $result[ 'view' ] ); // Remove preview link as it doesn't really work for draft events
+			} // endif
+			
+		} // endif
+		
+		return $result;
+	} // function
+
+	
+	/**
+	 * Handle an AJAX request for the dates of a recurring event
+	 */
+	public static function handle_get_recur_event_dates_priv() {
+		
+		$result = array();
+		
+		$request = $_REQUEST;
+//		Error_Log::var_dump( $request );
+
+		$nonce = isset( $request[ '_wpnonce' ] ) ? $request[ '_wpnonce' ] : NULL;
+		$is_valid_nonce = wp_verify_nonce( $nonce, self::GET_RECUR_EVENT_DATES_AJAX_ACTION );
+//		Error_Log::var_dump( $nonce, $is_valid_nonce );
+		
+		$event_dates = self::get_event_dates_for_request( $request ); // The start and end dates
+					
+		$start_date_time	= isset( $event_dates[ 'start' ] )		? $event_dates[ 'start' ]		: NULL;
+		$end_date_time		= isset( $event_dates[ 'end' ] )		? $event_dates[ 'end' ]			: NULL;
+		
+//		$recur_flag_value 				= isset( $request[ 'event_recur_flag' ] )			? $request[ 'event_recur_flag' ]			: NULL;
+		$recur_weekly_by_day_json 		= isset( $request[ 'recur_weekly_by_day_json' ] )	? $request[ 'recur_weekly_by_day_json' ]	: NULL;
+		$recur_monthly_by_day_json 		= isset( $request[ 'recur_monthly_by_day_json' ] )	? $request[ 'recur_monthly_by_day_json' ]	: NULL;
+		$recur_yearly_by_month_json 	= isset( $request[ 'recur_yearly_by_month_json' ] )	? $request[ 'recur_yearly_by_month_json' ]	: NULL;
+		$recur_yearly_by_day_json 		= isset( $request[ 'recur_yearly_by_day_json' ] )	? $request[ 'recur_yearly_by_day_json' ]	: NULL;
+//		$cancel_date_strings_json 		= isset( $request[ 'recur_cancel_dates' ] )			? $request[ 'recur_cancel_dates' ]			: NULL;
+		
+//		$is_recur_event = $recur_flag_value == '1';
+
+		$recur_weekly_by_day = isset( $recur_weekly_by_day_json ) ? json_decode( stripslashes( $recur_weekly_by_day_json ) ) : array();
+		$request[ 'recur_weekly_by_day' ] = $recur_weekly_by_day;
+//		Error_Log::var_dump( $recur_weekly_by_day_json, $recur_weekly_by_day );
+		
+		$recur_monthly_by_day = isset( $recur_monthly_by_day_json ) ? json_decode( stripslashes( $recur_monthly_by_day_json ) ) : array();
+		$request[ 'recur_monthly_by_day' ] = $recur_monthly_by_day;
+//		Error_Log::var_dump( $recur_monthly_by_day_json, $recur_monthly_by_day );
+		
+		$recur_yearly_by_month = isset( $recur_yearly_by_month_json ) ? json_decode( stripslashes( $recur_yearly_by_month_json ) ) : array();
+		$request[ 'recur_yearly_by_month' ] = $recur_yearly_by_month;
+//		Error_Log::var_dump( $recur_yearly_by_month_json, $recur_yearly_by_month );
+		
+		$recur_yearly_by_day = isset( $recur_yearly_by_day_json ) ? json_decode( stripslashes( $recur_yearly_by_day_json ) ) : array();
+		$request[ 'recur_yearly_by_day' ] = $recur_yearly_by_day;
+//		Error_Log::var_dump( $recur_yearly_by_day_json, $recur_yearly_by_day );
+
+//		$cancel_date_strings_array = isset( $cancel_date_strings_json ) ? json_decode( stripslashes( $cancel_date_strings_json ) ) : NULL;
+//		Error_Log::var_dump( $cancel_date_strings_json, $cancel_date_strings_array );
+		
+		// If there are no event dates posted then don't do anything
+		// This could happen if they somehow blanked out the form inputs - just ignore that
+		if ( $is_valid_nonce && ( $start_date_time !== NULL ) && ( $end_date_time !== NULL ) ) {
+			if ( $end_date_time < $start_date_time ) {
+				// The event can't end before it starts so just replace end time with start
+				$end_date_time = $start_date_time;
+			} // endif
+			
+			$recur_rule = self::get_recurrence_rule_for_request( $request, $start_date_time, $end_date_time );
+			if ( ! empty( $recur_rule ) ) {
+				$recur_dates = $recur_rule->get_recurring_event_dates();
+	//			Error_Log::var_dump( $recur_rule->__toString() );
+	//			Error_Log::var_dump( $recur_dates );
+	
+				$value_format = Event_Key::EVENT_DATE_FORMAT;
+				$label_format = get_option( 'date_format' );
+				
+				foreach( $recur_dates as $date_time_pair ) {
+					$recur_start = $date_time_pair[ 'start' ];
+					$value = $recur_start->format( $value_format );
+					$label = $recur_start->format( $label_format );
+					$event_data = array(
+							'label'		=> $label,
+							'value'		=> $value,
+					);
+					$result[ $value ] = $event_data;
+				} // endfor
+			} // endif
+		} // endif
+		
+		echo json_encode( $result );
+		wp_die(); // THIS IS REQUIRED!
+	} // function
+
+	
+	/**
+	 * Handle an AJAX post for a user who is not logged in
+	 */
+	public static function handle_ajax_no_priv() {
+		$error = __( 'ERROR: You are not logged in or your session has expired.  Please reload the page and log in again.', 'reg-man-rc' );
+		echo json_encode( array( 
+				'data' => array(), // This is for the datatables row data (if requested)
+				'success' => FALSE, // This is for my ajax requests
+				'text' => __( 'ERROR', 'reg-man-rc' ), // This is for my ajax requests 
+				'error' => $error ) // This is for both, mine and datatables
+			);
+		wp_die(); // THIS IS REQUIRED!
+	} // function
+	
 	/**
 	 * Filters the WHERE clause in the SQL for a next or previous post query.
 	 *
@@ -275,6 +479,148 @@ class Internal_Event_Descriptor_Controller {
 		return $result;
 	} // function
 
+	/**
+	 * Get the event date start and end dates from the specified request, usually a $_POST
+	 * @param	string[]	$request
+	 * @return	\DateTimeInterface[]	A Pair of event start and end dates and times, e.g.
+	 * ```
+	 * 	array(
+	 * 			'start'	=> \DateTimeInterface object with the event start date and time
+	 * 			'end'	=> \DateTimeInterface object with the event end date and time
+	 * 	);
+	 * ```
+	 */
+	public static function get_event_dates_for_request( $request ) {
+	
+		$start_date_string = isset( $request[ 'event_start_date' ] ) ? $request[ 'event_start_date' ] : NULL;
+		$start_time_string = isset( $request[ 'event_start_time' ] ) ? $request[ 'event_start_time' ] : NULL;
+		$end_time_string   = isset( $request[ 'event_end_time' ] )   ? $request[ 'event_end_time' ]   : NULL;
+
+		$start_date_time = NULL;
+		$end_date_time = NULL;
+		
+		if ( ( $start_date_string !== NULL ) && ( $start_time_string !== NULL ) && ( $end_time_string !== NULL ) ) {
+			
+			$start_string = "$start_date_string $start_time_string";
+			$end_string   = "$start_date_string $end_time_string";
+			
+			// All times will be specified by the user in the local timezone
+			$local_tz = wp_timezone();
+			try {
+				$start_date_time = new \DateTime( $start_string, $local_tz );
+			} catch ( \Exception $exc ) {
+				/* translators: %1$s is an invalid date value supplied for an event */
+				$msg = sprintf( __( 'An invalid event start date was supplied: %1$s.', 'reg-man-rc' ), $start_string );
+				Error_Log::log_exception( $msg, $exc );
+				$start_date_time = NULL;
+			} // endtry
+			
+			try {
+				$end_date_time = new \DateTime( $end_string, $local_tz );
+			} catch ( \Exception $exc ) {
+				/* translators: %1$s is an invalid date value supplied for an event */
+				$msg = sprintf( __( 'An invalid event end date was supplied: %1$s.', 'reg-man-rc' ), $end_string );
+				Error_Log::log_exception( $msg, $exc );
+				$end_date_time = NULL;
+			} // endtry
+
+			if ( ! empty( $start_date_time ) && ! empty( $end_date_time) && ( $end_date_time < $start_date_time ) ) {
+				// There is only one date input with two time inputs
+				// It's possible that the user wants an event that spans over midnight, like 10pm -- 2am
+				// In that case, what we have right now is an end date that is before the start date
+				// What we want is the end date on the following date
+				$end_date_time->modify( '+1 day' );
+			} // endif
+			
+		} // endif
+
+		$result = array(
+				'start'	=> $start_date_time,
+				'end'	=> $end_date_time,
+		);
+
+		return $result;
+			
+	} // function
+
+	/**
+	 * Get the recurrence rule from the specified request, usually a $_POST
+	 * @param	string[]	$request
+	 * @param	\DateTime	$start_date_time
+	 * @param	\DateTime	$end_date_time
+	 *
+	 * @return	Recurrence_Rule
+	 */
+	public static function get_recurrence_rule_for_request( $request, $start_date_time, $end_date_time ) {
+		
+		$recur_flag_value 	= isset( $request[ 'event_recur_flag' ] )		? $request[ 'event_recur_flag' ]		: NULL;
+		$recur_frequency 	= isset( $request[ 'event_recur_frequency' ] )	? $request[ 'event_recur_frequency' ]	: NULL;
+		$recur_interval 	= isset( $request[ 'event_recur_interval' ] )	? $request[ 'event_recur_interval' ]	: NULL;
+		$recur_until_date 	= isset( $request[ 'event_recur_until_date' ] )	? $request[ 'event_recur_until_date' ]	: NULL;
+		$end_time_string   	= isset( $request[ 'event_end_time' ] )  		? $request[ 'event_end_time' ]  		: NULL;
+		$weekly_by_day		= isset( $request[ 'recur_weekly_by_day' ] )  	? $request[ 'recur_weekly_by_day' ]  	: NULL;
+		$monthly_by_day		= isset( $request[ 'recur_monthly_by_day' ] )  	? $request[ 'recur_monthly_by_day' ]  	: NULL;
+		$yearly_by_month	= isset( $request[ 'recur_yearly_by_month' ] ) 	? $request[ 'recur_yearly_by_month' ]  	: NULL;
+		$yearly_by_day		= isset( $request[ 'recur_yearly_by_day' ] )  	? $request[ 'recur_yearly_by_day' ]  	: NULL;
+		
+//		Error_Log::var_dump( $recur_frequency, $yearly_by_month, $yearly_by_day );
+		
+		$is_recur_event = $recur_flag_value == '1';
+		
+		$result = NULL; // assume we don't have a valid recurrence rule
+		if ( ! empty( $start_date_time ) && ! empty( $end_date_time ) ) {
+
+			if ( $is_recur_event && ! empty( $recur_frequency ) && ! empty( $recur_interval ) && ! empty( $recur_until_date ) ) {
+					
+				$result = Recurrence_Rule::create();
+				$result->set_start_date_time( $start_date_time );
+				$result->set_end_date_time( $end_date_time );
+				$result->set_frequency( $recur_frequency );
+				$result->set_interval( $recur_interval );
+
+				$local_tz = wp_timezone();
+				$until_string   = "$recur_until_date $end_time_string";
+				$until_date_time = new \DateTime( $until_string, $local_tz );
+
+				$result->set_until( $until_date_time );
+
+				switch( $recur_frequency ) {
+
+					case 'WEEKLY':
+						$result->set_by_day( $weekly_by_day );
+						break;
+					
+					case 'MONTHLY':
+						$result->set_by_day( $monthly_by_day );
+						break;
+						
+					case 'YEARLY':
+						// If the user selects a "by day" like 1st Thursday and no month is selected
+						// Then that will mean the 1st Thursday of the year like Jan 4.
+						// We tell them that the default month is event date's month so we should assign that.
+						if ( empty( $yearly_by_month ) ) {
+							if ( isset( $start_date_time ) ) {
+								$event_month = $start_date_time->format( 'n' );
+								$yearly_by_month = array( $event_month );
+							} else {
+								$yearly_by_month = array( 1 ); // Use January if there's no start date assigned
+							} // endif
+						} // endif
+						$result->set_by_month( $yearly_by_month );
+						$result->set_by_day( $yearly_by_day );
+						break;
+						
+				} // endif
+
+//				Error_Log::var_dump( $result->get_as_string() );
+					
+			} // endif
+			
+		} // endif
+		
+		return $result;
+		
+	} // function
 
 
 	/**
@@ -291,55 +637,39 @@ class Internal_Event_Descriptor_Controller {
 			// Don't do anything during an autosave
 			return;
 		} else {
-			$event_descriptor = Internal_Event_Descriptor::get_internal_event_descriptor_by_event_id( $post_id );
-			if ( !empty( $event_descriptor ) ) {
+			$event_descriptor = Internal_Event_Descriptor::get_internal_event_descriptor_by_id( $post_id );
+			if ( ! empty( $event_descriptor ) ) {
 
 				// If there are any missing required settings then I will set this post to DRAFT status later
 				$set_post_status_draft = FALSE;
 
 				// Update the event dates
 				if ( isset( $_POST[ 'event_dates_input_flag' ] ) ) {
-
-					$start_date_string = isset( $_POST[ 'event_start_date' ] ) ? $_POST[ 'event_start_date' ] : NULL;
-					$start_time_string = isset( $_POST[ 'event_start_time' ] ) ? $_POST[ 'event_start_time' ] : NULL;
-					$end_time_string   = isset( $_POST[ 'event_end_time' ] )   ? $_POST[ 'event_end_time' ]   : NULL;
-
+					
+					$event_dates = self::get_event_dates_for_request( $_POST );
+					
+					$start_date_time	= isset( $event_dates[ 'start' ] )	? $event_dates[ 'start' ]	: NULL;
+					$end_date_time		= isset( $event_dates[ 'end' ] )	? $event_dates[ 'end' ]		: NULL;
+					
 					// If there are no event dates posted then don't do anything, just leave it as-is
 					// This could happen if they somehow blanked out the form inputs - just ignore that
-					if ( ( $start_date_string !== NULL ) && ( $start_time_string !== NULL ) && ( $end_time_string !== NULL ) ) {
-						$start_string = "$start_date_string $start_time_string";
-						$end_string   = "$start_date_string $end_time_string";
-						// All times will be specified by the user in the local timezone
-						$local_tz = wp_timezone();
-						try {
-							$start_date_time = new \DateTime( $start_string, $local_tz );
-						} catch ( \Exception $exc ) {
-							/* translators: %1$s is an invalid date value supplied for an event */
-							$msg = sprintf( __( 'An invalid event start date was supplied: %1$s.', 'reg-man-rc' ), $start_string );
-							Error_Log::log_exception( $msg, $exc );
-							$start_date_time = NULL;
-						} // endtry
-						try {
-							$end_date_time = new \DateTime( $end_string, $local_tz );
-						} catch ( \Exception $exc ) {
-							/* translators: %1$s is an invalid date value supplied for an event */
-							$msg = sprintf( __( 'An invalid event end date was supplied: %1$s.', 'reg-man-rc' ), $end_string );
-							Error_Log::log_exception( $msg, $exc );
-							$end_date_time = NULL;
-						} // endtry
-						if ( ( $start_date_time !== NULL ) && ( $end_date_time !== NULL ) ) {
-							if ( $end_date_time < $start_date_time ) {
-								// The event can't end before it starts so just replace end time with start
-								$end_date_time = $start_date_time;
-							} // endif
-							$event_descriptor->set_event_start_date_time( $start_date_time );
-							$event_descriptor->set_event_end_date_time( $end_date_time );
+					if ( ( $start_date_time !== NULL ) && ( $end_date_time !== NULL ) ) {
+						if ( $end_date_time < $start_date_time ) {
+							// The event can't end before it starts so just replace end time with start
+							$end_date_time = $start_date_time;
 						} // endif
+						$event_descriptor->set_event_start_date_time( $start_date_time );
+						$event_descriptor->set_event_end_date_time( $end_date_time );
+						
+						$recur_rule = self::get_recurrence_rule_for_request( $_POST, $start_date_time, $end_date_time );
+						$event_descriptor->set_event_recurrence_rule( $recur_rule );
+						
 					} // endif
+					
 				} // endif
 
 				// Update the event status
-				if ( isset( $_POST[ 'item_status_input_flag' ] ) ) {
+				if ( isset( $_POST[ 'event_status_input_flag' ] ) ) {
 					$event_status_id = isset( $_POST['event_status'] ) ? $_POST['event_status'] : NULL;
 					// If there is no event status posted then don't do anything, just leave it as-is
 					if ( $event_status_id !== NULL ) {
@@ -349,7 +679,13 @@ class Internal_Event_Descriptor_Controller {
 						} // endif
 					} // endif
 				} // endif
-
+				
+				// Update the cancelled event dates for recurring event
+				if ( isset( $_POST[ 'cancel_recurring_event_dates_input_flag' ] ) ) {
+					$cancel_dates = isset( $_POST[ 'recur_cancel_dates' ] ) ? $_POST[ 'recur_cancel_dates' ] : array();
+					$event_descriptor->set_cancelled_event_date_strings_array( $cancel_dates );
+				} // endif
+					
 				// update the event categories
 				// Make sure the selection flag is there and we're not doing a quick edit
 				// If the flag is not set then the user has no options to select, so don't delete anything
@@ -357,9 +693,11 @@ class Internal_Event_Descriptor_Controller {
 					// First check to see if it's set then make it an array
 					$category = isset( $_POST['event_category'] ) ? $_POST['event_category'] : NULL;
 					if ( empty( $category ) || ( $category == '0' ) ) {
-						// No event categories selected so set it to the default
-						$default_event_category = Event_Category::get_default_event_category();
-						$event_descriptor->set_event_category_array( array( $default_event_category ) );
+						/* DKS May 29, 2024 - we have a request to require users to select a category
+						 *  rather than assigning the default.
+						 */
+						$event_descriptor->set_event_category_array( NULL );
+						$set_post_status_draft = TRUE;
 					} else {
 						// We will assign an array of categories even if the user only supplied one value
 						$category_id_array = is_array( $category ) ? $category : array( $category );
@@ -410,13 +748,14 @@ class Internal_Event_Descriptor_Controller {
 
 						// The user selected "Add venue"
 						$event_descriptor->set_event_venue( NULL ); // remove any existing venue then create the new one
-						$venue_name = isset( $_POST['venue_name'] ) ? sanitize_text_field( $_POST['venue_name'] ) : NULL;
-						$loc = isset( $_POST[ 'venue_location' ] ) ? sanitize_text_field( $_POST[ 'venue_location' ] ) : NULL;
-						$lat_lng = isset( $_POST[ 'venue_lat_lng' ] ) ? stripslashes( $_POST[ 'venue_lat_lng' ] ) : NULL;
-						$geo = isset( $lat_lng ) ? Geographic_Position::create_from_google_map_marker_position_string( $lat_lng ) : NULL;
-						$zoom = isset( $_POST[ 'venue_map_zoom' ] ) ? $_POST[ 'venue_map_zoom' ] : NULL;
+						$venue_name =	isset( $_POST['venue_name'] ) ? sanitize_text_field( $_POST['venue_name'] ) : NULL;
+						$loc =			isset( $_POST[ 'venue_location' ] ) ? sanitize_text_field( $_POST[ 'venue_location' ] ) : NULL;
+						$venue_desc = NULL; // We won't ask the user to provide a description here
+						$lat_lng =		isset( $_POST[ 'venue_lat_lng' ] ) ? stripslashes( $_POST[ 'venue_lat_lng' ] ) : NULL;
+						$geo =			isset( $lat_lng ) ? Geographic_Position::create_from_google_map_marker_position_json_string( $lat_lng ) : NULL;
+						$zoom =			isset( $_POST[ 'venue_map_zoom' ] ) ? $_POST[ 'venue_map_zoom' ] : NULL;
 
-						$venue = Venue::create_new_venue( $venue_name, $loc, $geo, $zoom );
+						$venue = Venue::create_new_venue( $venue_name, $loc, $venue_desc, $geo, $zoom );
 
 						if ( ! empty( $venue ) ) {
 							$event_descriptor->set_event_venue( $venue );
@@ -432,6 +771,12 @@ class Internal_Event_Descriptor_Controller {
 
 				} // endif
 
+				// Update the volunteer pre-registration note
+				if ( isset( $_POST[ 'volunteer_pre_reg_note_input_flag' ] ) ) {
+					$note = isset( $_POST[ 'vol_pre_reg_note' ] ) ? $_POST[ 'vol_pre_reg_note' ] : NULL;
+					$event_descriptor->set_volunteer_pre_reg_note( $note );
+				} // endif
+				
 				if ( $set_post_status_draft ) {
 					// Unhook this function so it doesn't loop infinitely
 					remove_action( 'save_post_' . Internal_Event_Descriptor::POST_TYPE, array( __CLASS__, 'handle_post_save' ) );
@@ -462,17 +807,51 @@ class Internal_Event_Descriptor_Controller {
 	public static function show_edit_form_messages( $post ) {
 		if ( Internal_Event_Descriptor::POST_TYPE === get_post_type( $post ) && 'auto-draft' !== get_post_status( $post ) ) {
 
-			$event_desc = Internal_Event_Descriptor::get_internal_event_descriptor_by_event_id( $post->ID );
+			$event_desc = Internal_Event_Descriptor::get_internal_event_descriptor_by_id( $post->ID );
 
 			if ( ! empty( $event_desc ) ) {
 
-				// FIXME: If this is an event that appears in the Item Registration calendar then it should be
-				//  required to have fixer stations.  Otherwise, it's not really even a warning.
-//				$error_format = '<div class="error below-h2"><p>%s</p></div>';
-				$warning_format = '<div class="notice notice-warning below-h2 is-dismissible"><p>%s</p></div>';
+				$visitor_reg_calendar = Calendar::get_visitor_registration_calendar();
+				$is_visitor_reg_event = $visitor_reg_calendar->get_is_event_descriptor_contained_in_calendar( $event_desc );
+				$has_fixer_stations = ! empty( $event_desc->get_event_fixer_station_array() );
+				$event_status = $event_desc->get_event_status();
+				$is_confirmed = isset( $event_status ) ? ( $event_status->get_id() === Event_Status::CONFIRMED ) : TRUE;
+				$event_class = $event_desc->get_event_class();
+				$is_public = isset( $event_class ) ? ( $event_class->get_id() === Event_Class::PUBLIC ) : TRUE;
+				
+				$event_categories = $event_desc->get_event_categories();
+				
+//				Error_Log::var_dump( $is_visitor_reg_event, $has_fixer_stations );
+				
+//				$error_format =		'<div class="error below-h2"><p>%s</p></div>';
+				$warning_format =	'<div class="notice notice-warning below-h2 is-dismissible"><p>%s</p></div>';
 
-				if ( empty( $event_desc->get_event_fixer_station_array() ) ) {
-					printf( $warning_format, esc_html__( __( 'No fixer stations assigned for this event', 'reg-man-rc' ) ) );
+				if ( $is_visitor_reg_event && ! $has_fixer_stations ) {
+
+					$msg = __( 'No fixer stations are assigned for this event', 'reg-man-rc' );
+					printf( $warning_format, esc_html__( $msg ) );
+
+				} elseif ( ! $is_visitor_reg_event && $has_fixer_stations && $is_confirmed ) {
+
+					$msg = __( 'Fixer stations are assigned for this event but it does NOT appear on the visitor registration calendar', 'reg-man-rc' );
+					printf( $warning_format, esc_html__( $msg ) );
+
+				} // endif
+
+				if ( ! $is_public ) {
+					$msg = __( 'This event is not visible to the public or volunteers.', 'reg-man-rc' );
+					printf( $warning_format, esc_html__( $msg ) );
+				} // endif
+				
+				if ( empty( $event_categories ) ) {
+
+					if ( Settings::get_is_allow_event_multiple_categories() ) {
+						$msg = __( 'No event categories are assigned for this event', 'reg-man-rc' );
+					} else {
+						$msg = __( 'No event category is assigned for this event', 'reg-man-rc' );
+					} // endif
+					printf( $warning_format, esc_html__( $msg ) );
+
 				} // endif
 
 			} // endif

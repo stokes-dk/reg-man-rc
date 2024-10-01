@@ -16,8 +16,16 @@ interface Visitor_Registration_Descriptor {
 	 * @return	string|NULL		The key for the event
 	 * @since	v0.1.0
 	 */
-	public function get_event_key();
+	public function get_event_key_string();
 
+	/**
+	 * Get the most descriptive name available to this user in the current context for display purposes.
+	 * If we're rendering the admin interface and the user can view the full name then
+	 *   it will be returned (if known), otherwise the public name is used
+	 * @return string
+	 */
+	public function get_display_name();
+	
 	/**
 	 * Get the visitor's name as a string.
 	 * To protect the visitor's privacy their full name is never shown in public.

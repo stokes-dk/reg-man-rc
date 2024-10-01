@@ -14,10 +14,9 @@ use Reg_Man_RC\Model\Settings;
 class Permalink_Settings_Admin_Controller {
 
 	private static $EVENTS_FIELD_NAME			= 'reg_man_rc_events_slug';
-	private static $ITEMS_FIELD_NAME			= 'reg_man_rc_items_slug';
-	private static $VOLUNTEERS_FIELD_NAME		= 'reg_man_rc_volunteers_slug';
 	private static $CALENDARS_FIELD_NAME		= 'reg_man_rc_calendars_slug';
-	private static $VENUES_FIELD_NAME			= 'reg_man_rc_venues_slug';
+//	private static $ITEMS_FIELD_NAME			= 'reg_man_rc_items_slug';
+//	private static $VENUES_FIELD_NAME			= 'reg_man_rc_venues_slug';
 
 	public static function register() {
 
@@ -53,16 +52,11 @@ class Permalink_Settings_Admin_Controller {
 		$render_fn = array( __CLASS__, 'render_events_slug_field' );
 		add_settings_field( $name, $label, $render_fn, $page, $section_id );
 
+/*
 		// Items slug
 		$name = self::$ITEMS_FIELD_NAME;
 		$label = __( 'Items page base', 'reg-man-rc' );
 		$render_fn = array( __CLASS__, 'render_items_slug_field' );
-		add_settings_field( $name, $label, $render_fn, $page, $section_id );
-
-		// Volunteers slug
-		$name = self::$VOLUNTEERS_FIELD_NAME;
-		$label = __( 'Volunteers page base', 'reg-man-rc' );
-		$render_fn = array( __CLASS__, 'render_volunteers_slug_field' );
 		add_settings_field( $name, $label, $render_fn, $page, $section_id );
 
 		// Venues slug
@@ -76,6 +70,7 @@ class Permalink_Settings_Admin_Controller {
 		$label = __( 'Calendars page base', 'reg-man-rc' );
 		$render_fn = array( __CLASS__, 'render_calendars_slug_field' );
 		add_settings_field( $name, $label, $render_fn, $page, $section_id );
+*/
 
 	} // function
 
@@ -117,6 +112,7 @@ class Permalink_Settings_Admin_Controller {
 	 * @since v0.1.0
 	 *
 	 */
+/*
 	public static function render_items_slug_field( ) {
 		$name = self::$ITEMS_FIELD_NAME;
 		$val = Settings::get_items_slug();
@@ -124,24 +120,7 @@ class Permalink_Settings_Admin_Controller {
 		$desc = __( 'Enter the base slug for pages showing items', 'reg-man-rc' );
 		echo '<p class="description">' . $desc . '</p>';
 	} // function
-
-	/**
-	 * Render my settings field for the volunteers slug permalink
-	 *
-	 * @return	void
-	 *
-	 * @since v0.1.0
-	 *
-	 */
-	public static function render_volunteers_slug_field( ) {
-		$name = self::$VOLUNTEERS_FIELD_NAME;
-		$val = Settings::get_volunteers_slug();
-		echo "<input name=\"$name\" type=\"text\" class=\"regular-text code\" value=\"$val\" />";
-		$desc = __( 'Enter the base slug for pages showing volunteers', 'reg-man-rc' );
-		echo '<p class="description">' . $desc . '</p>';
-		$desc = __( 'Note that only PUBLIC volunteers will be visible on the website.  By default all volunteers are private.', 'reg-man-rc' );
-		echo '<p class="description">' . $desc . '</p>';
-	} // function
+*/
 
 	/**
 	 * Render my settings field for the venues slug permalink
@@ -151,6 +130,7 @@ class Permalink_Settings_Admin_Controller {
 	 * @since v0.1.0
 	 *
 	 */
+/*
 	public static function render_venues_slug_field( ) {
 		$name = self::$VENUES_FIELD_NAME;
 		$val = Settings::get_venues_slug();
@@ -158,7 +138,8 @@ class Permalink_Settings_Admin_Controller {
 		$desc = __( 'Enter the base slug for pages showing venues', 'reg-man-rc' );
 		echo '<p class="description">' . $desc . '</p>';
 	} // function
-
+*/
+	
 	/**
 	 * Render my settings field for the venues slug permalink
 	 *
@@ -167,6 +148,7 @@ class Permalink_Settings_Admin_Controller {
 	 * @since v0.1.0
 	 *
 	 */
+/*
 	public static function render_calendars_slug_field( ) {
 		$name = self::$CALENDARS_FIELD_NAME;
 		$val = Settings::get_calendars_slug();
@@ -174,7 +156,7 @@ class Permalink_Settings_Admin_Controller {
 		$desc = __( 'Enter the base slug for pages showing calendars', 'reg-man-rc' );
 		echo '<p class="description">' . $desc . '</p>';
 	} // function
-
+*/
 	/**
 	 * Save my settings for permalinks
 	 *
@@ -191,15 +173,11 @@ class Permalink_Settings_Admin_Controller {
 			$val = isset( $_POST[ $name ] ) ? trim( $_POST[ $name ] ) : NULL;
 			Settings::set_events_slug( $val );
 
+/*
 			// Items slug
 			$name = self::$ITEMS_FIELD_NAME;
 			$val = isset( $_POST[ $name ] ) ? trim( $_POST[ $name ] ) : NULL;
 			Settings::set_items_slug( $val );
-
-			// Volunteers slug
-			$name = self::$VOLUNTEERS_FIELD_NAME;
-			$val = isset( $_POST[ $name ] ) ? trim( $_POST[ $name ] ) : NULL;
-			Settings::set_volunteers_slug( $val );
 
 			// Venues slug
 			$name = self::$VENUES_FIELD_NAME;
@@ -210,6 +188,7 @@ class Permalink_Settings_Admin_Controller {
 			$name = self::$CALENDARS_FIELD_NAME;
 			$val = isset( $_POST[ $name ] ) ? trim( $_POST[ $name ] ) : NULL;
 			Settings::set_calendars_slug( $val );
+*/
 		} // endif
 	} // function
 } // class

@@ -339,10 +339,14 @@ class Event_Category {
 				),
 			),
 		);
+
 		$query = new \WP_Query( $args );
 		$result = $query->found_posts;
-		wp_reset_postdata(); // Required after using WP_Query()
+		
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
+
 	} // function
 
 	/**
@@ -366,8 +370,11 @@ class Event_Category {
 		);
 		$query = new \WP_Query( $args );
 		$result = $query->found_posts;
-		wp_reset_postdata(); // Required after using WP_Query()
+		
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
+
 	} // function
 
 	/**
@@ -543,7 +550,7 @@ class Event_Category {
 
 		$args = array(
 				'labels'				=> $labels,
-				'description'			=> __( 'Event\'s category', 'reg-man-rc' ),
+				'description'			=> __( 'A category for an event', 'reg-man-rc' ),
 				'hierarchical'			=> FALSE,	// Does each one have a parent and a heirarchy?
 				'public'				=> TRUE,	// whether it's intended for public use - must be TRUE to enable polylang translations
 				'publicly_queryable'	=> FALSE,	// can it be queried
@@ -577,6 +584,7 @@ class Event_Category {
 				Calendar::POST_TYPE,
 				Internal_Event_Descriptor::POST_TYPE,
 		);
+		
 		$taxonomy = register_taxonomy( self::TAXONOMY_NAME, $post_types, $args );
 
 		if ( is_wp_error( $taxonomy ) ) {
@@ -595,44 +603,6 @@ class Event_Category {
 */
 		} // endif
 
-	} // function
-
-	/**
-	 * Get the html content shown to the administrator in the "About" help for this taxonomy
-	 * @return string
-	 */
-	public static function get_about_content() {
-		ob_start();
-			$heading = __( 'About event categories', 'reg-man-rc' );
-			echo "<h2>$heading</h2>";
-			echo '<p>';
-				$msg = __(
-					'Events categories allow you to define different types of events.' .
-					'  For example, you may have a category for regular repair café events, one for small events and another for volunteer appreciation events.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'Events can be categorized in any way you like.' .
-					'  The default category is "Repair Café".  It can be renamed if necessary but it cannot be removed.' .
-					'  An event with no category is automatically assigned the default.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'When you create a calendar you can specify which event categories it shows and which are excluded,' .
-					' and each event on the calendar is colour-coded to indicate its category.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-
-			$result = ob_get_clean();
-		return $result;
 	} // function
 
 	/**

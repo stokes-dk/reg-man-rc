@@ -64,6 +64,9 @@ jQuery( document ).ready( function( $ ) {
 			
 		// I'll use a single info window and update its content when markers are clicked
 		var info_window = new google.maps.InfoWindow();
+		info_window.addListener( 'closeclick', function() {
+			me.trigger( 'map-info-window-changed' );
+		});
 
 		var marker_data_array_len = marker_data_array.length;
 
@@ -83,6 +86,7 @@ jQuery( document ).ready( function( $ ) {
 			} else {
 				marker_count++;
 				marker_args = {
+					map			: map,
 					position	: marker_data.position,
 					title		: title,
 					label		: label,
@@ -98,7 +102,6 @@ jQuery( document ).ready( function( $ ) {
 					},
 					zIndex		: 10,
 					data		: marker_data, // save the marker data so we can access it later as needed
-					map			: map
 				};
 				marker = new google.maps.Marker( marker_args );
 				marker_array.push( marker );
@@ -107,6 +110,7 @@ jQuery( document ).ready( function( $ ) {
 						var data = this.data;
 						info_window.setContent( data.infocontent );
 						info_window.open( map, this );
+						me.trigger( 'map-info-window-changed' );
 					});
 				} // endif
 			} // endif
@@ -152,6 +156,18 @@ jQuery( document ).ready( function( $ ) {
 
 	});
 	
+	$( '.reg-man-rc-google-map-container' ).on( 'map-info-window-changed', function() {
+		var me = $(this);
+		var info_windows = me.find( '.reg-man-rc-info-window-container' );
+		var is_info_window_showing = ( info_windows.length > 0 );
+		if ( is_info_window_showing ) {
+			me.addClass( 'info-window-showing' );
+		} else {
+			me.removeClass( 'info-window-showing' );
+		} // endif
+		me.trigger( 'popup-changed' ); // this is used by the calendar to detect popup changes
+	});
+
 	$( '.reg-man-rc-google-map-container' ).on( 'submit-start', function( evt ) {
 		var me = $( this );
 		me.addClass( 'reg-man-rc-map-loading' );
@@ -164,6 +180,15 @@ jQuery( document ).ready( function( $ ) {
 		var me = $( this );
 		var marker_json_data = response;
 		me.trigger( 'set-map-markers', [ marker_json_data ] );
+	});
+	$( '.reg-man-rc-google-map-container' ).on( 'msg-arrival', function( evt, errors_object, is_error ) {
+		var me = $( this );
+		var errors_array = Object.values( errors_object );
+		var error_text = '';
+		errors_array.forEach( function( curr_error, index ) {
+			error_text = error_text + curr_error.error_msg + '\n';
+		});
+		alert( error_text );
 	});
 
 	$( '.reg-man-rc-google-map-container' ).on( 'init-map-markers', function( evt, map_marker_array ) {
@@ -179,6 +204,7 @@ jQuery( document ).ready( function( $ ) {
 			me.trigger( 'set-map-markers', [ marker_json_data ] );
 		} // endif
 	});
+
 	
 	$( '.reg-man-rc-google-map-container' ).on( 'enable-user-input', function( evt ) {
 		var me = $(this);
@@ -203,11 +229,13 @@ jQuery( document ).ready( function( $ ) {
 		// First make sure google maps is loaded
 		if ( typeof google === 'object' && typeof google.maps === 'object' ) {
 			var me = $(this);
+			var map_id = me.attr( 'id' );
 			var map_element = me.find( '.reg-man-rc-google-map' );
 			var lat = map_element.data( 'lat' );
 			var lng = map_element.data( 'lng' );
 			var zoom = map_element.data( 'zoom' );
 			var map = new google.maps.Map( map_element[ 0 ], {
+				mapId: map_id, // Map ID is required for advanced markers.
 				mapTypeControl: false,				
 				center: { lat: lat, lng: lng },
 			    zoom: zoom,

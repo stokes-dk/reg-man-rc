@@ -18,7 +18,6 @@ class Item_Type {
 
 	const UNSPECIFIED_ITEM_TYPE_ID	= 0; // An ID used to indicate that the item type is not specified
 
-	const FIXER_STATION_ID_META_KEY	= 'reg-man-rc-item-type-default-fixer-station';
 	const COLOUR_META_KEY			= self::TAXONOMY_NAME . '-colour';
 	const ORDER_INDEX_META_KEY 		= self::TAXONOMY_NAME . '-order-index';
 	const EXTERNAL_NAMES_META_KEY	= self::TAXONOMY_NAME . '-external-names';
@@ -194,35 +193,6 @@ class Item_Type {
 		return $result;
 	} // function
 
-
-	/**
-	 * Get a flag indicating whether there is a term (in this taxonomy) with the specified name.
-	 * Note that this does not use the internal cache and instead queries the database directly.
-	 * This is used internally to facilitate creating the default set of terms.
-	 * Note also that this does not test external names assigned to the terms.
-	 *
-	 * @return	boolean	TRUE if a term with the specified name exists in this taxonomy, FALSE otherwise.
-	 *
-	 * @since v0.1.0
-	 */
-/* FIXME - not used
-	private static function get_is_exist_term_by_name( $name ) {
-		$name = wp_specialchars_decode( $name ); // A & B should be found using A &amp; B and vice-versa
-		$term_array = get_terms( array(
-				'taxonomy'		=> self::TAXONOMY_NAME,
-				'hide_empty'	=> FALSE, // We want all, including those used by no post
-				'name'			=> $name,
-		) );
-		if ( ( $term_array instanceof \WP_Error ) || ( ! is_array( $term_array ) ) ) {
-			// This should only happen if the taxonomy name does not exist
-			$result = FALSE;
-		} else {
-			$result = isset( $term_array[ 0 ] ); // TRUE if there is at least one item, FALSE otherwise
-		} // endif
-		return $result;
-	} // function
-*/
-
 	/**
 	 * Get the item type with the specified ID
 	 *
@@ -263,33 +233,6 @@ class Item_Type {
 		return $result;
 	} // function
 
-
-	/**
-	 * Get the item types whose default fixer station is the one specified
-	 *
-	 * @param	int|string	$fixer_station_id	The ID of the post whose fixer stations are to be returned
-	 * @return	Item_Type[]						An array of instances of this class whose default fixer station is the one specified
-	 *
-	 * @since v0.1.0
-	 */
-	public static function get_item_types_by_default_fixer_station( $fixer_station_id ) {
-		$result = array();
-
-		// Rather than constructing new objects I will look for instances in my cache
-
-		$all_types = self::get_all_item_types();
-
-		foreach ( $all_types as $type ) {
-			$default_station = $type->get_fixer_station();
-			if ( isset( $default_station ) && $default_station->get_id() === $fixer_station_id ) {
-				$result[] = $type;
-			} // endif
-		} // endfor
-
-		return $result;
-
-	} // function
-
 	/**
 	 * Get the URL for the admin UI for this taxonomy
 	 * @return string
@@ -300,8 +243,6 @@ class Item_Type {
 		$result = add_query_arg( array( 'taxonomy' => $taxonomy ), $base_url );
 		return $result;
 	} // function
-
-
 
 	/**
 	 * Get the ID of this object
@@ -369,51 +310,13 @@ class Item_Type {
 		);
 		$query = new \WP_Query( $args );
 		$result = $query->found_posts;
-		wp_reset_postdata(); // Required after using WP_Query()
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
 
 	} // function
-
-
-	/**
-	 * Get the default fixer station for this item type
-	 *
-	 * @return	Fixer_Station	The fixer station that items of this type are assigned to by default
-	 *
-	 * @since v0.1.0
-	 */
-	public function get_fixer_station() {
-		if ( ! isset( $this->fixer_station ) )  {
-			$fixer_station_id = get_term_meta( $this->get_id(), self::FIXER_STATION_ID_META_KEY, $single = TRUE);
-			if ( ( $fixer_station_id !== FALSE ) && ( $fixer_station_id !== NULL ) ) {
-				$this->fixer_station = Fixer_Station::get_fixer_station_by_id( $fixer_station_id );
-			} // endif
-		} // endif
-		return $this->fixer_station;
-	} // function
-
-	/**
-	 * Set the default fixer station for items of this type
-	 *
-	 * @param	int|string	$fixer_station_id	The ID of the fixer station to be assigned as the default for this item type
-	 * @return	void
-	 *
-	 * @since v0.1.0
-	 */
-	public function set_fixer_station_id( $fixer_station_id ) {
-		if ( ( $fixer_station_id === '' ) || ( $fixer_station_id === NULL ) || ( $fixer_station_id === FALSE ) ) {
-			delete_term_meta( $this->get_id(), self::FIXER_STATION_ID_META_KEY );
-		} else {
-			// We need to make sure there is only one value so if none exists add it, otherwise update it
-			$curr = get_term_meta( $this->get_id(), self::FIXER_STATION_ID_META_KEY, $single = TRUE);
-			if ( ( $curr === '' ) || ( $curr === NULL ) || ( $curr === FALSE ) ) {
-				add_term_meta( $this->get_id(), self::FIXER_STATION_ID_META_KEY, $fixer_station_id );
-			} else {
-				update_term_meta( $this->get_id(), self::FIXER_STATION_ID_META_KEY, $fixer_station_id, $curr );
-			} // endif
-		} // endif
-	} // function
-
+	
 	/**
 	 * Get the colour for this item type.
 	 * This is used to colour code graphs.
@@ -565,58 +468,6 @@ class Item_Type {
 
 
 	/**
-	 * Get the html content shown to the administrator in the "About" help for this taxonomy
-	 * @return string
-	 */
-	public static function get_about_content() {
-		ob_start();
-			$heading = __( 'About item types', 'reg-man-rc' );
-			echo "<h2>$heading</h2>";
-			echo '<p>';
-				$msg = __(
-					'Item types provide a way to group items for statistical analysis.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'The default item types are based on whether the item is electrically powered or not.' .
-					'  This makes it easier to provide data meeting the Open Repair Data Standard which ' .
-					' collects data only for electrical and electronic equipment (EEE).',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'You may choose not to define any item types.' .
-					'  If you define item types then each item registered must have its item type and fixer station assigned.' .
-					'  If you do not define any item types then each item registered must have only its fixer station assigned.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'Each item type has a default fixer station which allows the fixer station to be assigned ' .
-					' automatically during registration when the item type is selected.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'Item types are colour coded for display in statistical charts.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			$result = ob_get_clean();
-		return $result;
-	} // function
-
-	/**
 	 * Returns data that represent the default categories used to perform initial configuration of the plugin.
 	 * @return	string[][]
 	 */
@@ -634,62 +485,7 @@ class Item_Type {
 			'fixer_station'	=> '',
 			'colour'		=> '#1a9d9a',
 		);
-/*
-		$result[] = array(
-			'name'			=> __( 'Appliance', 'reg-man-rc' ),
-			'description'	=> __( 'Small home appliances and electric tools', 'reg-man-rc' ),
-			'fixer_station'	=> __( 'Appliances & Housewares', 'reg-man-rc' ),
-			'colour'		=> '#610f40',
-		);
-		$result[] = array(
-			'name'			=> __( 'Bike', 'reg-man-rc' ),
-			'description'	=> __( 'Bicycles', 'reg-man-rc' ),
-			'fixer_station'	=> __( 'Bikes', 'reg-man-rc' ),
-			'colour'		=> '#de2d37',
-		);
-		$result[] = array(
-			'name'			=> __( 'Book / Paper', 'reg-man-rc' ),
-			'description'	=> __( 'Books and paper', 'reg-man-rc' ),
-			'fixer_station'	=> __( 'Books & Paper', 'reg-man-rc' ),
-			'colour'		=> '#0f6eb0',
-		);
-		$result[] = array(
-			'name'			=> __( 'Clothing / Textiles', 'reg-man-rc' ),
-			'description'	=> __( 'Clothing and other textiles', 'reg-man-rc' ),
-			'fixer_station'	=> __( 'Clothing & Textiles', 'reg-man-rc' ),
-			'colour'		=> '#1a9d9a',
-		);
-		$result[] = array(
-			'name'			=> __( 'Computer / Smart Device', 'reg-man-rc' ),
-			'description'	=> __( 'Computers, tablets and smart phones', 'reg-man-rc' ),
-			'fixer_station'	=> __( 'Computers', 'reg-man-rc' ),
-			'colour'		=> '#fb9d19',
-		);
-		$result[] = array(
-			'name'			=> __( 'Furniture', 'reg-man-rc' ),
-			'description'	=> __( '', 'reg-man-rc' ),
-			'fixer_station'	=> __( 'Appliances & Housewares', 'reg-man-rc' ),
-			'colour'		=> '#7ec159',
-		);
-		$result[] = array(
-			'name'			=> __( 'Home Electronics', 'reg-man-rc' ),
-			'description'	=> __( 'Audio / video equipment and other electronics', 'reg-man-rc' ),
-			'fixer_station'	=> __( 'Appliances & Housewares', 'reg-man-rc' ),
-			'colour'		=> '#d11c71',
-		);
-		$result[] = array(
-			'name'			=> __( 'Housewares', 'reg-man-rc' ),
-			'description'	=> __( 'Non-electric items', 'reg-man-rc' ),
-			'fixer_station'	=> __( 'Appliances & Housewares', 'reg-man-rc' ),
-			'colour'		=> '#dbdd46',
-		);
-		$result[] = array(
-			'name'			=> __( 'Jewellery', 'reg-man-rc' ),
-			'description'	=> __( '', 'reg-man-rc' ),
-			'fixer_station'	=> __( 'Jewellery', 'reg-man-rc' ),
-			'colour'		=> '#ea4a25',
-		);
-*/
+
 		return $result;
 	} // function
 

@@ -12,6 +12,7 @@ use Reg_Man_RC\Model\Stats\Items_Chart_Model;
 use Reg_Man_RC\Model\Stats\Volunteers_Chart_Model;
 use Reg_Man_RC\Model\Stats\Visitors_And_Volunteers_Chart_Model;
 use Reg_Man_RC\Model\Stats\Visitors_Chart_Model;
+use Reg_Man_RC\Control\User_Role_Controller;
 
 /**
  * The administrative view for statistics
@@ -100,56 +101,126 @@ class Admin_Stats_View {
 						'<i class="icon dashicons dashicons-%3$s"></i><span class="text">%2$s</span>' . 
 					'</a>' . 
 				'</li>';
+
+		// Set up the tabs for the current user (depending on their role's capabilities)
+		$tabs_array = array();
+		$tabs_array[] = 'summary';
+		$tabs_array[] = 'fixed' ;
+		
+		if ( current_user_can( 'edit_' . User_Role_Controller::VOLUNTEER_CAPABILITY_TYPE_PLURAL ) ) {
+			$tabs_array[] = 'fixers';
+			$tabs_array[] = 'non-fixers';
+		} // endif
+		
+		if ( current_user_can( 'edit_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+			$tabs_array[] = 'map';
+		} // endif
+		
+//		if ( current_user_can( 'edit_others_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+		if ( current_user_can( 'edit_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+			$tabs_array[] = 'events';
+		} // endif
+		
+//		if ( current_user_can( 'edit_others_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL ) ) {
+		if ( current_user_can( 'edit_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL ) ) {
+			$tabs_array[] = 'items';
+		} // endif
+		
+//		if ( current_user_can( 'edit_others_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ) {
+		if ( current_user_can( 'edit_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ) {
+			$tabs_array[] = 'visitors';
+		} // endif
+		
+//		if ( current_user_can( 'edit_others_' . User_Role_Controller::VOLUNTEER_REG_CAPABILITY_TYPE_PLURAL ) ) {
+		if ( current_user_can( 'edit_' . User_Role_Controller::VOLUNTEER_REG_CAPABILITY_TYPE_PLURAL ) ) {
+			$tabs_array[] = 'vol-reg';
+		} // endif
 		
 		echo '<div class="reg-man-rc-tabs-container">';
 			echo '<ul>';
-				printf( $format, 'summary',			$summary_title,			'chart-bar' );
-				printf( $format, 'fixed',			$fixed_title,			'admin-tools' );
-				printf( $format, 'fixers',			$fixers_title,			'chart-bar' );
-				printf( $format, 'non-fixers',		$non_fixers_title,		'chart-bar' );
-				printf( $format, 'map',				$map_title,				'location-alt' );
-				printf( $format, 'events',			$events_title,			'calendar' );
-				printf( $format, 'items',			$items_title,			'clipboard' );
-				printf( $format, 'visitors'	,		$visitors_title,		'groups' );
-				printf( $format, 'vol-reg',			$vol_reg_title,			'admin-users' );
+				if ( in_array( 'summary', $tabs_array ) ) {
+					printf( $format, 'summary',			$summary_title,			'chart-bar' );
+				} // endif
+				if ( in_array( 'fixed', $tabs_array ) ) {
+					printf( $format, 'fixed',			$fixed_title,			'admin-tools' );
+				} // endif
+				if ( in_array( 'fixers', $tabs_array ) ) {
+					printf( $format, 'fixers',			$fixers_title,			'chart-bar' );
+				} // endif
+				if ( in_array( 'non-fixers', $tabs_array ) ) {
+					printf( $format, 'non-fixers',		$non_fixers_title,		'chart-bar' );
+				} // endif
+				if ( in_array( 'map', $tabs_array ) ) {
+					printf( $format, 'map',				$map_title,				'location-alt' );
+				} // endif
+				if ( in_array( 'events', $tabs_array ) ) {
+					printf( $format, 'events',			$events_title,			'calendar' );
+				} // endif
+				if ( in_array( 'items', $tabs_array ) ) {
+					printf( $format, 'items',			$items_title,			'clipboard' );
+				} // endif
+				if ( in_array( 'visitors', $tabs_array ) ) {
+					printf( $format, 'visitors'	,		$visitors_title,		'groups' );
+				} // endif
+				if ( in_array( 'vol-reg', $tabs_array ) ) {
+					printf( $format, 'vol-reg',			$vol_reg_title,			'admin-users' );
+				} // endif
 			echo '</ul>';
 
-			echo '<div id="tab-summary" class="tab-panel" data-name="summary">';
-				self::render_summary_tab();
-			echo '</div>';
+			if ( in_array( 'summary', $tabs_array ) ) {
+				echo '<div id="tab-summary" class="tab-panel" data-name="summary">';
+					self::render_summary_tab();
+				echo '</div>';
+			} // endif
+			
+			if ( in_array( 'fixed', $tabs_array ) ) {
+				echo '<div id="tab-fixed" class="tab-panel" data-name="fixed">';
+					self::render_fixed_tab();
+				echo '</div>';
+			} // endif
+			
+			if ( in_array( 'fixers', $tabs_array ) ) {
+				echo '<div id="tab-fixers" class="tab-panel" data-name="fixers">';
+					self::render_fixers_tab();
+				echo '</div>';
+			} // endif
+			
+			if ( in_array( 'non-fixers', $tabs_array ) ) {
+				echo '<div id="tab-non-fixers" class="tab-panel" data-name="non_fixers">';
+					self::render_non_fixers_tab();
+				echo '</div>';
+			} // endif
 
-			echo '<div id="tab-fixed" class="tab-panel" data-name="fixed">';
-				self::render_fixed_tab();
-			echo '</div>';
-
-			echo '<div id="tab-fixers" class="tab-panel" data-name="fixers">';
-				self::render_fixers_tab();
-			echo '</div>';
-
-			echo '<div id="tab-non-fixers" class="tab-panel" data-name="non_fixers">';
-				self::render_non_fixers_tab();
-			echo '</div>';
-
-			echo '<div id="tab-map" class="tab-panel" data-name="map">';
-				self::render_map_tab();
-			echo '</div>';
-
-			echo '<div id="tab-events" class="tab-panel" data-name="events">';
-				self::render_events_tab();
-			echo '</div>';
-
-			echo '<div id="tab-items" class="tab-panel" data-name="items">';
-				self::render_items_tab();
-			echo '</div>';
-
-			echo '<div id="tab-visitors" class="tab-panel" data-name="visitors">';
-				self::render_visitors_tab();
-			echo '</div>';
-
-			echo '<div id="tab-vol-reg" class="tab-panel" data-name="volunteer_registration">';
-				self::render_volunteer_registration_tab();
-			echo '</div>';
-
+			if ( in_array( 'map', $tabs_array ) ) {
+				echo '<div id="tab-map" class="tab-panel" data-name="map">';
+					self::render_map_tab();
+				echo '</div>';
+			} // endif
+			
+			if ( in_array( 'events', $tabs_array ) ) {
+				echo '<div id="tab-events" class="tab-panel" data-name="events">';
+					self::render_events_tab();
+				echo '</div>';
+			} // endif
+			
+			if ( in_array( 'items', $tabs_array ) ) {
+				echo '<div id="tab-items" class="tab-panel" data-name="items">';
+					self::render_items_tab();
+				echo '</div>';
+			} // endif
+			
+			if ( in_array( 'visitors', $tabs_array ) ) {
+				echo '<div id="tab-visitors" class="tab-panel" data-name="visitors">';
+					self::render_visitors_tab();
+				echo '</div>';
+			} // endif
+			
+			if ( in_array( 'vol-reg', $tabs_array ) ) {
+				echo '<div id="tab-vol-reg" class="tab-panel" data-name="volunteer_registration">';
+					self::render_volunteer_registration_tab();
+				echo '</div>';
+			} // endif
+			
 		echo '</div>';
 	} // function
 
@@ -177,7 +248,7 @@ class Admin_Stats_View {
 
 	private static function render_fixed_tab() {
 		echo '<div class="reg-man-rc-chart-group-container">';
-			$fixed_table = Items_Fixed_Admin_Table_View::create( Item_Stats_Collection::GROUP_BY_FIXER_STATION );
+			$fixed_table = Items_Fixed_Admin_Table_View::create();
 			$fixed_table->render();
 		echo '</div>';
 	} // function

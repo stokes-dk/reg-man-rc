@@ -11,37 +11,119 @@
 	padding: 0.5em;
 	background: #eee;
 	border: 1px solid #ccc;
+	text-decoration: none;
 }
- .visitor-reg-form-container .visitor-reg-input-accordion .visitor-reg-accordion-section {
-	padding: 1em;
+.visitor-reg-manager-event-header {
+	margin: 1em 0;
 }
- .visitor-reg-form-container .visitor-reg-input-accordion .visitor-reg-accordion-section > .form-input-list {
+.visitor-reg-form-header {
+	padding: 0.5em;
+	border-bottom: 1px solid #ccc;
+	background: #cef;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+.visitor-reg-manager-subtitle {
 	margin: 0;
 }
-.visitor-reg-form-container .house-rules {
-	font-size: inherit; margin: 1em;
+.visitor-reg-manager-event-header .visitor-reg-manager-event-display {
+	display: inline-block;
+	margin: 0;
 }
-.visitor-reg-form-container .visitor-reg-accordion-section .house-rules {
-	max-height: 25em; overflow-y: scroll; -webkit-overflow-scrolling: touch;
-	margin: 0; padding: 0;
+.visitor-reg-manager-event-header .change-event-link {
+  margin: 0 0.25em;
+}
+
+.reg-man-rc-visitor-reg-busy {
+	z-index: 20000;
+	background-image: url('../../../../wp-includes/images/spinner-2x.gif');
+	background-repeat: no-repeat; 
+	background-position: center;
+	background-color: #fff;
+	opacity: 0.5;
+	position: fixed;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	cursor: wait;
+	visibility: hidden;
+}
+.reg-man-rc-visitor-reg-busy.is-active {
+	visibility: visible;
+}
+
+
+.datatable-container .visitor-list-table-toolbar .reg-manager-show-station {
+	font-weight: bold;
+}
+
+.visitor-reg-form-container {
+	border: 1px solid #ccc;
+	box-shadow: 0.25em 0.25em 0.25em #ccc;
+}
+
+.visitor-reg-add-visitor-form-container .house-rules {
+	font-size: inherit;
+	font-family: inherit;
+	max-height: 20em;
+	border: 1px solid #ccc;
+	overflow-y: scroll;
+	-webkit-overflow-scrolling: touch;
+	margin: 0 1em 1em 1em;
+	padding: 0 1em;
  }
- .text-fadeout {
-	position: relative;
- 	height: 1em;
-	bottom: 1em;
-	margin-bottom: -1em;
-	background-image: linear-gradient( rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 1) 100% );
-}
-.visitor-reg-form-container .house-rules h2 { font-size: larger; }
+.form-input-list .input-container input[type=text],
+.form-input-list .input-container input[type=email],
 .form-input-list .input-container select {
-	font-family: inherit; font-size: inherit; font-weight: 300; color: #446; 
-	height: 2em; line-height: 2em; padding: 0.25em;
-	border: 1px solid #999; border-radius: 0.25em; max-width: 100%;
+	font-family: inherit;
+	font-size: inherit;
+	font-weight: 300;
+	color: #446; 
+	height: 2em;
+	line-height: 2em;
+	padding: 0.25em;
+	border: 1px solid #999;
+	border-radius: 0.25em;
+	max-width: 100%;
 }
 
 .visitor-reg-manager-table th {
 	text-align: start;
 }
+.visitor-reg-list-button-text-container {
+	display: flex;
+	align-items: center;
+	gap: 0.25em;
+}
+.visitor-reg-manager-table .visitor-reg-list-button {
+	font-family: inherit;
+	font-size: inherit;
+	padding: 0;
+	text-align: start;
+	background: #eee;
+	border-radius: 0.25em;
+}
+
+.visitor-reg-form-container .visitor-details-name {
+	margin: 0 1em;
+}
+.visitor-reg-form-container  .visitor-reg-item-list-msg-container {
+	margin: 0 1em;
+}
+.visitor-reg-form-container .visitor-reg-form-section {
+	margin: 1em 0;
+}
+
+.visitor-reg-add-visitor-form .visitor-reg-items-section {
+	margin-bottom: 2em;
+}
+
+.visitor-reg-update-visitor-form-container .visitor-reg-name-section {
+	margin-bottom: 0;
+}
+
 .visitor-reg-form .item-list-input,
 .add-item-to-visitor-reg-form .item-list-input {
 	margin: 0.25em 0.25em; vertical-align: top;
@@ -59,55 +141,87 @@
 	margin: 0.5em 0.25em;
 	white-space: nowrap;
 }
-.visitor-reg-form .visitor-reg-item-list,
-.add-item-to-visitor-reg-form .add-item-to-visitor-reg-new-item-list {
-	list-style: none; margin: 0; padding: 0;
+.visitor-reg-item-list > .input-item {
+	position: relative;
 }
-.visitor-reg-item-list .item-list-input-group {
-	display: flex;
-	flex-wrap: wrap;
+
+.visitor-reg-form .visitor-reg-item-list-add-button-container {
+	margin: 0 1em;
 }
-.visitor-reg-item-list .item-list-input-group .input-item {
-	flex-grow: 1;
-	flex-shrink: 0;
-	padding: 0.25em;
-}
+
 .visitor-reg-form .visitor-reg-item-list {
  counter-reset: item-num;
 }
-.visitor-reg-form .visitor-reg-item-list .item-label:AFTER
-{
+.visitor-reg-form .visitor-reg-item-list .item-list-item-fieldset legend:AFTER {
 	counter-increment: item-num;
 	content: " " counter(item-num);
 }
 
-.visitor-reg-form .visitor-reg-item-list .item-list-item:ONLY-CHILD .item-label:AFTER {
+.visitor-reg-form .visitor-reg-item-list .item-list-item-fieldset:only-child legend:AFTER {
 	content: "";
-}
-.visitor-reg-form .visitor-reg-item-list .item-list-item,
-.add-item-to-visitor-reg-form .add-item-to-visitor-reg-new-item-list .item-list-item {
-	margin-bottom: 0.75em; border: 1px solid #ddd; padding: 0.25em;
 }
 .visitor-reg-form .visitor-reg-item-list .item-list-item.highlight-item { background: #eee; }
 
-.visitor-reg-form .visitor-reg-item-list + .visitor-item-add,
-.visitor-reg-form .visitor-reg-item-list .reg-item-remove-button,
-.add-item-to-visitor-reg-form .add-item-to-visitor-reg-new-item-list + .visitor-item-add,
-.add-item-to-visitor-reg-form .add-item-to-visitor-reg-new-item-list .reg-item-remove-button {
-	font-size: 80%;
-}
 .visitor-reg-form .visitor-reg-item-list .reg-item-remove-button,
 .add-item-to-visitor-reg-form .add-item-to-visitor-reg-new-item-list .reg-item-remove-button {
-	text-align: right;
+	position: absolute;
+	right: -8px;
+	top: 0;
+	background: #fff;
 }
-.reg-item-remove-button .dashicons { cursor: pointer; }
+.visitor-reg-form .visitor-reg-item-list .item-list-item-fieldset:first-child .reg-item-remove-button {
+	display: none;
+}
+
+.reg-item-remove-button .dashicons { cursor: pointer; vertical-align: bottom; }
 @media screen and (min-width: 40em) {
 	.visitor-reg-dialog .visitor-reg-form { width: 35em; }
 }
 .visitor-reg-form .visitor-name-reset {
-	font-size: 0.75em;
-	margin: 0.25em 0;
+	font-size: 0.8em;
+	margin: 0.5em 0;
 }
 .visitor-reg-form .auto-filled-input input:DISABLED {
-	background-color: #eee;
+	opacity: 0.75;
+}
+.visitor-reg-form .visitor-reg-man-no-email-container {
+	font-style: normal;
+	color: initial;
+	margin: 0.5em 0;
+}
+.visitor-reg-form .visitor-reg-man-no-email-container input[type=checkbox] {
+	vertical-align: initial;
+}
+
+.reg-man-rc-swappable-container .reg-man-rc-swappable-element {
+	display: none;
+}
+.reg-man-rc-swappable-container .reg-man-rc-swappable-element:first-child {
+	display: initial;
+}
+.visitor-reg-form-container .visitor-reg-form-section.visitor-reg-form-buttons-section {
+	display: flex;
+	justify-content: flex-end;
+	gap: 1em;
+	margin: 1em;
+}
+.ui-autocomplete .ui-menu-item {
+	margin: 0.5em 0;
+}
+
+.visitor-details-name-container {
+	margin: 1em;
+}
+.visitor-details-name-container .visitor-details-name {
+	margin: 0;
+	padding: 0;
+}
+.visitor-details-item-fieldset.compact .visitor-details-item-input-field {
+	flex-grow: 1;
+	flex-shrink: 1;
+	flex-basis: 10em;
+}
+
+.visitor-reg-update-visitor-form-container .visitor-reg-visitor-item-list-section {
+	 margin: 0 1em 2em 1em;
 }

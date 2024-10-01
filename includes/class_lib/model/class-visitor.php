@@ -5,6 +5,8 @@ use Reg_Man_RC\View\Admin\Admin_Menu_Page;
 use Reg_Man_RC\Control\User_Role_Controller;
 use Reg_Man_RC\Model\Stats\Visitor_Registration_Descriptor;
 use Reg_Man_RC\Model\Stats\Visitor_Registration_Descriptor_Factory;
+use Reg_Man_RC\Model\Encryption\Encryption;
+use Reg_Man_RC\Model\Stats\Item_Stats;
 
 /**
  * An instance of this class represents a single person who may attend multiple events and register items for repair.
@@ -22,17 +24,25 @@ class Visitor {
 
 	const POST_TYPE						= 'reg-man-rc-visitor';
 
-	// We use a side table to store personal info about the visitor include full name and email
-	const VISITOR_SIDE_TABLE_NAME		= 'reg_man_rc_visitor';
-
+	const EMAIL_META_KEY				= self::POST_TYPE . '-email';
+	const EMAIL_HAHSCODE_META_KEY		= self::POST_TYPE . '-email-code';
+	const FULL_NAME_META_KEY			= self::POST_TYPE . '-full-name';
+	const FULL_NAME_HAHSCODE_META_KEY	= self::POST_TYPE . '-full-name-code';
+	
 	const FIRST_EVENT_KEY_META_KEY		= self::POST_TYPE . '-first-event-key';
 	const IS_JOIN_MAIL_LIST_META_KEY	= self::POST_TYPE . '-is-join-mail-list';
 
 	private $post;
 	private $post_id;
+	private $display_name; // A displayable name for this visitor
 	private $public_name; // The name used for the visitor when shown in public places, e.g. "Dave S"
-	private $full_name; // The visitor's full name, e.g. "Dave Stokes"
-	private $email; // Optional, the visitor's email address
+	private $full_name; // The visitor's full name, e.g. "Dave Stokes", encrypted before stored in db
+	private $encrypted_full_name; // The encrypted version of the full name, read out of db
+	private $email; // Optional, the visitor's email address, encrypted before stored in db
+	private $encrypted_email; // The encrypted version of the email address, read out of db
+	private $wp_user; // Optional, the registered user associated with this volunteer
+	private $is_authored_by_current_wp_user; // TRUE if this visitor was authored by the current WP User
+	private $is_instance_for_current_wp_user; // TRUE if this visitor represents the current WP User
 	private $partially_obscured_email;
 	private $is_join_mail_list; // Set to TRUE if the visitor wants to join the mailing list for the repair cafe
 	private $first_event_key; // The key (string) for the first event attended by the visitor or NULL if the visitor's first event is not known
@@ -57,77 +67,56 @@ class Visitor {
 	 * @since	v0.1.0
 	 */
 	private static function instantiate_from_post( $post ) {
+		
 		if ( ! ( $post instanceof \WP_Post ) || ( $post->post_type !== self::POST_TYPE ) ) {
+			
 			$result = NULL; // The argument is not a post or not the right type so I can't process it
+			
 		} else {
+			
 			$result = new self();
 			$result->post = $post;
 			$result->post_id = $post->ID;
 			$result->public_name = isset( $post->post_title ) ? $post->post_title : NULL;
-			// Note that the side table contains full name and email so it will only be accessed
-			//  when the user can see private posts
-			// TODO: I should be able to view MY OWN full name and email address if I can't read private
-			$capability = 'read_private_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
-			$is_join_allowed = current_user_can( $capability );
-			if ( ! isset( $post->visitor_table_joined ) && $is_join_allowed ) {
-				self::join_post_to_visitor_table( $post );
-			} // endif
-			$result->full_name = isset( $post->visitor_full_name ) ? $post->visitor_full_name : NULL;
-			$result->email = isset( $post->visitor_email ) ? $post->visitor_email : NULL;
+			
 		} // endif
+		
 		return $result;
+		
 	} // function
-
-	/**
-	 *
-	 * @param \WP_Post $post
-	 */
-	private static function join_post_to_visitor_table( $post ) {
-		global $wpdb;
-		$capability = 'read_private_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
-		if ( current_user_can( $capability ) ) {
-			$visitor_table = $wpdb->prefix . self::VISITOR_SIDE_TABLE_NAME;
-			$alias = 'reg_man_rc_visitor';
-			$fields = 	'1 as visitor_table_joined, ' .
-						"$alias.full_name as visitor_full_name, " .
-						"$alias.email as visitor_email";
-
-			$query = "SELECT $fields FROM $visitor_table $alias WHERE {$alias}.post_id = %s";
-
-			$stmt = $wpdb->prepare( $query, $post->ID );
-
-			$result = $wpdb->get_row( $stmt );
-
-			$post->visitor_table_joined = 1;
-			$post->visitor_full_name = isset( $result->visitor_full_name ) ? $result->visitor_full_name : '';
-			$post->visitor_email = isset( $result->visitor_email ) ? $result->visitor_email : '';
-		} // endif
-	} // function
-
-
+	
 	/**
 	 * Get all visitors
-	 * @return	Visitor[]	An array containing all existing visitor records
+	 * @return	Visitor[]	An array containing all existing visitor records visible to the current user
 	 * @since 	v0.1.0
 	 */
 	public static function get_all_visitors() {
+
 		$result = array();
-		$statuses = self::get_visible_statuses();
-		$post_array = get_posts( array(
-						'post_type'				=> self::POST_TYPE,
-						'post_status'			=> $statuses,
-						'posts_per_page'		=> -1, // get all
-						'orderby'				=> 'post_title',
-						'order'					=> 'ASC',
-						'ignore_sticky_posts'	=> 1 // TRUE here means do not move sticky posts to the start of the result set
-		) );
+
+		$args = array(
+				'post_type'				=> self::POST_TYPE,
+				'posts_per_page'		=> -1, // get all
+				'orderby'				=> 'post_title',
+				'order'					=> 'ASC',
+				'ignore_sticky_posts'	=> 1 // TRUE here means do not move sticky posts to the start of the result set
+				
+		);
+
+		$query = new \WP_Query( $args );
+		$post_array = $query->posts;
+
 		foreach ( $post_array as $post ) {
 			$item = self::instantiate_from_post( $post );
 			if ( $item !== NULL ) {
 				$result[] = $item;
 			} // endif
 		} // endfor
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+
 		return $result;
+
 	} // function
 
 	/**
@@ -137,95 +126,155 @@ class Visitor {
 	 * @since 	v0.1.0
 	 */
 	public static function get_visitor_by_id( $visitor_id ) {
+		
 		$post = get_post( $visitor_id );
+
 		$result = self::instantiate_from_post( $post );
+
 		return $result;
+
 	} // function
 
 	/**
+	 * Get the visitors with the specified hashcode value for the specified meta key.
+	 * This is used to find a visitor with a specific email or full name.
+	 * Rather than decrypting every email in the database, we store a hashcode and find those records.
+	 * Note that it is possible (although extremely unlikely) for two visitors with different emails
+	 *   or different full names to have the same hashcode
+	 * @param	string	$meta_key	The key for the metadata to be searched
+	 * @param	string	$hashcode	The hashcode value for the metadata
+	 * @return	Visitor[]	An array of instances of this class whose hahcode is the one specified 
+	 * @since	v0.5.0
+	 */
+	private static function get_visitors_by_hashcode( $meta_key, $hashcode ) {
+
+		$result = array();
+		
+		if ( ! empty ( $hashcode ) ) {
+
+			// N.B. We need to get any post, including private
+			// This may be necessary, for example, when we need to find the record for a visitor
+			//  using their email address during visitor registration by someone who does not
+			//  have
+			$post_status = 'any';
+			
+			$args = array(
+					'post_type'			=> self::POST_TYPE,
+					'posts_per_page'	=>	-1, // Get all posts
+					'post_status'		=> $post_status, 
+					'meta_key'			=> $meta_key,
+					'meta_query'		=> array(
+								array(
+										'key'		=> $meta_key,
+										'value'		=> $hashcode,
+										'compare'	=> '=',
+								)
+					)
+			);
+
+			$query = new \WP_Query( $args );
+			$post_array = $query->posts;
+
+			foreach ( $post_array as $post ) {
+				$result[] = self::instantiate_from_post( $post );
+			} // endfor
+
+//			wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+
+		} // endif
+
+		return $result;
+	} // function
+	
+	/**
 	 * Get a visitor record by their email address
-	 * @param	string		$email			The email address of the visitor to be retrieved
-	 * @param	boolean		$is_store_email TRUE if the email address should be stored in the resulting object.
-	 *  The result does not contain private information like the email address unless the current logged-in WP user has authority to view it.
-	 *  However, under certain circumstances, like logging in to the visitor area, the user may have already
-	 *  supplied the email address and it is convenient to just store it in the visitor object.
-	 *  T
+	 * @param	string	$email	The email address of the visitor to be retrieved
 	 * @return	Visitor|NULL	The visitor with the specified email address, or NULL if the record is not found
 	 * @since 	v0.1.0
 	 */
 	public static function get_visitor_by_email( $email ) {
-		global $wpdb;
-		$email = trim( $email );
-		if ( empty( $email ) ) {
-			$result = NULL;
-		} else {
-			// I will look in the side table for the specified email then use the post id to create the Visitor object
-			$table = $wpdb->prefix . self::VISITOR_SIDE_TABLE_NAME;
-			$query = "SELECT post_id FROM $table WHERE email='%s' AND email IS NOT NULL AND email != ''";
-//			Error_Log::var_dump( $query, $email );
-			$stmt = $wpdb->prepare( $query, $email );
-			$data = $wpdb->get_row( $stmt, OBJECT );
-			$post_id = isset( $data ) ? $data->post_id : NULL;
-			$result = self::get_visitor_by_id( $post_id );
+		
+		$result = NULL;
+		if ( ! empty( $email ) ) {
+			
+			// We must always search by lowercase email since that's what is stored
+			$email = strtolower( $email );
+			
+			$hashcode = Encryption::hash( $email );
+			$visitor_array = self::get_visitors_by_hashcode( self::EMAIL_HAHSCODE_META_KEY, $hashcode );
+			foreach ( $visitor_array as $visitor ) {
+				$enc = $visitor->get_encrypted_email();
+				$dec = ! empty( $enc ) ? Encryption::decrypt( $enc ) : NULL;
+				if ( ! empty( $dec ) && ( $dec == $email ) ) {
+					$result = $visitor;
+					break;
+				} // endif
+			} // endif
 		} // endif
+			
+		return $result;
+
+	} // function
+	
+	/**
+	 * Get a visitor record by their full name
+	 * @param	string	$full_name	The full name of the visitor to be retrieved
+	 * @return	Visitor|NULL	The visitor with the specified full name, or NULL if the record is not found
+	 * @since 	v0.5.0
+	 */
+	public static function get_visitor_by_full_name( $full_name ) {
+		
+		$result = NULL;
+		if ( ! empty( $full_name ) ) {
+			$lower_full_name = strtolower( $full_name ); // always compare in lower case
+			$hashcode = Encryption::hash( $lower_full_name );
+			$visitor_array = self::get_visitors_by_hashcode( self::FULL_NAME_HAHSCODE_META_KEY, $hashcode );
+			foreach ( $visitor_array as $visitor ) {
+				$enc = $visitor->get_encrypted_full_name();
+				$dec = ! empty( $enc ) ? Encryption::decrypt( $enc ) : NULL;
+				if ( ! empty( $dec ) && ( strtolower( $dec ) == $lower_full_name ) ) {
+					$result = $visitor;
+					break;
+				} // endif
+			} // endif
+		} // endif
+			
 		return $result;
 	} // function
 
 
 	/**
-	 * Get a visitor record by their email address
+	 * Get a visitor record by their email address or full name
 	 * @param	string		$email			The email address of the visitor to be retrieved
-	 * @param	boolean		$is_store_email TRUE if the email address should be stored in the resulting object.
-	 *  The result does not contain private information like the email address unless the current logged-in WP user has authority to view it.
-	 *  However, under certain circumstances, like logging in to the visitor area, the user may have already
-	 *  supplied the email address and it is convenient to just store it in the visitor object.
-	 *  T
-	 * @return	Visitor|NULL	The visitor with the specified email address, or NULL if the record is not found
+	 * @param	string		$full_name		The full name of the visitor to be retrieved
+	 * @return	Visitor|NULL	The visitor with the specified email address or full name, or NULL if the record is not found.
+	 * The email argument takes first priority.  We will look for the visitor with the specified email and if not found
+	 * then we will look for the one with the specified full name.
 	 * @since 	v0.1.0
 	 */
 	public static function get_visitor_by_email_or_full_name( $email, $full_name ) {
-		global $wpdb;
+		
+//		global $wpdb;
 
-		$email = trim( $email );
-		$full_name = trim( $full_name );
+		$email = isset( $email ) ? trim( $email ) : NULL;
+		$full_name = isset( $full_name ) ? trim( $full_name ) : NULL;
 
 		if ( empty( $email ) && empty( $full_name ) ) {
+			
 			$result = NULL;
 
 		} elseif ( ! empty( $email ) ) {
+			
 			$result = self::get_visitor_by_email( $email ); // Use the email when available
 
 		} else {
-			// I will look in the side table for the specified full name then use the post id to create the Visitor object
-			$table = $wpdb->prefix . self::VISITOR_SIDE_TABLE_NAME;
-			$query = "SELECT post_id FROM $table WHERE full_name='%s' AND full_name IS NOT NULL AND full_name != ''";
-//			Error_Log::var_dump( $query, $full_name );
-			$stmt = $wpdb->prepare( $query, $full_name );
-			$data = $wpdb->get_row( $stmt, OBJECT );
-			$post_id = isset( $data ) ? $data->post_id : NULL;
-			$result = self::get_visitor_by_id( $post_id );
+			
+			$result = self::get_visitor_by_full_name( $full_name ); // otherwise, try by full name
+			
 		} // endif
 
 		return $result;
 
-	} // function
-
-	/**
-	 * Get an array of post statuses that indicates what is visible to the current user.
-	 * @param boolean	$is_look_in_trash	A flag set to TRUE if posts in trash should be visible.
-	 * @return string[]
-	 */
-	private static function get_visible_statuses( $is_look_in_trash = FALSE ) {
-		$capability = 'read_private_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
-		if ( current_user_can( $capability ) ) {
-			$result = array( 'publish', 'pending', 'draft', 'future', 'private', 'inherit' ); // don't get auto-draft
-			if ( $is_look_in_trash ) {
-				$result[] = 'trash';
-			} // endif
-		} else {
-			$result = array( 'publish' );
-		} // endif
-		return $result;
 	} // function
 
 	/**
@@ -236,8 +285,7 @@ class Visitor {
 	 * @param	string			$email					The visitor's email address
 	 * @return	Visitor|null
 	 */
-	public static function create_visitor( $public_name, $full_name = NULL, $email = NULL ) {
-
+	public static function create_visitor( $public_name, $full_name = NULL, $email = NULL, $first_event_key = NULL, $is_join = NULL ) {
 		$args = array(
 				'post_title'	=> $public_name,
 				'post_status'	=> 'private',
@@ -252,50 +300,82 @@ class Visitor {
 		} else {
 			$post = get_post( $post_id );
 			$result = self::instantiate_from_post( $post );
-			if ( ! empty( $result ) && ( ( ! empty( $full_name) ) || ( ! empty( $email ) ) ) ) {
-				$result->set_personal_info( $full_name, $email );
+			if ( ! empty( $result ) ) {
+				if ( ! empty( $full_name) || ! empty( $email ) ) {
+					$result->set_personal_info( $full_name, $email );
+				} // endif
+				if ( isset( $first_event_key ) ) {
+					$result->set_first_event_key( $first_event_key );
+				} // endif
+				if ( isset( $is_join ) ) {
+					$result->set_is_join_mail_list( $is_join );
+				} // endif
 			} // endif
 		} // endif
 
 		return $result;
 
 	} // function
-
+	
 	/**
-	 * Update the visitor record with the specified ID
-	 * @param	string|int	$id					The ID of the visitor record to be updated
-	 * @param	string		$full_name			The visitor's full name, e.g. Dave Stokes
-	 * @param	string		$email				The visitor's email address or NULL if not known
-	 * @return	boolean		TRUE if the update was successful, FALSE otherwise
-	 * @since	v0.1.0
+	 * Get the visitor record for the current WP user.
+	 * If no user is logged in, this will return NULL.
+	 * @param	boolean	$is_create_new_visitor	When TRUE causes this function to construct and return a new Visitor
+	 * if there is a user logged in and no Visitor exists for the user and the user is able to edit Visitor records.
+	 * If FALSE or the user is unable to edit Visitors then NULL is returned
+	 * @return	Visitor|NULL
 	 */
- 	public static function update_visitor( $id, $full_name, $email ) {
-		global $wpdb;
-		$table = $wpdb->prefix . self::VISITOR_SIDE_TABLE_NAME;
-		$vals = array(
-			'full_name'				=> is_string( $full_name ) 			? trim( $full_name )		: '',
-			'email'					=> is_string( $email )				? trim( $email )			: NULL,
-		);
-		$types = array_fill( 0, count( $vals ), '%s');
-		$where = array( 'id' => $id );
-		$where_format = array( '%s' );
-		$update_result = $wpdb->update( $table, $vals, $where, $types, $where_format );
-		$result = ( $update_result == 1 ) ? TRUE : FALSE;
-		return $result;
-	} // function
+	public static function get_visitor_for_current_wp_user( $is_create_new_visitor = FALSE ) {
+		
+		$result = NULL; // Assume we can't find or create the visitor
+		$wp_user = wp_get_current_user();
+		if ( ! empty( $wp_user->ID ) ) {
+			
+			$user_email = $wp_user->user_email;
+			if ( ! empty( $user_email ) ) {
+			
+				$result = self::get_visitor_by_email( $user_email );
+				if ( empty( $result ) && $is_create_new_visitor ) {
 
-	/**
-	 * Delete a visitor record
-	 * @param	string|int	$visitor_id		The ID of the record to be deleted
-	 * @return	boolean		TRUE if the delete was successful, FALSE if not
-	 * @since	v0.1.0
-	 */
-	public static function delete_visitor( $visitor_id ) {
-		global $wpdb;
-		$table = $wpdb->prefix . self::VISITOR_SIDE_TABLE_NAME;
-		$count = $wpdb->delete( $table, array( 'id' => $visitor_id ) , array( '%s' ) );
-		$result = ( $count !== 0 ) ? TRUE : FALSE;
+					// There is no existing visitor, so create it if we can
+					$capability = 'edit_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL;
+					if ( current_user_can( $capability ) ) {
+					
+						if ( ! empty( $wp_user->first_name ) && ! empty( $wp_user->last_name ) ) {
+							
+							/* Translators: %1$s is the first name, %2$s is the last name */
+							$full_name_format = _x( '%1$s %2$s', 'A format for constructing a full name from first and last names', 'reg-man-rc' );
+							$full_name = sprintf( $full_name_format, $wp_user->first_name, $wp_user->last_name );
+							
+							$last_initial = substr( $wp_user->last_name, 0, 1 );
+							/* Translators: %1$s is the first name, %2$s is the last name */
+							$public_name_format = _x( '%1$s %2$s', 'A format for constructing a public name from first name and last initial', 'reg-man-rc' );
+							$public_name = sprintf( $public_name_format, $wp_user->first_name, $last_initial );
+							
+						} elseif ( ! empty( $wp_user->first_name ) ) {
+							
+							$full_name = $wp_user->first_name;
+							$public_name = $wp_user->first_name;
+							
+						} else {
+							
+							$full_name = '';
+							$public_name = $wp_user->display_name;
+							
+						} // endif
+						
+						$result = self::create_visitor( $public_name, $full_name, $user_email );
+						
+					} // endif
+					
+				} // endif
+				
+			} // endif
+			
+		} // endif
+		
 		return $result;
+		
 	} // function
 
 	/**
@@ -307,7 +387,7 @@ class Visitor {
 		$parts = explode( ' ', $full_name ); // find space between first and last names
 		if ( count( $parts ) > 1 ) {
 			// When there are two or more names (separated by space) use first name plus last initial
-			$last_initial = substr( $parts[1], 0, 1 );
+			$last_initial = substr( $parts[ 1 ], 0, 1 );
 			$result = $parts[ 0 ] . ' ' . $last_initial;
 		} else {
 			$result = $full_name; // give up and just use the full name
@@ -353,37 +433,315 @@ class Visitor {
 	} // function
 
 	/**
-	 * Get the visitor's name as a single string.
-	 * To protect the visitor's privacy their full name is returned only if we are rendering the administrative interface.
+	 * Set the public name for this visitor
+	 * @param string $public_name
+	 */
+	public function set_public_name( $public_name ) {
+		if ( ! empty( $public_name ) ) {
+			$post_id = $this->get_post_id();
+			$post_update_args = array(
+				'ID'			=> $post_id,
+				'post_title'	=> $public_name
+			);
+			wp_update_post( $post_update_args );
+		} // endif
+	} // function
+	
+	/**
+	 * Get the most descriptive name available to this user in the current context for display purposes.
+	 * If we're rendering the admin interface and the user can view the full name then
+	 *   it will be returned (if known), otherwise the public name is used
+	 * @return string
+	 */
+	public function get_display_name() {
+		
+		if ( ! isset( $this->display_name ) ) {
+			
+			if ( is_admin() &&
+				( 	current_user_can( 'read_private_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ||
+					$this->get_is_authored_by_current_wp_user() ||
+					$this->get_is_instance_for_current_wp_user() ) ) {
+			
+				$full_name = $this->get_full_name();
+				$this->display_name = ! empty( $full_name ) ? $full_name : $this->public_name;
+
+			} else {
+				
+				$this->display_name = ! empty( $this->public_name ) ? $this->public_name : $this->post_id; // ID as last resort
+				
+			} // endif
+
+		} // endif
+		
+		return $this->display_name;
+
+	} // function
+	
+	/**
+	 * This private function gets the encrypted version of the full name out of metadata
+	 *  so that we can do things like compare it with a full name we're looking for.
+	 * @return NULL|string
+	 */
+	private function get_encrypted_full_name() {
+		
+		if ( ! isset( $this->encrypted_full_name ) ) {
+			
+			$val = get_post_meta( $this->get_post_id(), self::FULL_NAME_META_KEY, $single = TRUE );
+
+			$this->encrypted_full_name = ! empty( $val ) ? $val : NULL;
+
+		} // endif
+		
+		return $this->encrypted_full_name;
+		
+	} // function
+	
+	/**
+	 * Get the visitor's full name.
+	 * Note that the visitor's full name must be available on the front end, for example, during visitor registration
+	 * so that we can find returning visitors and re-use those records.
+	 * It is also available on the backend to someone looking at their own record
+	 * Care must be taken not to display this name.
+	 * For a displayable version, always use get_public_name() or get_display_name().
 	 *
 	 * @return	string
 	 * @since	v0.1.0
 	 */
 	public function get_full_name() {
-		$capability = 'read_private_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
-		return ( current_user_can( $capability ) ) ? $this->full_name : $this->get_public_name();
+		
+		if ( ! isset( $this->full_name ) ) {
+			
+			$this->full_name = NULL; // Assume we don't have it or can't access it
+
+			if ( current_user_can( 'read_private_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ||
+				 $this->get_is_authored_by_current_wp_user() ||
+				 $this->get_is_instance_for_current_wp_user() ) {
+
+				$enc = $this->get_encrypted_full_name();
+				$this->full_name = ! empty( $enc ) ? Encryption::decrypt( $enc ) : NULL;
+						
+			} else {
+				
+				$this->full_name = $this->get_public_name();
+				
+			} // endif
+
+		} // endif
+		
+		return $this->full_name;
+		
 	} // function
 
+	/**
+	 * Set the visitor's full name
+	 * @param	string		$full_name	The visitor's full_name if it is known, NULL otherwise
+	 * @since	v0.1.0
+	 */
+	public function set_full_name( $full_name ) {
+		
+				if ( current_user_can( 'edit_others_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ||
+			$this->get_is_authored_by_current_wp_user() ||
+			$this->get_is_instance_for_current_wp_user() ) {
+
+			if ( empty( $full_name ) ) {
+				
+				delete_post_meta( $this->get_post_id(), self::FULL_NAME_META_KEY );
+				delete_post_meta( $this->get_post_id(), self::FULL_NAME_HAHSCODE_META_KEY );
+				
+			} else {
+				
+				// We need a hashcode so we can search encrypted emails without decrypting everything
+				$encrypted_data = Encryption::encrypt( $full_name );
+				$lower_full_name = strtolower( $full_name ); // store hashchode using lower case
+				$hashcode = Encryption::hash( $lower_full_name );
+				
+				// Update will add the meta data if it does not exist
+				update_post_meta( $this->get_post_id(), self::FULL_NAME_META_KEY, $encrypted_data );
+				update_post_meta( $this->get_post_id(), self::FULL_NAME_HAHSCODE_META_KEY, $hashcode );
+				
+			} // endif
+			
+			 // allow these to be re-acquired
+			unset( $this->full_name );
+			unset( $this->encrypted_full_name );
+			
+		} // endif
+
+	} // function
+
+	/**
+	 * This private function gets the encrypted version of the email address out of metadata
+	 *  so that we can do things like compare it with an email address we're looking for.
+	 * @return NULL|string
+	 */
+	private function get_encrypted_email() {
+		
+		if ( ! isset( $this->encrypted_email ) ) {
+			
+			$val = get_post_meta( $this->get_post_id(), self::EMAIL_META_KEY, $single = TRUE );
+
+			$this->encrypted_email = ! empty( $val ) ? $val : NULL;
+
+		} // endif
+		
+		return $this->encrypted_email;
+		
+	} // function
+	
 	/**
 	 * Get the visitor's email, if supplied
 	 * @return	string|NULL		The visitor's email address if it is known, NULL otherwise
 	 * @since	v0.1.0
 	 */
 	public function get_email() {
-		$capability = 'read_private_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
-		return ( current_user_can( $capability ) ) ? $this->email : $this->get_partially_obscured_email();
+		
+		if ( ! isset( $this->email ) ) {
+			
+			$this->email = NULL; // Assume we don't have it or can't access it
+			
+			// Users viewing their own record or users who can edit others' records can see the email
+			if ( is_admin() &&
+				(	current_user_can( 'edit_others_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ||
+					$this->get_is_authored_by_current_wp_user() ||
+					$this->get_is_instance_for_current_wp_user() ) ) {
+	
+				$enc = $this->get_encrypted_email();
+				$this->email = ! empty( $enc ) ? Encryption::decrypt( $enc ) : NULL;
+				
+			} // endif
+			
+		} // endif
+		
+		return $this->email;
+		
 	} // function
 
+	/**
+	 * Set the email address for this volunteer
+	 * @param	string	$email
+	 */
+	public function set_email( $email ) {
+
+		if ( current_user_can( 'edit_others_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ||
+			$this->get_is_authored_by_current_wp_user() ||
+			$this->get_is_instance_for_current_wp_user() ) {
+
+			if ( empty( $email ) ) {
+				
+				delete_post_meta( $this->get_post_id(), self::EMAIL_META_KEY );
+				delete_post_meta( $this->get_post_id(), self::EMAIL_HAHSCODE_META_KEY );
+				
+			} else {
+				
+				// The email will always be stored in lowercase
+				$email = strtolower( $email );
+				
+				// We need a hashcode so we can search encrypted emails without decrypting everything
+				$encrypted_data = Encryption::encrypt( $email );
+				$hashcode = Encryption::hash( $email );
+				
+				// Update will add the meta data if it does not exist
+				update_post_meta( $this->get_post_id(), self::EMAIL_META_KEY, $encrypted_data );
+				update_post_meta( $this->get_post_id(), self::EMAIL_HAHSCODE_META_KEY, $hashcode );
+				
+			} // endif
+			
+			 // allow these to be re-acquired
+			unset( $this->email );
+			unset( $this->encrypted_email );
+			
+		} // endif
+		
+	} // function
+	
+	/**
+	 * Get a boolean indicating whether the current WP User is the author of this post.
+	 * @return	boolean	TRUE if the current WP User is the author of this post, FALSE otherwise
+	 * @since	v0.5.0
+	 */
+	private function get_is_authored_by_current_wp_user() {
+		if ( ! isset( $this->is_authored_by_current_wp_user ) ) {
+			$current_user_id = get_current_user_id(); // User's ID or 0 if not logged in
+			if ( empty( $current_user_id ) ) {
+				$this->is_authored_by_current_wp_user = FALSE;
+			} else {
+				$post = $this->get_post();
+				$post_author = $post->post_author;
+				$this->is_authored_by_current_wp_user = ! empty( $post_author )  ? ( $post_author == $current_user_id ) : FALSE;
+			} // endif
+		} // endif
+		return $this->is_authored_by_current_wp_user;
+	} // function
+
+	/**
+	 * Get a boolean indicating whether this instance represents the current WP User.
+	 * Note that a WP User should be able to see the details of their own Visitor record.
+	 * This function is used to implement that behaviour.
+	 * @return	boolean	TRUE if the current WP User is represented by this instance, FALSE otherwise
+	 * @since	v0.5.0
+	 */
+	private function get_is_instance_for_current_wp_user() {
+		if ( ! isset( $this->is_instance_for_current_wp_user ) ) {
+			$current_user_id = get_current_user_id(); // User's ID or 0 if not logged in
+			if ( empty( $current_user_id ) ) {
+				$this->is_instance_for_current_wp_user = FALSE;
+			} else {
+				$visitor_user = $this->get_wp_user();
+				$this->is_instance_for_current_wp_user = ! empty( $visitor_user )  ? ( $visitor_user->ID === $current_user_id ) : FALSE;
+			} // endif
+		} // endif
+		return $this->is_instance_for_current_wp_user;
+	} // function
+
+	/**
+	 * Get the WP_User object for this visitor. 
+	 * If there is no associated user for this visitor then this will return NULL.
+	 * @return \WP_User|NULL|FALSE
+	 */
+	private function get_wp_user() {
+		if ( ! isset( $this->wp_user ) ) {
+//			Error_Log::var_dump( $this->email );
+			if ( ! empty( $this->email ) ) {
+				$this->wp_user = get_user_by( 'email', $this->email );
+			} // endif
+		} // endif
+		return $this->wp_user;
+	} // function
+
+	/**
+	 * Get the display name for the WP_User object for this visitor. 
+	 * If there is no associated user for this visitor then this will return NULL.
+	 * @return string|NULL
+	 */
+	public function get_wp_user_display_name() {
+		$wp_user = $this->get_wp_user();
+		$result = ! empty( $wp_user ) ? $wp_user->display_name : NULL;
+		return $result;
+	} // function
+
+	
 	/**
 	 * Get a partially obscured email address for this visitor. E.g. stok*****@yahoo.ca
 	 * @return string
 	 */
 	public function get_partially_obscured_email() {
 		if ( ! isset( $this->partially_obscured_email ) ) {
-			$email = $this->get_email();
-			$this->partially_obscured_email = self::get_partially_obscured_form_of_email( $email );
+			
+			// We can show a partially obscured email address on the public side for people who can read private
+			if ( current_user_can( 'read_private_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ||
+					$this->get_is_authored_by_current_wp_user() ||
+					$this->get_is_instance_for_current_wp_user() ) {
+
+				$enc = $this->get_encrypted_email();
+				$email = ! empty( $enc ) ? Encryption::decrypt( $enc ) : NULL;
+				$this->partially_obscured_email = self::get_partially_obscured_form_of_email( $email );
+
+			} // endif
+
 		} // endif
+			
 		return $this->partially_obscured_email;
+		
 	} // function
 
 	/**
@@ -493,68 +851,17 @@ class Visitor {
 	 */
 	public function set_personal_info( $full_name, $email ) {
 
-		global $wpdb;
-		$table = $wpdb->prefix . self::VISITOR_SIDE_TABLE_NAME;
-
-		$id = $this->get_post_id();
-
-		$data = array(
-				'post_id'	=> $id,
-				'full_name'	=> $full_name,
-				'email'		=> $email
-		);
-		$wpdb->replace( $table, $data ); // Note that replace() will insert the record if it does not exist
-
-	} // function
-
-	/**
-	 * Delete the visitor's personal information from the side table
-	 * @since	v0.1.0
-	 */
-	public function delete_personal_info( ) {
-
-		global $wpdb;
-		$table = $wpdb->prefix . self::VISITOR_SIDE_TABLE_NAME;
-		$id = $this->get_post_id();
-		$args = array( 'post_id' => $id );
-
-		$wpdb->delete( $table, $args );
-
-	} // function
-
-	/**
-	 * Get a descriptive label for the visitor including their name and email.
-	 * If we are rendering the admin interface for a user that can read private posts then this will include personal details,
-	 *  otherwise it will be just the person's public name like, 'Dave S.'
-	 * @return string	A visitor label that quickly identifies a person to a human user, suitable for use as a select option
-	 * @since v0.1.0
-	 */
-	public function get_label() {
-
-		$capability = 'read_private_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
-		if ( current_user_can( $capability ) ) {
-			/* translators: %1$s is a person's name, %2$s is the person's email address. */
-			$label_format = _x( '%1$s : %2$s', 'A label for a person using their name and email address', 'reg-man-rc' );
-			$name = $this->get_full_name();
-			if ( empty( $name ) ) {
-				$name = $this->get_public_name();
-			} // endif
-			$email = $this->get_email();
-			if ( empty( $email ) ) {
-				$email = __( '[No email]', 'reg-man-rc' );
-			} // endif
-			$result = sprintf( $label_format, $name, $email );
-		} else {
-			$name = $this->get_public_name();
-			if ( empty( $name ) ) {
-				$name = __( '[No name]', 'reg-man-rc' );
-			} // endif
-			$result = $name; // Only show the public name!
+		if ( current_user_can( 'edit_others_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ||
+			$this->get_is_authored_by_current_wp_user() ||
+			$this->get_is_instance_for_current_wp_user() ) {
+		
+			$this->set_full_name( $full_name );
+			$this->set_email( $email );
+			
 		} // endif
-
-		return $result;
+		
 	} // function
-	
+
 	/**
 	 * Get the array of registrations for this visitor
 	 * @return	Visitor_Registration_Descriptor[]
@@ -599,6 +906,57 @@ class Visitor {
 	} // function
 	
 	/**
+	 * Enforce the rule that each visitor may have at most 1 item active (in the queue or with a fixer) at any time
+	 * Secondary items will be marked as "Standby"
+	 * @param string $event_key
+	 */
+	public function enforce_single_active_item_rule( $event_key ) {
+		$visitor_id = $this->get_id();
+		$items_array = Item::get_items_registered_by_visitor_for_event( $visitor_id, $event_key );
+
+		$is_active_found = FALSE;
+		$in_queue_status = Item_Status::get_item_status_by_id( Item_Status::IN_QUEUE );
+		$standby_status = Item_Status::get_item_status_by_id( Item_Status::STANDBY );
+		
+		// Loop through the visitor's items
+		// if we find an active item, set a flag so we can change subsequent active items to Standby
+		foreach( $items_array as $item ) {
+
+			$status = $item->get_item_status();
+			
+			if ( isset( $status ) ) {
+
+				if ( $is_active_found ) {
+
+					// A previous item is already active so set this one to Standby if it's also active
+					if ( $status->get_is_active() ) {
+						$item->set_item_status( $standby_status );
+					} // endif
+					
+				} else {
+					
+					// No previous item is active so set this one to active if it is on Standby
+					if ( $status->get_id() === Item_Status::STANDBY ) {
+						$item->set_item_status( $in_queue_status );
+						$is_active_found = TRUE; // We just made an item active
+					} // endif
+					
+				} // endif
+
+				if ( $status->get_is_active() ) {
+					
+					// This is the first active item
+					$is_active_found = TRUE;
+					
+				} // endif
+
+			} // endif
+
+		} // endif
+		
+	} // function
+	
+	/**
 	 *  Register the Visitor custom post type during plugin init.
 	 *
 	 *  @since	v0.1.0
@@ -633,8 +991,11 @@ class Visitor {
 		);
 
 		$icon = 'dashicons-groups';
-		$capability_singular = User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_SINGULAR;
-		$capability_plural = User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
+		
+		$capability_singular = User_Role_Controller::VISITOR_CAPABILITY_TYPE_SINGULAR;
+		$capability_plural = User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL;
+		$required_capability = 'read_private'; // Only users with this capability will see the admin UI
+
 		$args = array(
 				'labels'				=> $labels,
 				'description'			=> 'Visitors', // Internal description, not visible externally
@@ -645,16 +1006,15 @@ class Visitor {
 				// There is no reason to allow these to be accessible via REST
 				'show_in_rest'			=> FALSE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
 				'show_in_nav_menus'		=> FALSE, // available for selection in navigation menus?
-				'show_in_menu'			=> Admin_Menu_Page::get_CPT_show_in_menu( $capability_plural ), // Where to show in admin menu? The main menu page will determine this
+				 // Whether and where to show in admin menu? The main menu page will determine this
+				'show_in_menu'			=> Admin_Menu_Page::get_CPT_show_in_menu( $capability_plural, $required_capability ),
 				'show_in_admin_bar'		=> FALSE, // Whether to include this post type in the admin bar
-				'menu_position'			=> 5, // Menu order position.  5 is below Posts
+				'menu_position'			=> Admin_Menu_Page::get_menu_position(), // Menu order position
 				'menu_icon'				=> $icon,
 				'hierarchical'			=> FALSE, // Can each post have a parent?
 				// Note that page-attributes allows ordering of the posts
-//				'supports'				=> array( 'title', 'editor', 'thumbnail' ),
-				'supports'				=> array( 'title' ),
-				'taxonomies'			=> array(
-											 ),
+				'supports'				=> array( 'title', 'author' ),
+				'taxonomies'			=> array(),
 				'has_archive'			=> FALSE, // is there an archive page?
 				// Rewrite determines how the public page url will look.
 				'rewrite'				=> FALSE,
@@ -668,40 +1028,24 @@ class Visitor {
 	} // function
 
 	/**
-	 * Perform the necessary steps for this class when the plugin is activated.
-	 * For this class this means conditionally creating its database table using dbDelta().
-	 * @return	void
-	 * @since	v0.1.0
-	 */
-	public static function handle_plugin_activation() {
-		global $wpdb;
-
-		$charset_collate = $wpdb->get_charset_collate();
-		require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
-
-		$table = $wpdb->prefix . self::VISITOR_SIDE_TABLE_NAME;
-
-		$sql = "CREATE TABLE $table (
-			post_id bigint(20) unsigned NOT NULL,
-			full_name varchar(256) DEFAULT NULL,
-			email varchar(256) DEFAULT NULL,
-			PRIMARY KEY	(post_id)
-		) $charset_collate;";
-
-		dbDelta( $sql );
-
-	} // function
-
-	/**
 	 * Perform the necessary steps for this class when the plugin is uninstalled.
 	 * For this class this means removing its table.
 	 * @return	void
 	 * @since	v0.1.0
 	 */
 	public static function handle_plugin_uninstall() {
-		global $wpdb;
-		$table = $wpdb->prefix . self::VISITOR_SIDE_TABLE_NAME;
-		$wpdb->query( "DROP TABLE IF EXISTS $table" );
+		
+		// When the plugin is uninstalled, remove all posts of my type
+		$stati = get_post_stati(); // I need all post statuses
+		$posts = get_posts( array(
+				'post_type'			=> self::POST_TYPE,
+				'post_status'		=> $stati,
+				'posts_per_page'	=> -1 // get all
+		) );
+		foreach ( $posts as $post ) {
+			wp_delete_post( $post->ID );
+		} // endfor
+		
 	} // function
 
 } // class

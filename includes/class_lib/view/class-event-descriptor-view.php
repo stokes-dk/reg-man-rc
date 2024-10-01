@@ -14,6 +14,7 @@ use Reg_Man_RC\View\Object_View\List_Item;
 use Reg_Man_RC\View\Object_View\Object_View;
 use Reg_Man_RC\View\Object_View\Object_View_Section;
 use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Model\Event_Class;
 
 /**
  * An instance of this class provides rendering for an Internal_Event_Descriptor object.
@@ -26,8 +27,11 @@ class Event_Descriptor_View extends Abstract_Object_View {
 
 	const DEFAULT_PAGE_SLUG		= 'rc-events';
 
+	private static $EVENT_MARKER_TEXT_VALUES_ARRAY; // used to store marker text for events and descriptors
+	
 	private $event_descriptor;
 	private $item_provider;
+	private $first_event;
 
 	/**
 	 * A protected constructor forces users to use one of the factory methods
@@ -232,7 +236,7 @@ class Event_Descriptor_View extends Abstract_Object_View {
 				break;
 
 			case Map_View::MAP_TYPE_CALENDAR_ADMIN:
-				// We're showing an info window on the dashboard calendar map
+				// We're showing an info window on the admin calendar map
 				$result = array(
 						List_Item::EVENT_CATEGORIES,
 						List_Item::EVENT_DATE,
@@ -322,8 +326,60 @@ class Event_Descriptor_View extends Abstract_Object_View {
 	} // function
 
 	/**
+	 * Get the array of event marker text values keyed by event status and class
+	 * @return string[][]
+	 */
+	public static function get_event_marker_text_values_array() {
+		if ( ! isset( self::$EVENT_MARKER_TEXT_VALUES_ARRAY ) ) {
+			$tentative_status = Event_Status::get_event_status_by_id( Event_Status::TENTATIVE );
+			$tentative_text = $tentative_status->get_event_marker_text();
+			$cancelled_status = Event_Status::get_event_status_by_id( Event_Status::CANCELLED );
+			$cancelled_text = $cancelled_status->get_event_marker_text();
+			$private_class = Event_Class::get_event_class_by_id( Event_Class::PRIVATE );
+			$private_text = $private_class->get_event_marker_text();
+			$confidential_class = Event_Class::get_event_class_by_id( Event_Class::CONFIDENTIAL );
+			$confidential_text = $confidential_class->get_event_marker_text();
+			/* Translators: %1$s is an event class like "PRIVATE", %2$s is an event status like "TENTATIVE" */
+			$format = _x( '%1$s %2$s', 'A format for event marker text containing both event class and status', 'reg-man-rc' );
+			self::$EVENT_MARKER_TEXT_VALUES_ARRAY = array(
+
+					Event_Status::CONFIRMED	=> array(
+						Event_Class::PUBLIC			=> NULL,
+						Event_Class::PRIVATE		=> $private_text,
+						Event_Class::CONFIDENTIAL	=> $confidential_text,
+					),
+					Event_Status::TENTATIVE	=> array(
+						Event_Class::PUBLIC			=> $tentative_text,
+						Event_Class::PRIVATE		=> sprintf( $format, $private_text, $tentative_text ),
+						Event_Class::CONFIDENTIAL	=> sprintf( $format, $confidential_text, $tentative_text ),
+					),
+					Event_Status::CANCELLED	=> array(
+						Event_Class::PUBLIC			=> $cancelled_text,
+						Event_Class::PRIVATE		=> sprintf( $format, $private_text, $cancelled_text ),
+						Event_Class::CONFIDENTIAL	=> sprintf( $format, $confidential_text, $cancelled_text ),
+					),
+			);
+		} // endif
+		return self::$EVENT_MARKER_TEXT_VALUES_ARRAY;
+	} // function
+	/**
+	 * Get the marker text to be shown for an event or event descriptor
+	 * @param Event_Descriptor	$event_descriptor	The event descriptor
+	 * @param \DateTime|NULL	$event_date			The start date and time for an event or instance of a recurring event
+	 */
+	public static function get_event_marker_text( $event_descriptor, $event_date = NULL ) {
+		$status = $event_descriptor->get_event_status( $event_date );
+		$status_id = isset( $status ) ? $status->get_id() : Event_Status::get_default_event_status_id();
+		$class = $event_descriptor->get_event_class();
+		$class_id = isset( $class ) ? $class->get_id() : Event_Class::get_default_event_class_id();
+		$text_values_array = self::get_event_marker_text_values_array();
+		$result = isset( $text_values_array[ $status_id ][ $class_id ] ) ? $text_values_array[ $status_id ][ $class_id ] : NULL;
+		return $result;
+	} // function
+	
+	/**
 	 * Modify the title for posts of this type so that it includes the status for unconfirmed events,
-	 *  e.g. "(Tentative) Event Title"
+	 *  e.g. "TENTATIVE Event Title"
 	 * @param	string	$title	The post title retrieved from the database
 	 * @return	string	The post content modified for my custom post type
 	 * @since	v0.1.0
@@ -331,19 +387,24 @@ class Event_Descriptor_View extends Abstract_Object_View {
 	public static function modify_post_title( $title, $id ) {
 		global $post;
 		$result = $title; // return the original title by default
+//		Error_Log::var_dump( self::get_is_internal_event_page(), is_main_query(), in_the_loop() );
 		if ( self::get_is_internal_event_page() && is_main_query() && in_the_loop() ) {
+			
 			if ( post_password_required( $post ) ) {
 				// TODO: What if it is password protected?
+
 			} else {
 				$event_descriptor = self::get_internal_event_descriptor_for_post( $post );
 				if ( $event_descriptor !== NULL ) {
-					$status = $event_descriptor->get_event_status();
-					$status_id = ! empty( $status ) ? $status->get_id() : NULL;
-					if ( $status_id !== Event_Status::CONFIRMED ) {
-						$status_name = $status->get_name();
-						/* translators: %1$s is the status of an event, %2$s is the title of an event. */
-						$format = _x( '(%1$s) %2$s', 'A title for an event that includes its status like "(Tentative) Repair Cafe"', 'reg-man-rc' );
-						$result = sprintf( $format, $status_name, $title );
+
+					$summary = $event_descriptor->get_event_summary();
+					$marker_text = self::get_event_marker_text( $event_descriptor );
+					if ( ! empty( $marker_text ) ) {
+			
+						/* Translators: %1$s is the status of an event, %2$s is the title of an event. */
+						$format = _x( '%1$s %2$s', 'A title for an event that includes its status like "TENTATIVE Repair Cafe"', 'reg-man-rc' );
+						$result = sprintf( $format, $marker_text, $summary );
+
 					} // endif
 				} // endif
 			} // endif
@@ -358,7 +419,7 @@ class Event_Descriptor_View extends Abstract_Object_View {
 	 * @since	v0.1.0
 	 */
 	public static function modify_post_content( $content ) {
-		global $post, $wp_query;
+		global $post; //, $wp_query;
 		$result = $content; // return the original content by default
 		if ( self::get_is_internal_event_page() ) {
 			if ( post_password_required( $post ) ) {
@@ -370,14 +431,14 @@ class Event_Descriptor_View extends Abstract_Object_View {
 					$event = self::get_first_event_for_descriptor( $event_descriptor );
 				} else {
 					// For repeating events I will attempt to get the recurrence event out of the page request
-					// If a recurrence ID is found then I'll show the content for that single event (one date)
-					// If no recurrence ID is specified then I'll show the content for the whole descriptor (all dates)
-					$rcr_id = get_query_var( Event_Key::RECUR_ID_QUERY_ARG_NAME, FALSE );
-//					Error_Log::var_dump( $rcr_id );
-					if ( ! empty( $rcr_id ) ) {
+					// If a recurrence date is found then I'll show the content for that single event (one date)
+					// If no recurrence date is specified then I'll show the content for the whole descriptor (all dates)
+					$rcr_date = get_query_var( Event_Key::EVENT_DATE_QUERY_ARG_NAME, FALSE );
+//					Error_Log::var_dump( $rcr_date );
+					if ( ! empty( $rcr_date ) ) {
 						$evt_id = $event_descriptor->get_event_descriptor_id();
 						$prv_id = $event_descriptor->get_provider_id();
-						$event_key = Event_Key::create( $evt_id, $prv_id, $rcr_id );
+						$event_key = Event_Key::create( $rcr_date, $evt_id, $prv_id );
 						$event = Event::get_event_by_key( $event_key );
 					} else {
 						$event = NULL;
@@ -416,7 +477,7 @@ class Event_Descriptor_View extends Abstract_Object_View {
 			if ( isset( $event_descriptor ) ) {
 
 				// For the excerpt the view is always the event descriptor
-				$view = self::create( $event_descriptor );
+				$view = self::create_for_page_content( $event_descriptor );
 
 			} // endif
 
@@ -438,7 +499,7 @@ class Event_Descriptor_View extends Abstract_Object_View {
 		} else {
 			$post_type = $post->post_type;
 			if ( $post_type == Internal_Event_Descriptor::POST_TYPE ) {
-				$result = Internal_Event_Descriptor::get_internal_event_descriptor_by_event_id( $post->ID );
+				$result = Internal_Event_Descriptor::get_internal_event_descriptor_by_id( $post->ID );
 			} else {
 				$result = NULL;
 			} // endif
@@ -454,7 +515,7 @@ class Event_Descriptor_View extends Abstract_Object_View {
 	private static function get_is_internal_event_page() {
 		$internal_events_post_type = Internal_Event_Descriptor::POST_TYPE;
 		if ( is_singular( $internal_events_post_type ) ) {
-			global $wp_query, $wp;
+//			global $wp_query, $wp;
 			$internal_query_var = get_query_var( $internal_events_post_type, FALSE );
 			$result = ( $internal_query_var !== FALSE );
 		} else {
@@ -504,8 +565,8 @@ class Event_Descriptor_View extends Abstract_Object_View {
 			} else {
 				$event = $this->get_first_event();
 				if ( isset( $event ) ) {
-					$start_date = $event->get_start_date_time_local_timezone_object();
-					$end_date = $event->get_end_date_time_local_timezone_object();
+					$start_date = $event->get_start_date_time_object();
+					$end_date = $event->get_end_date_time_object();
 					$date_label = Event::create_label_for_event_dates_and_times( $start_date, $end_date );
 				} // endif
 
@@ -515,14 +576,6 @@ class Event_Descriptor_View extends Abstract_Object_View {
 					$date_label = sprintf( $format, $date_label );
 					echo '<p>' . $date_label . '</p>';
 				} // endif
-			} // endif
-
-			$url = $event_descriptor->get_event_page_url();
-			if ( ! empty( $url ) ) {
-				echo '<p>';
-					$link_text = esc_html__( 'Event details &raquo;', 'reg-man-rc' );
-					echo "<a class=\"event-descriptor-details-event-page-link\" href=\"$url\">$link_text</a>";
-				echo '</p>';
 			} // endif
 
 		$result = ob_get_clean();

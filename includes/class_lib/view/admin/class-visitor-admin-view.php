@@ -70,17 +70,6 @@ class Visitor_Admin_View {
 					'high'														// Meta box priority
 			);
 
-/* FIXME - This is copied from Volunteer.  Visitors cannot be public, right?
-			add_meta_box(
-					'custom-metabox-visitor-is-public',						// Unique ID for the element
-					__( 'Public Profile', 'reg-man-rc' ),						// Box title
-					array( __CLASS__, 'render_visitor_is_public_meta_box' ),	// Content callback, must be of type callable
-					Visitor::POST_TYPE, 										// Post type for this meta box
-					'side',														// Meta box position
-					'high'														// Meta box priority
-			);
-*/
-
 			add_meta_box(
 					'custom-metabox-visitor-reg-list',							// Unique ID for the element
 					__( 'Event Registrations', 'reg-man-rc' ),					// Box title
@@ -93,38 +82,6 @@ class Visitor_Admin_View {
 		} // endif
 	} // function
 
-	/**
-	 * Render the metabox for choosing whether the Visitor has a public profile page
-	 * @param	\WP_Post	$post
-	 * @return	void
-	 * @since 	v0.1.0
-	 */
-/*
-	public static function render_visitor_is_public_meta_box( $post ) {
-
-		// We need a flag to distinguish the case where no user input is provided
-		//  versus the case where no inputs were shown at all like in quick edit mode
-		echo '<input type="hidden" name="visitor_is_public_selection_flag" value="TRUE">';
-
-		$visitor = Visitor::get_visitor_by_id( $post->ID );
-
-		$input_list = Form_Input_List::create();
-
-		$label = __( 'Profile this visitor on the public website?', 'reg-man-rc' );
-		$name = 'visitor_public_profile';
-		$options = array(
-				__( 'Yes, include this visitor\'s profile on the public website', 'reg-man-rc' )		=> 'TRUE',
-				__( 'No, DO NOT show this visitor on the website', 'reg-man-rc' )			=> 'FALSE'
-		);
-		$curr_val = $visitor->get_has_public_profile();
-		$selected = $curr_val ? 'TRUE' : 'FALSE';
-		$hint = __( 'Public profiles NEVER contain identifying personal information like full name or email address.', 'reg-man-rc' );
-		$input_list->add_radio_group( $label, $name, $options, $selected, $hint );
-
-		$input_list->render();
-
-	} // function
-*/
 
 	/**
 	 * Render the metabox for list of registrations for this visitor
@@ -187,15 +144,19 @@ class Visitor_Admin_View {
 			
 			$label = __( 'First Event Attended', 'reg-man-rc' );
 			$input_name = 'visitor_first_event_key';
-			$selected_key = isset( $visitor ) ? $visitor->get_first_event_key() : NULL;
+			// Make sure we can get the actual first event for this visitor
+			$first_event_key = isset( $visitor ) ? $visitor->get_first_event_key() : NULL;
+			$first_event = isset( $first_event_key ) ? Event::get_event_by_key( $first_event_key ) : NULL;
+			$selected_key = isset( $first_event ) ? $first_event->get_key_string() : NULL;
 			ob_start();
 				$classes = '';
 				$calendar = Calendar::get_admin_calendar();
-				$name = esc_html( __( '-- Please select --', 'reg-man-rc' ) );
+				$name = esc_html( __( '[ Not known ]', 'reg-man-rc' ) );
 				$selected = ( empty( $selected_key ) ) ? 'selected="selected"' : '';
-				$first_option = "<option value=\"\" disabled=\"disabled\" $selected>$name</option>";
+				$first_option = "<option value=\"0\" $selected>$name</option>";
 				$is_required = TRUE;
-				Event_View::render_event_select( $input_name, $classes, $calendar, $selected_key, $first_option, $is_required );
+				$events_array = NULL; // We want to show all events
+				Event_View::render_event_select( $input_name, $classes, $calendar, $selected_key, $events_array, $first_option, $is_required );
 			$input_html = ob_get_clean();
 			$input_list->add_custom_html_input( $label, $input_name, $input_html );
 			
@@ -272,10 +233,9 @@ class Visitor_Admin_View {
 		$result = array(
 			'cb'						=> $columns[ 'cb' ],
 			'title'						=> __( 'Public Name',			'reg-man-rc' ),
-//			'is_public'					=> __( 'Public Profile',		'reg-man-rc' ),
+//			'id'						=> __( 'ID',					'reg-man-rc' ),
 			'full_name'					=> __( 'Full Name',				'reg-man-rc' ),
 			'email'						=> __( 'Email',					'reg-man-rc' ),
-//			'reg_count'					=> __( 'Events',				'reg-man-rc' ),
 			'is_join_mail_list'			=> __( 'Join Mailing List?',	'reg-man-rc' ),
 			'first_event'				=> __( 'First Event',			'reg-man-rc' ),
 			'event_count'				=> __( 'Events',				'reg-man-rc' ),
@@ -299,18 +259,17 @@ class Visitor_Admin_View {
 		$visitor = Visitor::get_visitor_by_id( $post_id );
 		if ( $visitor !== NULL ) {
 			switch ( $column_name ) {
-
+/*
+				case 'id':
+					$result = $visitor->get_id();
+					break;
+*/
+				
 				case 'title':
 					$public_name = $visitor->get_public_name();
 					$result = ! empty( $public_name ) ? esc_html( $public_name ) : $em_dash;
 					break;
-/*
-				case 'is_public':
-					$is_public = $visitor->get_has_public_profile();
-					$val = $is_public ? __( 'Yes', 'reg-man-rc' ) : $em_dash; //__( 'No', 'reg-man-rc' );
-					$result = esc_html( $val );
-					break;
-*/
+
 				case 'full_name':
 					$full_name = $visitor->get_full_name();
 					$result = ! empty( $full_name ) ? esc_html( $full_name ) : $em_dash;
@@ -325,12 +284,6 @@ class Visitor_Admin_View {
 					} // endif
 					break;
 
-/*
-				case 'reg_count':
-					$reg_array = $visitor->get_registration_descriptors();
-					$result = ! empty( $reg_array ) ? esc_html( count( $reg_array ) ) : $em_dash;
-					break;
-*/
 				case 'is_join_mail_list':
 					$is_join = $visitor->get_is_join_mail_list();
 					$result = $is_join ? __( 'Yes', 'reg-man-rc' ) : $em_dash;
@@ -353,9 +306,13 @@ class Visitor_Admin_View {
 				default:
 					$result = $em_dash;
 					break;
+
 			} // endswitch
+			
 		} // endif
+		
 		echo $result;
+		
 	} // function
 
 
@@ -402,4 +359,94 @@ class Visitor_Admin_View {
 		return $result;
 	} // function
 
+	/**
+	 * Get the set of tabs to be shown in the help for this type
+	 * @return array
+	 */
+	public static function get_help_tabs() {
+		$result = array(
+			array(
+				'id'		=> 'reg-man-rc-about',
+				'title'		=> __( 'About', 'reg-man-rc' ),
+				'content'	=> self::get_about_content(),
+			),
+		);
+		return $result;
+	} // function
+	
+	/**
+	 * Get the html content shown to the administrator in the "About" help for this post type
+	 * @return string
+	 */
+	private static function get_about_content() {
+		ob_start();
+			$heading = __( 'About Visitors', 'reg-man-rc' );
+			
+			echo "<h2>$heading</h2>";
+			echo '<p>';
+				$msg = __(
+					'A visitor record contains the details of a visitor who registered one or more items at an event.' .
+					'  It includes the following:',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+
+				$item_format = '<dt>%1$s</dt><dd>%2$s</dd>';
+				echo '<dl>';
+
+					$title = esc_html__( 'Public Name', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The name used to represent this visitor publicly like in the visitor registration list.' .
+							'  This is usually the visitor\'s first name or first name and last initial.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Full Name', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The visitor\'s full name.' .
+							'  Note that this is for internal records only and is never shown on the public website.' .
+							'  Also, note that this data is encrypted in the database and is not searchable.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Email', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The visitor\'s email address if known.' .
+							'  Note that this is for internal records only and is never shown on the public website.' .
+							'  Also, note that this data is encrypted in the database and is not searchable.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Join Mailing List?', 'reg-man-rc' );
+					$msg = esc_html__(
+							'A flag set to TRUE if this visitor has requested to join the organization\'s mailing list.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'First Event', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The first event this visitor attended, if known.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Events', 'reg-man-rc' );
+					$msg = esc_html__(
+							'A count or list of events this visitor has attended.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Author', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The author of this visitor record.' .
+							'  Note that the author of the record has authority to view the visitor\'s email address.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+				echo '</dl>';
+			echo '</p>';
+
+		$result = ob_get_clean();
+		return $result;
+	} // function
+	
 } // class

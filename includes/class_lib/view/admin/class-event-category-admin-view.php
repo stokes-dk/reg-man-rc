@@ -6,6 +6,7 @@ use Reg_Man_RC\Model\Internal_Event_Descriptor;
 use Reg_Man_RC\Model\Calendar;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Model\Settings;
+use Reg_Man_RC\View\Form_Input_List;
 
 /**
  * The administrative view for event category
@@ -65,8 +66,6 @@ class Event_Category_Admin_View {
 		} // endif
 	} // function
 
-
-
 	/**
 	 * Hide the slug form field for my taxonomy
 	 * @return	void
@@ -76,6 +75,17 @@ class Event_Category_Admin_View {
 		echo '<style>.term-slug-wrap { display:none; }</style>';
 	} // function
 
+	/**
+	 * Return a flag to indicate whether to show an admin notice for this taxonomy
+	 * @return boolean	TRUE if an admin notice should be displayed, FALSE otherwise
+	 */
+	public static function get_is_show_create_defaults_admin_notice() {
+		// We automatically create a defaut Event category so this taxonomy is never empty
+		$result = FALSE; // We don't currently have any admin notices for this taxonomy
+		return $result;
+	} // function
+
+	
 
 	/**
 	 * Render a metabox for the specified post.
@@ -85,11 +95,11 @@ class Event_Category_Admin_View {
 	public function render_post_metabox( $post ) {
 		switch ( $post->post_type ) {
 			case Internal_Event_Descriptor::POST_TYPE:
-				$event = Internal_Event_Descriptor::get_internal_event_descriptor_by_event_id( $post->ID );
+				$event = Internal_Event_Descriptor::get_internal_event_descriptor_by_id( $post->ID );
 				$this->render_metabox_for_event( $event );
 				break;
 			case Calendar::POST_TYPE:
-				$calendar = Calendar::get_calendar_by_id( $post->ID );
+				$calendar = Calendar::get_calendar_by_post_id( $post->ID );
 				$this->render_metabox_for_calendar( $calendar );
 				break;
 		} // switch
@@ -113,20 +123,41 @@ class Event_Category_Admin_View {
 			$selected_id_array[] = $category->get_id();
 		} // endfor
 		$event_categories = Event_Category::get_all_event_categories();
-		$input_name = esc_attr( self::INPUT_NAME );
+//		$input_name = esc_attr( self::INPUT_NAME );
 
 		$is_multi_category_allowed = Settings::get_is_allow_event_multiple_categories();
+		
+/*
 		if ( $is_multi_category_allowed ) {
 			self::render_checkboxes( $input_name, $event_categories, $selected_id_array );
 		} else {
 			self::render_radio_buttons( $input_name, $event_categories, $selected_id_array );
 		} // endif
+*/
 
+		$input_name = $is_multi_category_allowed ? self::INPUT_NAME . '[]' : self::INPUT_NAME;
+		$input_list = Form_Input_List::create();
+		
+		$is_required = ! $is_multi_category_allowed; // We can't make every checkbox required
+		$classes = '';
+		foreach( $event_categories as $event_category ) {
+			$label = $event_category->get_name();
+			$val = $event_category->get_id();
+			$hint = esc_html( $event_category->get_description() );
+			$is_checked = in_array( $val, $selected_id_array );
+			if ( $is_multi_category_allowed ) {
+				$input_list->add_checkbox_input($label, $input_name, $val, $is_checked, $hint, $classes, $is_required );
+			} else {
+				$input_list->add_radio_button_input( $label, $input_name, $val, $is_checked, $hint, $classes, $is_required );
+			} // endif
+		} // endfor
+		
+		$input_list->render();
 	} // function
 
 	private function render_checkboxes( $input_name, $event_categories, $selected_id_array ) {
 		$format =
-			'<div><label title="%1$s">' .
+			'<div><label title="%1$s" class="reg-man-rc-metabox-radio-label">' .
 				'<input type="checkbox" name="' . $input_name . '[]" value="%2$s" %3$s autocomplete="off">' .
 				'<span>%4$s</span>' .
 			'</label></div>';
@@ -142,8 +173,8 @@ class Event_Category_Admin_View {
 
 	private function render_radio_buttons( $input_name, $event_categories, $selected_id_array ) {
 		$format =
-			'<div><label title="%1$s">' .
-				'<input type="radio" name="' . $input_name . '" value="%2$s" %3$s autocomplete="off">' .
+			'<div><label title="%1$s" class="reg-man-rc-metabox-radio-label">' .
+				'<input type="radio" name="' . $input_name . '" value="%2$s" %3$s required="required" autocomplete="off">' .
 				'<span>%4$s</span>' .
 			'</label></div>';
 
@@ -198,7 +229,7 @@ class Event_Category_Admin_View {
 		// The choices are ANY or some subset.
 
 		$format =
-			'<div class="%6$s"><label>' .
+			'<div class="%6$s"><label class="reg-man-rc-metabox-radio-label">' .
 				'<input type="%1$s" name="%5$s" value="%2$s" %3$s autocomplete="off">' .
 				'<span>%4$s</span>' .
 			'</label></div>';
@@ -214,7 +245,7 @@ class Event_Category_Admin_View {
 				printf( $format, $type, $value, $checked, $label, $input_name, $class );
 			} // endfor
 
-		$msg = __( 'Select the event categories to be included in this calendar', 'reg-man-rc' );
+		$msg = __( 'Select the categories for events to be shown in this calendar', 'reg-man-rc' );
 		echo '<p>' . $msg . '</p>';
 
 	} // function
@@ -310,6 +341,36 @@ class Event_Category_Admin_View {
 			echo '</tr>';
 
 			// Calendar
+			$calendar_array = Calendar::get_all_calendars();
+			if ( ! empty( $calendar_array ) ) {
+				$input_id = 'event-category-calendar';
+				$input_name = 'event-category-calendar[]';
+				$label = __( 'Calendars', 'reg-man-rc' );
+				$desc = __( 'Select the calendars that should display events of this category.', 'reg-man-rc' );
+				$selected_calendar_array = Calendar::get_calendars_with_event_category( $event_category );
+				$selected_id_array = array();
+				foreach( $selected_calendar_array as $calendar ) {
+					$selected_id_array[] = $calendar->get_id();
+				} // endfor
+			echo '<tr class="form-field term-group-wrap">';
+				
+				echo '<th scope="row">';
+					echo "<label for=\"$input_id\">";
+						echo $label;
+					echo '</label>';
+				echo '</th>';
+			
+				echo '<td>';
+
+					self::render_calendar_select_input( $input_name, $selected_id_array );
+	
+					echo '<p class="description">';
+							echo $desc;
+					echo '</p>';
+				echo '</td>';
+			echo '</tr>';
+			} // endif
+/*
 			$input_id = 'event-category-calendars-input';
 			$label = __( 'Calendars', 'reg-man-rc' );
 			$desc = __( 'To modify the calendars that display this event category, edit the calendars directly.', 'reg-man-rc' );
@@ -330,7 +391,7 @@ class Event_Category_Admin_View {
 					echo "<p class=\"description\">$desc</p>";
 				echo '</td>';
 			echo '</tr>';
-
+*/
 			if ( Settings::get_is_show_external_names() ) {
 				// External names
 				$input_id = 'event-category-ext-names-input';
@@ -454,5 +515,58 @@ class Event_Category_Admin_View {
 		return $content;
 	} // function
 
+	/**
+	 * Get the set of tabs to be shown in the help for this taxonomy
+	 * @return array
+	 */
+	public static function get_help_tabs() {
+		$result = array(
+			array(
+				'id'		=> 'reg-man-rc-about',
+				'title'		=> __( 'About', 'reg-man-rc' ),
+				'content'	=> self::get_about_content(),
+			),
+		);
+		return $result;
+	} // function
 
+	/**
+	 * Get the html content shown to the administrator in the "About" help for this taxonomy
+	 * @return string
+	 */
+	private static function get_about_content() {
+		ob_start();
+			$heading = __( 'About event categories', 'reg-man-rc' );
+			echo "<h2>$heading</h2>";
+			echo '<p>';
+				$msg = __(
+					'Events categories allow you to define different types of events.' .
+					'  For example, you may have a category for regular repair café events, one for small events and another for volunteer appreciation events.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'Events can be categorized in any way you like.' .
+					'  The default category is "Repair Café".  It can be renamed if necessary but it cannot be removed.' .
+					'  An event with no category is automatically assigned the default.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'When you create a calendar you can specify which event categories it shows and which are excluded,' .
+					' and each event on the calendar is colour-coded to indicate its category.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+
+			$result = ob_get_clean();
+		return $result;
+	} // function
+
+	
 } // class

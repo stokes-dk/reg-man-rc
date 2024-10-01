@@ -18,71 +18,75 @@ use const Reg_Man_RC\PLUGIN_VERSION;
 class Scripts_And_Styles {
 
 	// The following handles are used internally to register and enqueue styles and scripts
-	private static $SHARED_BASE_SCRIPT_HANDLE = 'reg-man-rc-shared-base-script';
-	private static $SHARED_BASE_STYLE_HANDLE = 'reg-man-rc-shared-base-style';
+	private static $SHARED_BASE_SCRIPT_HANDLE			= 'reg-man-rc-shared-base-script';
+	private static $SHARED_BASE_STYLE_HANDLE			= 'reg-man-rc-shared-base-style';
 
-	private static $PUBLIC_BASE_STYLE_HANDLE = 'reg-man-rc-public-style';
-	private static $PUBLIC_BASE_SCRIPT_HANDLE = 'reg-man-rc-public-script';
+	private static $PUBLIC_BASE_STYLE_HANDLE			= 'reg-man-rc-public-style';
+	private static $PUBLIC_BASE_SCRIPT_HANDLE			= 'reg-man-rc-public-script';
 
-	private static $PUBLIC_REGISTRATION_STYLE_HANDLE = 'reg-man-rc-public-registration-style';
-	private static $PUBLIC_REGISTRATION_SCRIPT_HANDLE = 'reg-man-rc-public-registration-script';
+	private static $PUBLIC_REGISTRATION_STYLE_HANDLE	= 'reg-man-rc-public-registration-style';
+	private static $PUBLIC_REGISTRATION_SCRIPT_HANDLE	= 'reg-man-rc-public-registration-script';
 
-	private static $VOLUNTEER_AREA_STYLE_HANDLE = 'reg-man-rc-volunteer-area-style';
-	private static $VOLUNTEER_AREA_SCRIPT_HANDLE = 'reg-man-rc-volunteer-area-script';
+	private static $VOLUNTEER_AREA_STYLE_HANDLE			= 'reg-man-rc-volunteer-area-style';
+	private static $VOLUNTEER_AREA_SCRIPT_HANDLE		= 'reg-man-rc-volunteer-area-script';
 
-	private static $ADMIN_BASE_STYLE_HANDLE = 'reg-man-rc-admin-base-style';
-	private static $ADMIN_BASE_SCRIPT_HANDLE = 'reg-man-rc-admin-base-script';
+	private static $ADMIN_BASE_STYLE_HANDLE				= 'reg-man-rc-admin-base-style';
+	private static $ADMIN_BASE_SCRIPT_HANDLE			= 'reg-man-rc-admin-base-script';
 
-	private static $ADMIN_REST_SCRIPT_HANDLE = 'reg-man-rc-admin-rest-script';
+	private static $ADMIN_REST_SCRIPT_HANDLE			= 'reg-man-rc-admin-rest-script';
 
-	private static $TERM_ORDER_ADMIN_STYLE_HANDLE = 'reg-man-rc-term-order-admin-style';
-	private static $TERM_ORDER_ADMIN_SCRIPT_HANDLE = 'reg-man-rc-term-order-admin-script';
+	private static $TERM_ORDER_ADMIN_STYLE_HANDLE		= 'reg-man-rc-term-order-admin-style';
+	private static $TERM_ORDER_ADMIN_SCRIPT_HANDLE		= 'reg-man-rc-term-order-admin-script';
 
-	private static $ADMIN_DASHBOARD_SCRIPT_HANDLE = 'reg-man-rc-admin-dashboard-script';
+	private static $ADMIN_CALENDAR_SCRIPT_HANDLE		= 'reg-man-rc-admin-calendar-script';
+
+	private static $ADMIN_REMOVE_CPT_SCRIPT_HANDLE		= 'reg-man-rc-remove-cpt-script';
 	
-	private static $STATS_VIEW_STYLE_HANDLE = 'reg-man-rc-stats-view-style';
-	private static $STATS_VIEW_SCRIPT_HANDLE = 'reg-man-rc-stats-view-script';
+	private static $STATS_VIEW_STYLE_HANDLE				= 'reg-man-rc-stats-view-style';
+	private static $STATS_VIEW_SCRIPT_HANDLE			= 'reg-man-rc-stats-view-script';
 
-	private static $AJAX_FORMS_SCRIPT_HANDLE = 'reg-man-rc-ajax-forms-script';
+	private static $AJAX_FORMS_SCRIPT_HANDLE			= 'reg-man-rc-ajax-forms-script';
 
-	private static $JQUERY_STYLE_HANDLE = 'reg-man-rc-jquery-theme';
+	private static $JQUERY_STYLE_HANDLE					= 'reg-man-rc-jquery-theme';
 
-	private static $GOOGLE_MAPS_API_SCRIPT_HANDLE = 'reg-man-rc-google-maps-api-script';
-	private static $GOOGLE_MAPS_INTERNAL_SCRIPT_HANDLE = 'reg-man-rc-google-maps-internal-script';
-	private static $GOOGLE_MAPS_INTERNAL_STYLE_HANDLE = 'reg-man-rc-google-maps-internal-style';
+	private static $GOOGLE_MAPS_API_SCRIPT_HANDLE		= 'reg-man-rc-google-maps-api-script';
+	private static $GOOGLE_MAPS_INTERNAL_SCRIPT_HANDLE	= 'reg-man-rc-google-maps-internal-script';
+	private static $GOOGLE_MAPS_INTERNAL_STYLE_HANDLE	= 'reg-man-rc-google-maps-internal-style';
 
-	private static $DATATABLES_STYLE_HANDLE = 'reg-man-rc-datatables-style';
-	private static $DATATABLES_SCRIPT_HANDLE = 'reg-man-rc-datatables-script';
-	private static $DATATABLES_ROWGROUP_STYLE_HANDLE = 'reg-man-rc-datatables-rowgroup-style';
-	private static $DATATABLES_ROWGROUP_SCRIPT_HANDLE = 'reg-man-rc-datatables-rowgroup-script';
-	private static $DATATABLES_BUTTONS_STYLE_HANDLE = 'reg-man-rc-datatables-buttons-style';
-	private static $DATATABLES_BUTTONS_SCRIPT_HANDLE = 'reg-man-rc-datatables-buttons-script';
-	private static $DATATABLES_BUTTONS_COLUMN_VISIBILITY_SCRIPT_HANDLE = 'reg-man-rc-datatables-buttons-col-vis-script';
-	private static $DATATABLES_BUTTONS_HTML5_SCRIPT_HANDLE = 'reg-man-rc-datatables-buttons-html5-script';
-	private static $DATATABLES_BUTTONS_PRINT_SCRIPT_HANDLE = 'reg-man-rc-datatables-buttons-print-script';
+	private static $DATATABLES_STYLE_HANDLE						= 'reg-man-rc-datatables-style';
+	private static $DATATABLES_SCRIPT_HANDLE					= 'reg-man-rc-datatables-script';
+	private static $DATATABLES_RESPONSIVE_STYLE_HANDLE			= 'reg-man-rc-datatables-responsive-style';
+	private static $DATATABLES_RESPONSIVE_SCRIPT_HANDLE			= 'reg-man-rc-datatables-responsive-script';
+	private static $DATATABLES_ROWGROUP_STYLE_HANDLE			= 'reg-man-rc-datatables-rowgroup-style';
+	private static $DATATABLES_ROWGROUP_SCRIPT_HANDLE			= 'reg-man-rc-datatables-rowgroup-script';
+	private static $DATATABLES_BUTTONS_STYLE_HANDLE				= 'reg-man-rc-datatables-buttons-style';
+	private static $DATATABLES_BUTTONS_SCRIPT_HANDLE 			= 'reg-man-rc-datatables-buttons-script';
+	private static $DATATABLES_BUTTONS_COL_VIS_SCRIPT_HANDLE	= 'reg-man-rc-datatables-buttons-col-vis-script';
+	private static $DATATABLES_BUTTONS_HTML5_SCRIPT_HANDLE		= 'reg-man-rc-datatables-buttons-html5-script';
+	private static $DATATABLES_BUTTONS_PRINT_SCRIPT_HANDLE		= 'reg-man-rc-datatables-buttons-print-script';
 	
-//	private static $CHARTJS_STYLE_HANDLE = 'reg-man-rc-chartjs-style';
-	private static $CHARTJS_SCRIPT_HANDLE = 'reg-man-rc-chartjs-script';
+//	private static $CHARTJS_STYLE_HANDLE				= 'reg-man-rc-chartjs-style';
+	private static $CHARTJS_SCRIPT_HANDLE				= 'reg-man-rc-chartjs-script';
 
-//	private static $JSTREE_STYLE_HANDLE = 'reg-man-rc-jstree-style';
-//	private static $JSTREE_SCRIPT_HANDLE = 'reg-man-rc-jstree-script';
+//	private static $JSTREE_STYLE_HANDLE					= 'reg-man-rc-jstree-style';
+//	private static $JSTREE_SCRIPT_HANDLE				= 'reg-man-rc-jstree-script';
 
-//	private static $FULLCALENDAR_STYLE_HANDLE = 'reg-man-rc-fullcalendar-style';
-	private static $FULLCALENDAR_SCRIPT_HANDLE = 'reg-man-rc-fullcalendar-script';
-	private static $FULLCALENDAR_LOCALES_SCRIPT_HANDLE = 'reg-man-rc-fullcalendar-locales-script';
-	private static $FULLCALENDAR_LIST_SCRIPT_HANDLE = 'reg-man-rc-fullcalendar-list-script';
-	private static $FULLCALENDAR_DAYGRID_SCRIPT_HANDLE = 'reg-man-rc-fullcalendar-daygrid-script';
+//	private static $FULLCALENDAR_STYLE_HANDLE			= 'reg-man-rc-fullcalendar-style';
+	private static $FULLCALENDAR_SCRIPT_HANDLE			= 'reg-man-rc-fullcalendar-script';
+	private static $FULLCALENDAR_LOCALES_SCRIPT_HANDLE	= 'reg-man-rc-fullcalendar-locales-script';
+	private static $FULLCALENDAR_LIST_SCRIPT_HANDLE		= 'reg-man-rc-fullcalendar-list-script';
+	private static $FULLCALENDAR_DAYGRID_SCRIPT_HANDLE	= 'reg-man-rc-fullcalendar-daygrid-script';
 	private static $FULLCALENDAR_MULTIMONTH_SCRIPT_HANDLE = 'reg-man-rc-fullcalendar-multimonth-script';
-	private static $FULLCALENDAR_INTERNAL_SCRIPT_HANDLE = 'reg-man-rc-fullcalendar-internal-script';
-	private static $FULLCALENDAR_INTERNAL_STYLE_HANDLE = 'reg-man-rc-fullcalendar-internal-style';
+	private static $FULLCALENDAR_INTERNAL_SCRIPT_HANDLE	= 'reg-man-rc-fullcalendar-internal-script';
+	private static $FULLCALENDAR_INTERNAL_STYLE_HANDLE	= 'reg-man-rc-fullcalendar-internal-style';
 
-	private static $SELECT2_STYLE_HANDLE = 'reg-man-rc-select2-style';
-	private static $SELECT2_SCRIPT_HANDLE = 'reg-man-rc-select2-script';
+	private static $SELECT2_STYLE_HANDLE				= 'reg-man-rc-select2-style';
+	private static $SELECT2_SCRIPT_HANDLE				= 'reg-man-rc-select2-script';
 
 	// Tooltipster is used to show popup details of events in fullcalendar
-	private static $TOOLTIPSTER_STYLE_HANDLE = 'reg-man-rc-tooltipster-style';
-	private static $TOOLTIPSTER_SHADOW_STYLE_HANDLE = 'reg-man-rc-tooltipster-shadow-style';
-	private static $TOOLTIPSTER_SCRIPT_HANDLE = 'reg-man-rc-tooltipster-script';
+	private static $TOOLTIPSTER_STYLE_HANDLE			= 'reg-man-rc-tooltipster-style';
+	private static $TOOLTIPSTER_SHADOW_STYLE_HANDLE		= 'reg-man-rc-tooltipster-shadow-style';
+	private static $TOOLTIPSTER_SCRIPT_HANDLE			= 'reg-man-rc-tooltipster-script';
 
 	/**
 	 * Register the scripts and styles for the plugin
@@ -95,7 +99,7 @@ class Scripts_And_Styles {
 	 */
 	public static function register() {
 		// Register the elements used only on  back end or front end, depending on what's being rendered right now
-		if ( is_admin() ) { // is_admin() ONLY checks if the dashboard is being rendered, not if user is admin
+		if ( is_admin() ) { // is_admin() ONLY checks if the backend admin UI is being rendered, not if user is admin
 			// Register the admin scripts and styles
 			add_action( 'admin_enqueue_scripts', array( __CLASS__, 'register_admin_scripts_and_styles' ) );
 		} else {
@@ -116,9 +120,10 @@ class Scripts_And_Styles {
 	public static function register_admin_scripts_and_styles() {
 		self::register_shared_scripts_and_styles();
 		self::register_base_admin_scripts_and_styles();
-		self::register_admin_dashboard_script();
+		self::register_admin_calendar_script();
 //		self::register_admin_rest_script();
 		self::register_term_order_admin_scripts_and_styles();
+		self::register_remove_cpt_admin_scripts();
 //		self::register_chartjs(); // Shared!
 //		self::register_jstree();
 	} // function
@@ -150,6 +155,7 @@ class Scripts_And_Styles {
 		self::register_shared_base_scripts_and_styles();
 		self::register_jquery_theme();
 		self::register_datatables();
+		self::register_datatables_responsive_extension();
 		self::register_datatables_rowgroup_extension();
 		self::register_datatables_buttons_extension();
 		self::register_ajax_forms();
@@ -193,17 +199,6 @@ class Scripts_And_Styles {
 			$media = 'all'
 		);
 	} // function
-
-	/**
-	 * Enqueue the shared stylesheet
-	 *
-	 * @return	void
-	 * @since	0.1.0
-	 */
-	public static function enqueue_shared_stylesheet() {
-		wp_enqueue_style( self::$SHARED_BASE_STYLE_HANDLE );
-	} // function
-
 
 	/**
 	 * Internal method to register the public stylesheet
@@ -255,10 +250,13 @@ class Scripts_And_Styles {
 					'jquery-ui-tooltip',
 					'jquery-ui-dialog',
 					'jquery-ui-autocomplete',
-					'jquery-ui-accordion',
+//					'jquery-ui-accordion',
+//					'jquery-effects-slide',
+					'jquery-ui-sortable',
 					self::$SHARED_BASE_SCRIPT_HANDLE,
 					self::$AJAX_FORMS_SCRIPT_HANDLE,
 					self::$DATATABLES_SCRIPT_HANDLE,
+					self::$DATATABLES_RESPONSIVE_SCRIPT_HANDLE,
 					self::$DATATABLES_ROWGROUP_SCRIPT_HANDLE,
 			),
 			$version,
@@ -272,6 +270,7 @@ class Scripts_And_Styles {
 					self::$SHARED_BASE_STYLE_HANDLE,
 					self::$PUBLIC_BASE_STYLE_HANDLE,
 					self::$DATATABLES_STYLE_HANDLE,
+					self::$DATATABLES_RESPONSIVE_STYLE_HANDLE,
 					self::$DATATABLES_ROWGROUP_STYLE_HANDLE,
 					self::$JQUERY_STYLE_HANDLE,
 					'dashicons',
@@ -355,6 +354,7 @@ class Scripts_And_Styles {
 	public static function enqueue_volunteer_area_scripts_and_styles() {
 		wp_enqueue_script( self::$VOLUNTEER_AREA_SCRIPT_HANDLE );
 		wp_enqueue_style( self::$VOLUNTEER_AREA_STYLE_HANDLE );
+		self::enqueue_fullcalendar();
 	} // function
 
 	/**
@@ -371,9 +371,11 @@ class Scripts_And_Styles {
 			$src,
 			$dependencies = array(
 					'jquery',
+					'jquery-ui-tabs',
+					'jquery-ui-dialog',
+					'jquery-ui-sortable',
 					self::$SHARED_BASE_SCRIPT_HANDLE,
 					self::$DATATABLES_SCRIPT_HANDLE,
-					'jquery-ui-tabs',
 			),
 			$version,
 			$footer = FALSE
@@ -406,16 +408,16 @@ class Scripts_And_Styles {
 	} // function
 
 	/**
-	 * Internal method to register the admin dashboard javascript
+	 * Internal method to register the admin calendar javascript
 	 *
 	 * @return	void
 	 * @since	v0.3.0
 	 */
-	private static function register_admin_dashboard_script() {
+	private static function register_admin_calendar_script() {
 		$version = PLUGIN_VERSION;
-		$src = plugins_url( 'admin/admin-dashboard.js', PLUGIN_BOOTSTRAP_FILENAME );
+		$src = plugins_url( 'admin/admin-calendar.js', PLUGIN_BOOTSTRAP_FILENAME );
 		wp_register_script(
-			self::$ADMIN_DASHBOARD_SCRIPT_HANDLE,
+			self::$ADMIN_CALENDAR_SCRIPT_HANDLE,
 			$src,
 			$dependencies = array(
 					'jquery-ui-dialog',
@@ -428,21 +430,21 @@ class Scripts_And_Styles {
 	} // function
 
 	/**
-	 * Enqueue the base admin scripts and styles
+	 * Enqueue the admin calendar scripts and styles
 	 *
 	 * @return	void
 	 * @since	0.1.0
 	 */
-	public static function enqueue_admin_dashboard_scripts_and_styles() {
+	public static function enqueue_admin_calendar_scripts_and_styles() {
 		self::enqueue_base_admin_script_and_styles();
 		self::enqueue_ajax_forms();
 		self::enqueue_fullcalendar();
 		self::enqueue_google_maps();
 		self::enqueue_stats_view_script_and_styles();
-		wp_enqueue_script( self::$ADMIN_DASHBOARD_SCRIPT_HANDLE );
+		wp_enqueue_script( self::$ADMIN_CALENDAR_SCRIPT_HANDLE );
 		// This script contains I18 functions and will need translations
-//		wp_set_script_translations( self::$ADMIN_DASHBOARD_SCRIPT_HANDLE, 'reg-man-rc' );
-//		wp_enqueue_style( self::$ADMIN_DASHBOARD_STYLE_HANDLE ); // No such thing, yet
+//		wp_set_script_translations( self::$ADMIN_CALENDAR_SCRIPT_HANDLE, 'reg-man-rc' );
+//		wp_enqueue_style( self::$ADMIN_CALENDAR_STYLE_HANDLE ); // No such thing, yet
 	} // function
 
 	
@@ -515,6 +517,43 @@ class Scripts_And_Styles {
 	} // function
 
 
+	/**
+	 * Internal method to register the admin javascript for remove CPT function
+	 *
+	 * @return	void
+	 * @since	v0.5.8
+	 */
+	private static function register_remove_cpt_admin_scripts() {
+		$version = PLUGIN_VERSION;
+		$src = plugins_url( 'admin/admin-remove-cpt.js', PLUGIN_BOOTSTRAP_FILENAME );
+		wp_register_script(
+			self::$ADMIN_REMOVE_CPT_SCRIPT_HANDLE,
+			$src,
+			$dependencies = array(
+					'wp-i18n',
+					self::$ADMIN_BASE_SCRIPT_HANDLE,
+					self::$AJAX_FORMS_SCRIPT_HANDLE,
+					self::$SELECT2_SCRIPT_HANDLE,
+					'jquery-ui-dialog',
+			),
+			$version,
+			$footer = FALSE
+		);
+	} // function
+
+	/**
+	 * Enqueue the term ordering admin scripts and styles
+	 *
+	 * @return	void
+	 * @since	0.5.8
+	 */
+	public static function enqueue_remove_cpt_admin_scripts() {
+		wp_enqueue_script( self::$ADMIN_REMOVE_CPT_SCRIPT_HANDLE );
+		// This script contains I18 functions and will need translations
+		wp_set_script_translations( self::$ADMIN_REMOVE_CPT_SCRIPT_HANDLE, 'reg-man-rc' );
+	} // function
+
+	
 
 	/**
 	 * Internal method to register the stats view javascript and stylesheet
@@ -535,9 +574,11 @@ class Scripts_And_Styles {
 					self::$CHARTJS_SCRIPT_HANDLE,
 					self::$DATATABLES_SCRIPT_HANDLE,
 					self::$DATATABLES_BUTTONS_SCRIPT_HANDLE,
-					self::$DATATABLES_BUTTONS_COLUMN_VISIBILITY_SCRIPT_HANDLE,
+					self::$DATATABLES_BUTTONS_COL_VIS_SCRIPT_HANDLE,
 					self::$DATATABLES_BUTTONS_HTML5_SCRIPT_HANDLE,
 					self::$DATATABLES_BUTTONS_PRINT_SCRIPT_HANDLE,
+					self::$DATATABLES_RESPONSIVE_SCRIPT_HANDLE,
+					self::$DATATABLES_ROWGROUP_SCRIPT_HANDLE,
 					'jquery-ui-tabs',
 			),
 			$version,
@@ -552,6 +593,8 @@ class Scripts_And_Styles {
 //					self::$CHARTJS_STYLE_HANDLE, // NOTE THAT there is no CHARTJS style
 					self::$DATATABLES_STYLE_HANDLE,
 					self::$DATATABLES_BUTTONS_STYLE_HANDLE,
+					self::$DATATABLES_ROWGROUP_STYLE_HANDLE,
+					self::$DATATABLES_RESPONSIVE_STYLE_HANDLE,
 					self::$JQUERY_STYLE_HANDLE,
 			),
 			$version,
@@ -648,9 +691,10 @@ class Scripts_And_Styles {
 			$key = Settings::get_maps_api_key();
 			$url = "https://maps.googleapis.com/maps/api/js";
 			$args = array();
-			$args['key'] = $key;
-			$args['libraries'] = 'places';
-			$args['callback'] = 'reg_man_rc_google_maps_callback';
+			$args[ 'key' ]			= $key;
+			$args[ 'loading' ]		= 'async';
+			$args[ 'libraries' ]	= 'places';
+			$args[ 'callback' ]		= 'reg_man_rc_google_maps_callback';
 			$locale_parts = explode( '_', get_locale() );
 			$count = count( $locale_parts );
 			if ( $count == 1 ) {
@@ -699,7 +743,7 @@ class Scripts_And_Styles {
 	 * @since	v0.1.0
 	 */
 	private static function register_datatables() {
-		$version = '1.13.4';
+		$version = '1.13.10';
 		$src = plugins_url("external_lib/datatables/$version/css/jquery.dataTables.min.css", PLUGIN_BOOTSTRAP_FILENAME);
 		wp_register_style(
 			self::$DATATABLES_STYLE_HANDLE,
@@ -719,13 +763,39 @@ class Scripts_And_Styles {
 	} // function
 
 	/**
+	 * Internal method to register the Datatables Responsive extension style and script
+	 *
+	 * @return	void
+	 * @since	v0.5.0
+	 */
+	private static function register_datatables_responsive_extension() {
+		$version = '2.5.0';
+		$src = plugins_url("external_lib/datatables/Responsive/$version/css/responsive.dataTables.min.css", PLUGIN_BOOTSTRAP_FILENAME);
+		wp_register_style(
+			self::$DATATABLES_RESPONSIVE_STYLE_HANDLE,
+			$src,
+			$dependencies = array( self::$DATATABLES_STYLE_HANDLE ),
+			$version,
+			$media = 'all'
+		);
+		$src = plugins_url("external_lib/datatables/Responsive/$version/js/dataTables.responsive.min.js", PLUGIN_BOOTSTRAP_FILENAME);
+		wp_register_script(
+			self::$DATATABLES_RESPONSIVE_SCRIPT_HANDLE,
+			$src,
+			$dependencies = array( self::$DATATABLES_SCRIPT_HANDLE ),
+			$version,
+			$footer = FALSE
+		);
+	} // function
+
+	/**
 	 * Internal method to register the Datatables RowGroup extension style and script
 	 *
 	 * @return	void
 	 * @since	v0.1.0
 	 */
 	private static function register_datatables_rowgroup_extension() {
-		$version = '1.3.1';
+		$version = '1.4.1';
 		$src = plugins_url("external_lib/datatables/RowGroup/$version/css/rowGroup.dataTables.min.css", PLUGIN_BOOTSTRAP_FILENAME);
 		wp_register_style(
 			self::$DATATABLES_ROWGROUP_STYLE_HANDLE,
@@ -751,7 +821,7 @@ class Scripts_And_Styles {
 	 * @since	v0.3.0
 	 */
 	private static function register_datatables_buttons_extension() {
-		$version = '2.3.6';
+		$version = '2.4.2';
 
 		$src = plugins_url("external_lib/datatables/Buttons/$version/css/buttons.dataTables.min.css", PLUGIN_BOOTSTRAP_FILENAME);
 		wp_register_style(
@@ -775,7 +845,7 @@ class Scripts_And_Styles {
 
 		$src = plugins_url("external_lib/datatables/Buttons/$version/js/buttons.colVis.min.js", PLUGIN_BOOTSTRAP_FILENAME);
 		wp_register_script(
-				self::$DATATABLES_BUTTONS_COLUMN_VISIBILITY_SCRIPT_HANDLE,
+				self::$DATATABLES_BUTTONS_COL_VIS_SCRIPT_HANDLE,
 				$src,
 				$dependencies = array(
 						self::$DATATABLES_SCRIPT_HANDLE,
@@ -823,6 +893,20 @@ class Scripts_And_Styles {
 	public static function enqueue_datatables() {
 		wp_enqueue_script( self::$DATATABLES_SCRIPT_HANDLE );
 		wp_enqueue_style( self::$DATATABLES_STYLE_HANDLE );
+	} // function
+
+	/**
+	 * Enqueue Datatables Responsive extension scripts and styles
+	 *
+	 * This method can be called by any user interface that uses the Responsive extension for Datatables.
+	 * Calling this function will cause the correct styles and scripts to be enqueued.
+	 *
+	 * @return	void
+	 * @since	v0.5.0
+	 */
+	public static function enqueue_datatables_responsive_extension() {
+		wp_enqueue_script( self::$DATATABLES_RESPONSIVE_SCRIPT_HANDLE );
+		wp_enqueue_style( self::$DATATABLES_RESPONSIVE_STYLE_HANDLE );
 	} // function
 
 	/**
@@ -892,7 +976,7 @@ class Scripts_And_Styles {
 	 * @since	v0.1.0
 	 */
 	public static function enqueue_chartjs() {
-//		if ( is_admin() ) { // is_admin() ONLY checks if the dashboard is being rendered, not if user is admin
+//		if ( is_admin() ) { // is_admin() ONLY checks if the admin UI is being rendered, not if user is admin
 			wp_enqueue_script( self::$CHARTJS_SCRIPT_HANDLE );
 //			wp_enqueue_style( self::$CHARTJS_STYLE_HANDLE );
 //		} else {
@@ -928,7 +1012,7 @@ class Scripts_And_Styles {
 		);
 	} // function
 	public static function enqueue_jstree() {
-		if ( is_admin() ) { // is_admin() ONLY checks if the dashboard is being rendered, not if user is admin
+		if ( is_admin() ) { // is_admin() ONLY checks if the admin UI is being rendered, not if user is admin
 			wp_enqueue_script( self::$JSTREE_SCRIPT_HANDLE );
 			wp_enqueue_style( self::$JSTREE_STYLE_HANDLE );
 		} else {

@@ -30,23 +30,24 @@ class Geographic_Position implements \JsonSerializable {
 	 * @since v0.1.0
 	 */
 	public static function create_from_iCalendar_string( $iCalendar_string ) {
-		$parts = explode( ';', $iCalendar_string );
-		if ( count( $parts ) == 2 ) {
-			$result = new self( $parts[ 0 ], $parts[ 1 ] );
-		} else {
-			$result = NULL;
+		$result = NULL; // Assume we can't parse the string
+		if ( ! empty( $iCalendar_string ) ) {
+			$parts = explode( ';', $iCalendar_string );
+			if ( count( $parts ) == 2 ) {
+				$result = new self( $parts[ 0 ], $parts[ 1 ] );
+			} // endif
 		} // endif
 		return $result;
 	} // function
 
 	/**
-	 * Create an instance of this class using a map marker position JSON encoded as a string,
+	 * Create an instance of this class using a map marker position encoded as a JSON string,
 	 *   e.g. '{ lat: 43.692139, lng: -79.329711 }'
 	 * @param	string	$marker_position_string	The string representing the map marker position
 	 * @return	self|NULL	An instance of this class with data from the specified string or NULL if the string is not valid
 	 * @since v0.1.0
 	 */
-	public static function create_from_google_map_marker_position_string( $marker_position_string ) {
+	public static function create_from_google_map_marker_position_json_string( $marker_position_string ) {
 		$pos = json_decode( $marker_position_string );
 		if ( isset( $pos->lat ) && isset( $pos->lng ) ) {
 			$result = new self( $pos->lat, $pos->lng );

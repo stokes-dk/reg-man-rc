@@ -35,7 +35,6 @@
 	#form-page #form-banner .banner-container h1 {
 		font-size: 1.25em; font-weight: 400; padding:0; 
 	}
-	#form-page .form-event-display { font-size: 1em; font-weight: 400; }
 }
  
 .minimal-template .form-input-list input[type="text"], 
@@ -132,67 +131,36 @@ body.ui-widget textarea, body .ui-widget button {
 	 margin-right: 0.25em;
 }
 
-.visitor-reg-form-container .visitor-reg-input-accordion .visitor-reg-accordion-section {
-	padding: 1em;
-}
-.visitor-reg-form-container .house-rules {
-	font-size: inherit; margin: 1em;
-}
-.visitor-reg-form-container .visitor-reg-accordion-section .house-rules {
-	max-height: 25em; overflow-y: scroll; -webkit-overflow-scrolling: touch;
-	margin: 0; padding: 0;
- }
- .text-fadeout {
-	position: relative;
- 	height: 1em;
-	bottom: 1em;
-	margin-bottom: -1em;
-	background-image: linear-gradient( rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 1) 100% );
-}
-.visitor-reg-form-container .house-rules h2 { font-size: larger; }
-
 .ui-dialog { max-width: 90%; }
 
-.reg-manager-datatable-container { margin: 1em 0; }
 .datatable-container .datatable-toolbar {
-	float: right; display: flex; justify-content: space-around; margin: 0.25em 0; font-size: 0.85em;
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: end;
+	gap: 0.5em;
+	font-size: 0.85em;
+	margin-bottom: 1em;
 }
-.datatable-container .datatable-toolbar .toolbar-button { margin: 0 0.3em; }
-.datatable-container .dataTables_wrapper .dataTables_filter { float: left; margin: 0.25em 0; }
-.datatable-container .dataTables_wrapper .dataTables_filter input {
-	appearance: textfield;
-	-webkit-appearance: textfield;
-	-moz-appearance: textfield;
-	font-size: 1.1em;
-	padding: 0.15em;
+.datatable-container .reg-man-rc-datatable-header-wrapper {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 0.5em;
 }
+
 .datatable-container .dataTables_wrapper .dataTables_filter input.filter-on { background: #ff9; }
-.datatable-container .dataTables_wrapper .dataTables_length { margin-top: 0.5em; }
-.datatable-container .dataTables_wrapper .dataTables_processing { top: 3em; padding: 1em 0; }
-.datatable-container .dataTables_wrapper .dataTables_info { padding: 0 0 0.5em 0; width: 100%; }
+
+.datatable-container .dataTables_wrapper .dataTables_processing {
+	top: 4em;
+	padding: 1em 0;
+	background: #fff;
+	border: 1px solid #ccc;
+}
+.datatable-container .dataTables_wrapper .dataTables_info { padding: 0; float: none; }
 
 .datatable-container td.action-buttons { text-align: center; }
 .datatable-container button .dashicons { margin: 0 0.1em; vertical-align: middle; }
 .datatable-container button .button-text { vertical-align: middle; }
-
-.datatable-container .visitor-button-container { float: right; font-size: 0.8em; }
-.datatable-container .visitor-button-container .form-button { margin: 0 0.25em; padding: 0.25em 0.35em; }
-
-.visitor-reg-list-table .visitor-item-list .item-separator { margin-right: 0.25em; }
-.visitor-reg-list-table .visitor-item-list .item-desc.item-surveyed { text-decoration: line-through; }
-.visitor-reg-list-table .visitor-item-list .item-status { font-weight: 200; }
-.visitor-reg-list-table .visitor-reg-list-update-button { white-space: nowrap; }
-.visitor-reg-list-table .visitor-reg-list-visitor-id { display: none; }
-
-.accordion-buttons { text-align: right; margin-top: 0.5em; }
-.accordion-buttons button { min-width: 5em; margin-left: 1em; }
-.accordion-buttons .form-button.visitor-reg-back-button:DISABLED { display: none; }
-
-.item-is-fixed-radio-group .radio-input-list .input-item:LAST-CHILD {
-	margin-top: 0.5em;
-	padding: 0.5em 0;
-	border-top: 1px solid #ccc;
-}
 
 .standalone-server-upload-header { text-align: right; font-size: 80%; }
 .standalone-server-upload-form-please-wait { opacity: 0.5; }
@@ -207,48 +175,6 @@ body.ui-widget textarea, body .ui-widget button {
 .upload-records-form { width: 40em; min-height: 10em; }
 
 
-.reg-man-rc-volunteer-profile-list {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	width: 100%;
-}
-
-.reg-man-rc-volunteer-profile-list .reg-man-rc-volunteer-profile-list-item {
-	line-height: normal;
-	background: #fcfcfc;
-	margin: 0 0 1em 0;
-	padding: 0.75em;
-	border: 1px solid #eee;
-	box-shadow: 0.5em 0.5em 1em 0em #ccc;
-}
-.reg-man-rc-volunteer-profile-list-item .reg-man-rc-volunteer-profile-header-container {
-	display: block;
-	margin: 0;
-	padding: 0.5em;
-	background: linear-gradient(#9c9, #ada, #9c9);
-}
-.reg-man-rc-volunteer-profile-list-item .reg-man-rc-volunteer-profile-header-container .title {
-	margin: 0;
-	padding: 0;
-	font-size: 150%;
-	font-weight: bold;
-	color: inherit;
-}
-.reg-man-rc-volunteer-profile-list-item .reg-man-rc-volunteer-profile-image-container {
-	float: left;
-	width: 12em;
-	max-width: 25%;
-	margin: 0 1em 1em 0;
-}
-.reg-man-rc-volunteer-profile-list-item .reg-man-rc-volunteer-profile-content {
-	overflow: auto;
-}
-.reg-man-rc-volunteer-profile-list-item .reg-man-rc-show-hide-content {
-	max-height: 14em;
-	overflow: hidden;
-	position: relative
-}
 
 .reg-man-rc-show-hide-container.show .reg-man-rc-show-hide-content {
 	max-height: none;
@@ -285,6 +211,7 @@ body.ui-widget textarea, body .ui-widget button {
 }
 .reg-man-rc-shortcode-container.upcoming-events .reg-man-rc-upcoming-events-date-container {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: flex-start;
 	border: 1px solid #ccc;
 	border-radius: 0.25em;
@@ -303,6 +230,8 @@ body.ui-widget textarea, body .ui-widget button {
 	line-height: 1.4em;
 	background: #369;
 	color: #fff;
+	min-width: 8em;
+	flex-grow: 1;
 }
 .reg-man-rc-shortcode-container.upcoming-events .reg-man-rc-upcoming-events-day-label-container .day-of-month {
 	font-size: 2em;
@@ -311,7 +240,7 @@ body.ui-widget textarea, body .ui-widget button {
 .reg-man-rc-upcoming-events-event-group-container {
 	display: flex;
 	flex-direction: column;
-	flex-grow: 1;
+	flex-grow: 5;
 }
 .reg-man-rc-upcoming-events-event-container {
 	border: 1px solid #ccc;
@@ -332,6 +261,7 @@ details.reg-man-rc-object-view-disclosure-container summary::before {
 	float: right;
 	font-size: 1.2em;
 	width: 1.2em;
+	line-height: 1.4em;
 	text-align: center;
 	font-weight: bold;	border: 1px solid #ccc;
 	background: #eee;

@@ -32,7 +32,8 @@ class Event_Class {
 	private $id;
 	private $name;
 	private $desc;
-
+	private $marker_text;
+	
 	private function __construct() { }
 
 	public static function get_all_event_classes() {
@@ -63,7 +64,6 @@ class Event_Class {
 		return self::$ALL_CLASS_ARRAY;
 	} // function
 
-
 	/**
 	 * Get the event class with the specified ID which must be one of the constants defined in this class: PUBLIC, PRIVATE, or CONFIDENTIAL.
 	 *
@@ -78,6 +78,31 @@ class Event_Class {
 		$all = self::get_all_event_classes();
 		$result = isset( $all[ $event_class_id ] ) ? $all[ $event_class_id ] : $all[ self::PUBLIC ];
 		return $result;
+	} // function
+
+	/**
+	 * Get the default event class object (PUBLIC) used when no class is specified by an event.
+	 *
+	 * @return	Event_Class		An instance of this class with the specified ID.
+	 *
+	 * @since v0.6.0
+	 */
+	public static function get_default_event_class() {
+		$all = self::get_all_event_classes();
+		$id = self::get_default_event_class_id();
+		$result = $all[ $id ];
+		return $result;
+	} // function
+
+	/**
+	 * Get the default event class ID, to be used when an event that has no class assigned.
+	 *
+	 * @return	string	The ID of the default event status.
+	 *
+	 * @since v0.1.0
+	 */
+	public static function get_default_event_class_id() {
+		return self::PUBLIC;
 	} // function
 
 	/**
@@ -113,4 +138,37 @@ class Event_Class {
 		return $this->desc;
 	} // function
 
+	/**
+	 * Get the marker text to use for this status.
+	 * This can be applied to the event title like: "CANCELLED Creative Reuse Toronto Drop-in Event"
+	 * @return	string
+	 * @since	v0.5.0
+	 */
+	public function get_event_marker_text() {
+		if ( ! isset( $this->marker_text ) ) {
+
+			// TODO: We could have a configuration option for this
+			switch ( $this->id ) {
+
+				default:
+				case self::PUBLIC:
+					$this->marker_text = '';
+					break;
+					
+				case self::PRIVATE:
+					$this->marker_text = __( 'PRIVATE', 'reg-man-rc' );
+					break;
+					
+				case self::CONFIDENTIAL:
+					$this->marker_text = __( 'PRIVATE', 'reg-man-rc' );
+					break;
+			
+			} // endswitch
+
+		} // endif
+		
+		return $this->marker_text;
+		
+	} // function
+	
 } // class

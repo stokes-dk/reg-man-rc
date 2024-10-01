@@ -34,20 +34,6 @@ class Term_Order_Admin_View {
 			// Regsiter to enqueue the necessary scripts and styles as needed
 			add_action( 'admin_enqueue_scripts', array( __CLASS__, 'handle_enqueue_scripts' ) );
 
-/* There isn't really any need to show the Order column, is there?
-			foreach ( Term_Order_Controller::SUPPORTED_TAXONOMIES as $taxonomy ) {
-
-				// Modify columns in the admin UI term list - but do after the taxonomies themselves have done it
-				add_filter( 'manage_edit-' . $taxonomy . '_columns', array( __CLASS__, 'filter_admin_UI_columns' ), 100, 1 );
-
-				// Put values into my columns in the term list
-				add_filter( 'manage_' . $taxonomy . '_custom_column', array( __CLASS__, 'get_admin_UI_column_values' ), 100, 3 );
-
-				// Register my columns as sortable
-				add_filter( 'manage_edit-' . $taxonomy . '_sortable_columns', array( __CLASS__, 'add_sortable_columns' ), 10, 1 );
-
-			} // endfor
-*/
 			if ( current_user_can( 'manage_categories' ) ) {
 
 				// Register the AJAX call to allow administrators to access the term ordering form
@@ -119,7 +105,7 @@ class Term_Order_Admin_View {
 	public static function render_after_table( $taxonomy ) {
 		// Wordpress does not have a filter for modifying the top of the terms list table, just the bottom
 		// So I will put this element at the bottom of the table and hide it, then move it using javascript on the client side
-		$label = __( 'Change Order…', 'reg-man-rc' );
+		$label = __( 'Change Order&hellip;', 'reg-man-rc' );
 		$value = esc_attr( $taxonomy );
 		echo '<button id="reg-man-rc-term-order-action" type="button" class="button value="' . $value . '" style="display:none">';
 			echo esc_html( $label );

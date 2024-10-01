@@ -22,6 +22,7 @@ class Supplemental_Item implements Item_Descriptor {
 	private $event_key;
 	private $item_type_name;
 	private $fixer_station_name;
+	private $item_status;
 	private $status_name;
 
 	/**
@@ -35,29 +36,39 @@ class Supplemental_Item implements Item_Descriptor {
 	 */
 	public static function get_all_supplemental_item_descriptors( $event_keys_array ) {
 
+		global $wpdb;
 		$result = array();
-		if ( is_array( $event_keys_array ) && count( $event_keys_array ) > 0 ) {
-			global $wpdb;
-			$table = $wpdb->prefix . self::SUPPLEMENTAL_ITEMS_TABLE_NAME;
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_ITEMS_TABLE_NAME;
+		$cols = 'id, event_key, item_type_id, fixer_station_id, fixed_count, repairable_count, eol_count, unreported_count ';
 
-			$cols = 'id, event_key, item_type_id, fixer_station_id, fixed_count, repairable_count, eol_count, unreported_count ';
+		if ( is_array( $event_keys_array ) && count( $event_keys_array ) > 0 ) {
+
 			$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
 			$placehold_string = implode( ', ', $placeholder_array );
 			$where_clause = "( event_key IN ( $placehold_string ) )";
-
 			$query = "SELECT $cols FROM $table WHERE $where_clause";
-			$stmt = $wpdb->prepare( $query, $event_keys_array );
-			$desc_data_arrays = $wpdb->get_results( $stmt, ARRAY_A );
-	//Error_Log::var_dump( $query, $desc_data_arrays );
-
-			foreach ( $desc_data_arrays as $data_array ) {
-				$inst_array = self::create_instance_array_from_data_array( $data_array );
-				if ( ! empty( $inst_array ) ) {
-					$result = array_merge( $result, $inst_array );
-				} // endif
-			} // endfor
+			$query = $wpdb->prepare( $query, $event_keys_array );
+			
+		} else {
+			
+			$query = "SELECT $cols FROM $table";
+			
 		} // endif
+		
+//		Error_Log::var_dump( $query );
+		
+		$desc_data_arrays = $wpdb->get_results( $query, ARRAY_A );
+//		Error_Log::var_dump( count( $desc_data_arrays ) );
+
+		foreach ( $desc_data_arrays as $data_array ) {
+			$inst_array = self::create_instance_array_from_data_array( $data_array );
+			if ( ! empty( $inst_array ) ) {
+				$result = array_merge( $result, $inst_array );
+			} // endif
+		} // endfor
+
 		return $result;
+		
 	} // function
 
 	/**
@@ -100,60 +111,65 @@ class Supplemental_Item implements Item_Descriptor {
 
 		$type = isset( $type_id ) ? Item_Type::get_item_type_by_id( $type_id ) : NULL;
 		$type_name = isset( $type ) ? array( $type->get_name() ) : array();
+		
 		$station = isset( $station_id ) ? Fixer_Station::get_fixer_station_by_id( $station_id ) : NULL;
 		$station_name = isset( $station ) ? $station->get_name() : NULL;
 
 		// Fixed
-		$status = Item_Status::get_item_status_by_id( Item_Status::FIXED );
-		$status_name = $status->get_name();
+		$item_status = Item_Status::get_item_status_by_id( Item_Status::FIXED );
+		$status_name = $item_status->get_name();
 		if ( $fixed_count > 0 ) {
 			for ( $index = 0; $index < $fixed_count; $index++  ) {
 				$curr = new self();
 				$curr->event_key = $event_key;
 				$curr->item_type_name = $type_name;
 				$curr->fixer_station_name = $station_name;
+				$curr->item_status = $item_status;
 				$curr->status_name = $status_name;
 				$result[] = $curr;
 			} // endfor
 		} // endif
 
 		// Repairable
-		$status = Item_Status::get_item_status_by_id( Item_Status::REPAIRABLE );
-		$status_name = $status->get_name();
+		$item_status = Item_Status::get_item_status_by_id( Item_Status::REPAIRABLE );
+		$status_name = $item_status->get_name();
 		if ( $repairable_count > 0 ) {
 			for ( $index = 0; $index < $repairable_count; $index++ ) {
 				$curr = new self();
 				$curr->event_key = $event_key;
 				$curr->item_type_name = $type_name;
 				$curr->fixer_station_name = $station_name;
+				$curr->item_status = $item_status;
 				$curr->status_name = $status_name;
 				$result[] = $curr;
 			} // endfor
 		} // endif
 
 		// EOL
-		$status = Item_Status::get_item_status_by_id( Item_Status::END_OF_LIFE );
-		$status_name = $status->get_name();
+		$item_status = Item_Status::get_item_status_by_id( Item_Status::END_OF_LIFE );
+		$status_name = $item_status->get_name();
 		if ( $eol_count > 0 ) {
 			for ( $index = 0; $index < $eol_count; $index++ ) {
 				$curr = new self();
 				$curr->event_key = $event_key;
 				$curr->item_type_name = $type_name;
 				$curr->fixer_station_name = $station_name;
+				$curr->item_status = $item_status;
 				$curr->status_name = $status_name;
 				$result[] = $curr;
 			} // endfor
 		} // endif
 
 		// Unreported
-		$status = Item_Status::get_item_status_by_id( Item_Status::REGISTERED );
-		$status_name = $status->get_name();
+		$item_status = Item_Status::get_item_status_by_id( Item_Status::DONE_UNREPORTED );
+		$status_name = $item_status->get_name();
 		if ( $unreported_count > 0 ) {
 			for ( $index = 0; $index < $unreported_count; $index++ ) {
 				$curr = new self();
 				$curr->event_key = $event_key;
 				$curr->item_type_name = $type_name;
 				$curr->fixer_station_name = $station_name;
+				$curr->item_status = $item_status;
 				$curr->status_name = $status_name;
 				$result[] = $curr;
 			} // endfor
@@ -166,65 +182,75 @@ class Supplemental_Item implements Item_Descriptor {
 
 	/**
 	 * Get the supplemental item stats for the specified events and grouped in the specified way
-	 * @param	Event_Key[]		$event_key_array	An array of event keys whose group stats are to be returned
+	 * @param	Event_Key[]		$event_keys_array	An array of event keys whose group stats are to be returned
 	 * @param	string			$group_by			One of the "GROUP_BY" constants from Item_Stats_Collection
 	 * @return Item_Stats[]	An array of instances of Item_Stats describing the items and their related data.
 	 */
-	public static function get_supplemental_group_stats_array( $event_key_array, $group_by ) {
+	public static function get_supplemental_group_stats_array( $event_keys_array, $group_by ) {
 
+		global $wpdb;
 		$result = array(); // Start with an empty set and then add to it
-		if ( is_array( $event_key_array) && ( count( $event_key_array ) > 0 ) ) {
 
-			global $wpdb;
-			$table = $wpdb->prefix . self::SUPPLEMENTAL_ITEMS_TABLE_NAME;
-			switch( $group_by ) {
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_ITEMS_TABLE_NAME;
+		switch( $group_by ) {
 
-				case Item_Stats_Collection::GROUP_BY_EVENT:
-					$name_col = 'event_key';
-					break;
+			case Item_Stats_Collection::GROUP_BY_EVENT:
+				$name_col = 'event_key';
+				break;
 
-				case Item_Stats_Collection::GROUP_BY_FIXER_STATION:
-					$name_col = 'fixer_station_id';
-					break;
+			case Item_Stats_Collection::GROUP_BY_FIXER_STATION:
+				$name_col = 'fixer_station_id';
+				break;
 
-				case Item_Stats_Collection::GROUP_BY_ITEM_TYPE:
-					$name_col = 'item_type_id';
-					break;
+			case Item_Stats_Collection::GROUP_BY_ITEM_TYPE:
+				$name_col = 'item_type_id';
+				break;
 
-				case Item_Stats_Collection::GROUP_BY_STATION_AND_TYPE:
-					$name_col = "CONCAT( fixer_station_id, '|', item_type_id )";
-					break;
+			case Item_Stats_Collection::GROUP_BY_STATION_AND_TYPE:
+				$name_col = "CONCAT( fixer_station_id, '|', item_type_id )";
+				break;
 
-				case Item_Stats_Collection::GROUP_BY_ITEM_DESC:
-					$name_col = "''"; // must be a quoted string for SQL otherwise illegal column name
-					break;
+			case Item_Stats_Collection::GROUP_BY_ITEM_DESC:
+				$name_col = "''"; // must be a quoted string for SQL otherwise illegal column name
+				break;
 
-				case Item_Stats_Collection::GROUP_BY_TOTAL:
-				default:
-					$name_col = "''"; // must be a quoted string for SQL otherwise illegal column name
-					break;
+			case Item_Stats_Collection::GROUP_BY_TOTAL:
+			default:
+				$name_col = "''"; // must be a quoted string for SQL otherwise illegal column name
+				break;
 
-			} // endswitch
+		} // endswitch
 
-			$cols = "$name_col as name, " .
-					'SUM( fixed_count ) as fixed_count, ' .
-					'SUM( repairable_count ) as repairable_count, ' .
-					'SUM( eol_count ) as eol_count, ' .
-					'SUM( unreported_count ) as unreported_count, ' .
-					'SUM( fixed_count + repairable_count + eol_count + unreported_count ) as total_count ';
-			$placeholder_array = array_fill( 0, count( $event_key_array ), '%s' );
+		$cols = "$name_col as name, " .
+				'SUM( fixed_count ) as fixed_count, ' .
+				'SUM( repairable_count ) as repairable_count, ' .
+				'SUM( eol_count ) as eol_count, ' .
+				'SUM( unreported_count ) as unreported_count, ' .
+				'SUM( fixed_count + repairable_count + eol_count + unreported_count ) as total_count ';
+			
+		if ( is_array( $event_keys_array ) && ( count( $event_keys_array ) > 0 ) ) {
+
+			$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
 			$placehold_string = implode( ', ', $placeholder_array );
 			$query = "SELECT $cols FROM $table WHERE event_key IN ( $placehold_string ) GROUP BY name";
-			$stmt = $wpdb->prepare( $query, $event_key_array );
-			$data_array = $wpdb->get_results( $stmt, OBJECT_K );
-//	Error_Log::var_dump( $query, $data_array );
-			foreach( $data_array as $name => $obj ) {
-				$result[ $name ] = Item_Stats::create(
-						$name, $obj->total_count, $obj->fixed_count, $obj->repairable_count, $obj->eol_count
-					);
-			} // endfor
+			$query = $wpdb->prepare( $query, $event_keys_array );
+
+		} else {
+			
+			$query = "SELECT $cols FROM $table GROUP BY name";
+			
 		} // endif
+			
+		$data_array = $wpdb->get_results( $query, OBJECT_K );
+//		Error_Log::var_dump( $query, $data_array );
+		foreach( $data_array as $name => $obj ) {
+			$result[ $name ] = Item_Stats::create(
+					$name, $obj->total_count, $obj->fixed_count, $obj->repairable_count, $obj->eol_count
+				);
+		} // endfor
+
 		return $result;
+			
 	} // function
 
 	/**
@@ -329,6 +355,55 @@ class Supplemental_Item implements Item_Descriptor {
 
 
 	/**
+	 * Get an array of event key for supplemental items registered to events in the specified date range
+	 * @param string $min_key_date_string
+	 * @param string $max_key_date_string
+	 * @return string[]
+	 */
+	public static function get_event_keys_for_items_in_date_range( $min_key_date_string, $max_key_date_string ) {
+		
+		global $wpdb;
+		
+		$result = array();
+
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_ITEMS_TABLE_NAME;
+		
+		$where_parts_array = array();
+		$where_args_array = array();
+
+		if ( ! empty( $min_key_date_string ) ) {
+			$where_parts_array[] = ' ( event_key >= %s ) ';
+			$where_args_array[] = $min_key_date_string;
+		} // endif
+		
+		if ( ! empty( $max_key_date_string ) ) {
+			$where_parts_array[] = ' ( event_key <= %s ) ';
+			$where_args_array[] = $max_key_date_string;
+		} // endif
+		
+		if ( ! empty( $where_parts_array ) ) {
+			$where_clause = ' WHERE ( ' . implode( ' AND ', $where_parts_array ) . ' ) ';
+		} else {
+			$where_clause = '';
+		} // endif
+		
+		$query = "SELECT DISTINCT event_key FROM $table $where_clause";
+		
+		if ( count( $where_args_array ) > 0 )  {
+			$query = $wpdb->prepare( $query, $where_args_array );
+		} // endif
+		$data_array = $wpdb->get_results( $query, OBJECT );
+
+		foreach ( $data_array as $reg_data ) {
+			$result[] = $reg_data->event_key;
+		} // endif
+		
+//	Error_Log::var_dump( $result );
+		return $result;
+		
+	} // function
+	
+	/**
 	 * Perform the necessary steps for this class when the plugin is activated.
 	 * For this class this means conditionally creating its database table using dbDelta().
 	 * @return	void
@@ -373,12 +448,18 @@ class Supplemental_Item implements Item_Descriptor {
 	} // function
 
 
-
-
+	/**
+	 * Get the ID of this item
+	 * @return	string	The ID of this item
+	 * @since	v0.1.0
+	 */
+	public function get_item_id() {
+		return '';
+	} // function
 
 	/**
 	 * Get the description of this item
-	 * @return	string	The description of this item which may contain html formating
+	 * @return	string	The description of this item
 	 * @since	v0.1.0
 	 */
 	public function get_item_description() {
@@ -390,7 +471,7 @@ class Supplemental_Item implements Item_Descriptor {
 	 * @return	string	The event key for the event for which this item was registered.
 	 * @since	v0.1.0
 	 */
-	public function get_event_key() {
+	public function get_event_key_string() {
 		return $this->event_key;
 	} // function
 	
@@ -409,6 +490,17 @@ class Supplemental_Item implements Item_Descriptor {
 	} // function
 
 	/**
+	 * Get the most descriptive name available to the current user in the current context for display purposes.
+	 * If we're rendering the admin interface and the user can view the full name then
+	 *   it will be returned (if known), otherwise the public name is used
+	 * @return	string		The visitor's full name.
+	 * @since	v0.1.0
+	 */
+	public function get_visitor_display_name() {
+		return '';
+	} // function
+	
+	/**
 	 * Get the full name of the visitor who registered the item.
 	 * @return	string		The visitor's full name.
 	 * @since	v0.1.0
@@ -425,6 +517,30 @@ class Supplemental_Item implements Item_Descriptor {
 	 */
 	public function get_visitor_public_name() {
 		return '';
+	} // function
+
+	/**
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Item_Descriptor::get_visitor_email()
+	 */
+	public function get_visitor_email() {
+		return '';
+	} // function
+
+	/**
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Item_Descriptor::get_visitor_is_first_time()
+	 */
+	public function get_visitor_is_first_time() {
+		return NULL;
+	} // function
+
+	/**
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Item_Descriptor::get_visitor_is_join_mail_list()
+	 */
+	public function get_visitor_is_join_mail_list() {
+		return NULL;
 	} // function
 
 	/**
@@ -448,14 +564,11 @@ class Supplemental_Item implements Item_Descriptor {
 	} // function
 
 	/**
-	 * Get name the status for this item, i.e. Fixed, Repairable etc.
-	 *
-	 * @return	string	The status assigned to this item.
-	 *
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Item_Descriptor::get_item_status()
 	 */
-	public function get_status_name() {
-		return $this->status_name;
+	public function get_item_status() {
+		return $this->item_status;
 	} // function
 
 	/**

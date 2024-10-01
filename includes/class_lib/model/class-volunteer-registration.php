@@ -22,8 +22,11 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 
 	private $post;
 	private $post_id;
+	private $event_key_string;
 	private $event;
 	private $volunteer;
+	private $volunteer_display_name;
+	private $volunteer_email; // Community event leaders may have special access to the email for certain registrations
 	private $comments; // The volunteer-provided comments during registration, e.g. "I could use a ride to this event"
 	private $volunteer_roles_array; // Roles the volunteer will perform at the event
 	private $fixer_station; // The fixer station the volunteer will work at the event
@@ -72,18 +75,25 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 		$post_id = wp_insert_post( $args, $wp_error = TRUE );
 
 		if ( $post_id instanceof \WP_Error ) {
+			
 			Error_Log::log_wp_error( __( 'Unable to create new volunteer registration', 'reg-man-rc' ), $post_id );
 			$result = NULL;
+			
 		} else {
+			
+			// Get the post itself then instantiate a new instance so I can update its parts
 			$post = get_post( $post_id );
 			$result = self::instantiate_from_post( $post );
 			if ( ! empty( $result ) ) {
+				
 				$result->set_volunteer( $volunteer );
 				$result->set_event( $event );
 				$result->set_volunteer_roles_array( $roles );
 				$result->set_fixer_station( $fixer_station );
 				$result->set_is_fixer_apprentice( $is_apprentice );
+				
 			} // endif
+			
 		} // endif
 
 		return $result;
@@ -128,23 +138,31 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	 * @return	Volunteer_Registration[]
 	 */
 	public static function get_all_registrations( ) {
+
 		$result = array();
-		$statuses = self::get_visible_statuses();
-		$post_array = get_posts( array(
-						'post_type'				=> self::POST_TYPE,
-						'post_status'			=> $statuses,
-						'posts_per_page'		=> -1, // get all
-						'orderby'				=> 'post_title',
-						'order'					=> 'ASC',
-						'ignore_sticky_posts'	=> 1 // TRUE here means do not move sticky posts to the start of the result set
-		) );
+
+		$args = array(
+				'post_type'				=> self::POST_TYPE,
+				'posts_per_page'		=> -1, // get all
+				'orderby'				=> 'post_title',
+				'order'					=> 'ASC',
+				'ignore_sticky_posts'	=> 1 // TRUE here means do not move sticky posts to the start of the result set
+		);
+
+		$query = new \WP_Query( $args );
+		$post_array = $query->posts;
+
 		foreach ( $post_array as $post ) {
 			$instance = self::instantiate_from_post( $post );
 			if ( $instance !== NULL ) {
 				$result[] = $instance;
 			} // endif
 		} // endfor
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
+
 	} // function
 
 
@@ -158,14 +176,19 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	 * @return	Volunteer_Registration[]
 	 */
 	public static function get_all_registrations_for_event_keys( $event_keys_array ) {
-		if ( is_array( $event_keys_array) && ( count( $event_keys_array ) == 0 ) ) {
+
+		if ( is_array( $event_keys_array ) && ( count( $event_keys_array ) == 0 ) ) {
+
 			$result = array(); // The request is for an empty set of events so return an empty set
+
 		} else {
+
+			// Otherwise, the request is for ALL events (event keys array is NULL) or some subset
+
 			$result = array();
-			$statuses = self::get_visible_statuses();
+
 			$args = array(
 					'post_type'				=> self::POST_TYPE,
-					'post_status'			=> $statuses,
 					'posts_per_page'		=> -1, // get all
 					'orderby'				=> 'post_title',
 					'order'					=> 'ASC',
@@ -184,14 +207,17 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 			} // endif
 
 			$query = new \WP_Query( $args );
-			$posts = $query->posts;
-			foreach ( $posts as $post ) {
+			$post_array = $query->posts;
+			
+			foreach ( $post_array as $post ) {
 				$reg = self::instantiate_from_post( $post );
 				if ( $reg !== NULL ) {
 					$result[] = $reg;
 				} // endif
 			} // endfor
-			wp_reset_postdata(); // Required after using WP_Query()
+
+//			wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+
 		} // endif
 
 		return $result;
@@ -207,14 +233,17 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	 * @return	Volunteer_Registration[]
 	 */
 	public static function get_registrations_for_volunteer( $volunteer ) {
+
 		if ( empty( $volunteer ) || ( ! $volunteer instanceof Volunteer ) ) {
+
 			$result = array(); // The argument is not a valid volunteer so return an empty set
+
 		} else {
+
 			$result = array();
-			$statuses = self::get_visible_statuses();
+
 			$args = array(
 					'post_type'				=> self::POST_TYPE,
-					'post_status'			=> $statuses,
 					'posts_per_page'		=> -1, // get all
 					'orderby'				=> 'post_title',
 					'order'					=> 'ASC',
@@ -231,14 +260,17 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 				);
 
 			$query = new \WP_Query( $args );
-			$posts = $query->posts;
-			foreach ( $posts as $post ) {
+			$post_array = $query->posts;
+
+			foreach ( $post_array as $post ) {
 				$reg = self::instantiate_from_post( $post );
 				if ( $reg !== NULL ) {
 					$result[] = $reg;
 				} // endif
 			} // endfor
-			wp_reset_postdata(); // Required after using WP_Query()
+
+//			wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+			
 		} // endif
 
 		return $result;
@@ -272,14 +304,17 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	 * @return	Volunteer_Registration[]
 	 */
 	public static function get_registrations_for_volunteer_and_event_keys_array( $volunteer, $event_keys_array ) {
+
 		if ( empty( $volunteer ) || ( ! $volunteer instanceof Volunteer ) ) {
+
 			$result = array(); // The argument is not a valid volunteer so return an empty set
+
 		} else {
+
 			$result = array();
-			$statuses = self::get_visible_statuses();
+
 			$args = array(
 					'post_type'				=> self::POST_TYPE,
-					'post_status'			=> $statuses,
 					'posts_per_page'		=> -1, // get all
 					'orderby'				=> 'post_title',
 					'order'					=> 'ASC',
@@ -301,225 +336,21 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 			);
 
 			$query = new \WP_Query( $args );
-			$posts = $query->posts;
-			foreach ( $posts as $post ) {
+			$post_array = $query->posts;
+
+			foreach ( $post_array as $post ) {
 				$reg = self::instantiate_from_post( $post );
 				if ( $reg !== NULL ) {
 					$result[] = $reg;
 				} // endif
 			} // endfor
-			wp_reset_postdata(); // Required after using WP_Query()
+
+//			wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+
 		} // endif
 
 		return $result;
 
-	} // function
-
-	/**
-	 * Get fixer registrations.
-	 *
-	 * Note that this may include fixers who also registered for a volunteer role like "Setup & Cleanup".
-	 *
-	 * @param	string[]	$event_keys_array	An array of keys for the events whose fixer registrations are to be returned
-	 *   OR NULL to return all known fixer registrations
-	 * @return	Volunteer_Registration[]	A list of registrations with a fixer role for the specified events.
-	 */
-	public static function get_fixer_registrations_for_event_keys( $event_keys_array ) {
-		if ( is_array( $event_keys_array) && ( count( $event_keys_array ) == 0 ) ) {
-			$result = array(); // The request is for an empty set of events so return an empty set
-		} else {
-			$result = array();
-			$statuses = self::get_visible_statuses();
-			$args = array(
-					'post_type'				=> self::POST_TYPE,
-					'post_status'			=> $statuses,
-					'posts_per_page'		=> -1, // get all
-					'orderby'				=> 'post_title',
-					'order'					=> 'ASC',
-					'ignore_sticky_posts'	=> 1, // TRUE here means do not move sticky posts to the start of the result set
-					'tax_query' => array(
-							array(
-									'taxonomy'	=> Fixer_Station::TAXONOMY_NAME,
-									'operator'	=> 'EXISTS',
-							)
-					)
-			);
-
-			if ( is_array( $event_keys_array ) ) {
-				$args[ 'meta_key' ]		= self::EVENT_META_KEY;
-				$args[ 'meta_query' ]	= array(
-							array(
-									'key'		=> self::EVENT_META_KEY,
-									'value'		=> $event_keys_array,
-									'compare'	=> 'IN',
-							)
-					);
-			} // endif
-
-			$query = new \WP_Query( $args );
-			$posts = $query->posts;
-			foreach ( $posts as $post ) {
-				$reg = self::instantiate_from_post( $post );
-				if ( $reg !== NULL ) {
-					$result[] = $reg;
-				} // endif
-			} // endfor
-			wp_reset_postdata(); // Required after using WP_Query()
-		} // endif
-
-		return $result;
-
-	} // function
-
-	/**
-	 * Get registrations for volunteers who registered for a volunteer role (i.e. non-fixer role like "Registration")
-	 *  for any of the events specified in the event keys array.
-	 *
-	 * Note that this may include fixers who also registered for a volunteer role like "Setup & Cleanup".
-	 *
-	 * This method will return an array of instances of this class describing registrations with volunteer roles
-	 *
-	 * @param	string[]	$event_keys_array	An array of keys for the events whose registrations are to be returned
-	 *   OR NULL to return all volunteer role registrations
-	 * @return	Volunteer_Registration[]
-	 */
-/*
-	public static function get_volunteer_role_registrations_for_event_keys( $event_keys_array ) {
-		if ( is_array( $event_keys_array) && ( count( $event_keys_array ) == 0 ) ) {
-			$result = array(); // The request is for an empty set of events so return an empty set
-		} else {
-			$result = array();
-			$statuses = self::get_visible_statuses();
-			$args = array(
-					'post_type'				=> self::POST_TYPE,
-					'post_status'			=> $statuses,
-					'posts_per_page'		=> -1, // get all
-					'orderby'				=> 'post_title',
-					'order'					=> 'ASC',
-					'ignore_sticky_posts'	=> 1, // TRUE here means do not move sticky posts to the start of the result set
-					'tax_query' => array(
-							array(
-									'taxonomy'	=> Volunteer_Role::TAXONOMY_NAME,
-									'operator'	=> 'EXISTS',
-							)
-					)
-			);
-
-			if ( is_array( $event_keys_array ) ) {
-				$args[ 'meta_key' ]		= self::EVENT_META_KEY;
-				$args[ 'meta_query' ]	= array(
-							array(
-									'key'		=> self::EVENT_META_KEY,
-									'value'		=> $event_keys_array,
-									'compare'	=> 'IN',
-							)
-					);
-			} // endif
-
-			$query = new \WP_Query( $args );
-			$posts = $query->posts;
-			foreach ( $posts as $post ) {
-				$reg = self::instantiate_from_post( $post );
-				if ( $reg !== NULL ) {
-					$result[] = $reg;
-				} // endif
-			} // endfor
-			wp_reset_postdata(); // Required after using WP_Query()
-		} // endif
-
-		return $result;
-
-	} // function
-*/
-	/**
-	 * Get volunteer registration descriptors for volunteer who registered for a non-fixer role like "Registration".
-	 *
-	 * Note that some volunteers may have a fixer role AND a non-fixer role like "Setup & Cleanup".  Those registrations
-	 *   are INCLUDED in the result of this method.
-	 *
-	 * Also note that some volunteers select no role at all intending to show up and perform a task assigned at the event.
-	 * Those registrations are also included in the result of this method.
-	 *
-	 * @param	string[]	$event_keys_array	An array of keys for the events whose registrations are to be returned
-	 *   OR NULL to return all volunteer role registrations
-	 * @return	Volunteer_Registration[]		An array of Volunteer_Registration_Descriptor objects describing
-	 *  all non-fixer registrations known to the system and limited to the events described by the filter.
-	 */
-	public static function get_non_fixer_registrations_for_event_keys( $event_keys_array ) {
-		if ( is_array( $event_keys_array) && ( count( $event_keys_array ) == 0 ) ) {
-			$result = array(); // The request is for an empty set of events so return an empty set
-		} else {
-			$result = array();
-			$statuses = self::get_visible_statuses();
-			$args = array(
-					'post_type'				=> self::POST_TYPE,
-					'post_status'			=> $statuses,
-					'posts_per_page'		=> -1, // get all
-					'orderby'				=> 'post_title',
-					'order'					=> 'ASC',
-					'ignore_sticky_posts'	=> 1, // TRUE here means do not move sticky posts to the start of the result set
-					'tax_query' => array(
-							array(	'relation'	=>	'OR',
-									array(
-											'taxonomy'	=> Volunteer_Role::TAXONOMY_NAME,
-											'operator'	=> 'EXISTS',
-									),
-									array(	'relation'	=>	'AND',
-											array(
-													'taxonomy'	=> Volunteer_Role::TAXONOMY_NAME,
-													'operator'	=> 'NOT EXISTS',
-											),
-											array(
-													'taxonomy'	=> Fixer_Station::TAXONOMY_NAME,
-													'operator'	=> 'NOT EXISTS',
-											)
-									)
-							)
-					)
-			);
-
-			if ( is_array( $event_keys_array ) ) {
-				$args[ 'meta_key' ]		= self::EVENT_META_KEY;
-				$args[ 'meta_query' ]	= array(
-							array(
-									'key'		=> self::EVENT_META_KEY,
-									'value'		=> $event_keys_array,
-									'compare'	=> 'IN',
-							)
-				);
-			} // endif
-
-			$query = new \WP_Query( $args );
-			$posts = $query->posts;
-			foreach ( $posts as $post ) {
-				$reg = self::instantiate_from_post( $post );
-				if ( $reg !== NULL ) {
-					$result[] = $reg;
-				} // endif
-			} // endfor
-			wp_reset_postdata(); // Required after using WP_Query()
-		} // endif
-
-		return $result;
-
-	} // function
-
-	/**
-	 * Get an array of post statuses that indicates what is visible to the current user.
-	 * @param boolean	$is_look_in_trash	A flag set to TRUE if posts in trash should be visible.
-	 * @return string[]
-	 */
-	private static function get_visible_statuses( $is_look_in_trash = FALSE ) {
-		$capability = 'read_private_' . User_Role_Controller::VOLUNTEER_REG_CAPABILITY_TYPE_PLURAL;
-		if ( current_user_can( $capability ) ) {
-			$result = array( 'publish', 'pending', 'draft', 'future', 'private', 'inherit' ); // don't get auto-draft
-			if ( $is_look_in_trash ) {
-				$result[] = 'trash';
-			} // endif
-		} else {
-			$result = array( 'publish' );
-		} // endif
-		return $result;
 	} // function
 
 	/**
@@ -532,16 +363,21 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	 */
 	public static function get_all_registrations_for_event( $event_key ) {
 		$result = array();
+
 		if ( is_string( $event_key ) ) {
+
 			$key_string = $event_key; // the argument is the string I want
+
 		} else {
+
 			$key_string = ( $event_key instanceof Event_Key ) ? $event_key->get_as_string() : NULL;
+
 		} // endif
+
 		if ( !empty ( $key_string ) ) {
-			$statuses = self::get_visible_statuses();
+
 			$args = array(
 					'post_type'  => self::POST_TYPE,
-					'post_status'			=> $statuses,
 					'posts_per_page'		=> -1, // get all
 					'orderby'				=> 'post_title',
 					'order'					=> 'ASC',
@@ -556,16 +392,41 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 					)
 			);
 			$query = new \WP_Query( $args );
-			$posts = $query->posts;
-			foreach ( $posts as $post ) {
+			$post_array = $query->posts;
+
+			foreach ( $post_array as $post ) {
 				$reg = self::instantiate_from_post( $post );
 				if ( $reg !== NULL ) {
 					$result[] = $reg;
 				} // endif
 			} // endfor
-			wp_reset_postdata(); // Required after using WP_Query()
+
+//			wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+
 		} // endif
 
+		return $result;
+
+	} // function
+
+	/**
+	 * Get all volunteer IDs for volunteers registered for a single event.
+	 *
+	 * @param	string|Event_Key	$event_key	The key for the event whose fixer and volunteer registrations are to be returned
+	 * @return	int[]
+	 */
+	public static function get_all_volunteer_ids_registered_for_event( $event_key ) {
+		
+		$result = array();
+		
+		$vol_reg_array = self::get_all_registrations_for_event( $event_key );
+		foreach( $vol_reg_array as $vol_reg ) {
+			$vol_id = get_post_meta( $vol_reg->get_post_id(), self::VOLUNTEER_META_KEY, $single = TRUE );
+			if ( ! empty( $vol_id ) ) {
+				$result[] = intval( $vol_id );
+			} // endif
+		} // endif
+		
 		return $result;
 
 	} // function
@@ -589,6 +450,42 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 		return $result;
 	} // function
 
+	
+	/**
+	 * Get an array of event key strings for volunteers registered to events in the specified date range
+	 * @param string $min_key_date_string
+	 * @param string $max_key_date_string
+	 * @return string[]
+	 */
+	public static function get_event_key_strings_for_volunteer_registrations_in_date_range( $min_key_date_string, $max_key_date_string ) {
+
+		$result = array();
+		$args = array(
+				'post_type'			=> self::POST_TYPE,
+				'posts_per_page'	=>	-1, // Get all posts
+		);
+
+		$args[ 'meta_key' ]		= self::EVENT_META_KEY;
+		$args[ 'meta_query' ]	= array(
+					array(
+							'key'		=> self::EVENT_META_KEY,
+							'value'		=> array( $min_key_date_string, $max_key_date_string ),
+							'compare'	=> 'BETWEEN',
+					)
+			);
+
+		$query = new \WP_Query( $args );
+		$posts = $query->posts;
+		foreach ( $posts as $post ) {
+			$result[] = get_post_meta( $post->ID, self::EVENT_META_KEY, $single = TRUE );
+		} // endfor
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+
+		return $result;
+	} // function
+
+	
 	/**
 	 * Get the post associated with this registration.
 	 * @return	\WP_Post		The post for this registration
@@ -617,14 +514,29 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	} // function
 
 	/**
+	 * Get the event key string for this registration.
+	 * @return	string		The event key string for this registration
+	 * @since	v0.6.0
+	 */
+	public function get_event_key_string() {
+		if ( ! isset( $this->event_key_string ) ) {
+			$key = get_post_meta( $this->get_post_id(), self::EVENT_META_KEY, $single = TRUE );
+			if ( ( $key !== FALSE ) && ( $key !== NULL ) && ( $key != '' ) ) {
+				$this->event_key_string = $key;
+			} // endif
+		} // endif
+		return $this->event_key_string;
+	} // function
+
+	/**
 	 * Get the event for this registration.
 	 * @return	Event		The Event object for this registration
 	 * @since	v0.1.0
 	 */
 	public function get_event() {
 		if ( ! isset( $this->event ) ) {
-			$key = get_post_meta( $this->get_post_id(), self::EVENT_META_KEY, $single = TRUE );
-			if ( ( $key !== FALSE ) && ( $key !== NULL ) && ( $key != '' ) ) {
+			$key = $this->get_event_key_string();
+			if ( ! empty( $key ) ) {
 				$this->event = Event::get_event_by_key( $key );
 			} // endif
 		} // endif
@@ -642,7 +554,8 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 			// The new value is empty so we can remove the metadata
 			delete_post_meta( $this->get_post_id(), self::EVENT_META_KEY );
 		} else {
-			$event_key = $event->get_key();
+			$event_key = $event->get_key_string();
+			$this->event_key_string = $event_key;
 			update_post_meta( $this->get_post_id(), self::EVENT_META_KEY, $event_key );
 		} // endif
 		unset( $this->event ); // allow it to be re-acquired
@@ -670,14 +583,23 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	 * @since	v0.1.0
 	 */
 	public function set_volunteer( $volunteer ) {
+
+		$post_id = $this->get_post_id();
+
 		if ( empty( $volunteer ) ) {
+
 			// The new value is empty so we can remove the metadata
-			delete_post_meta( $this->get_post_id(), self::VOLUNTEER_META_KEY );
+			delete_post_meta( $post_id, self::VOLUNTEER_META_KEY );
+
 		} else {
+
 			$id = $volunteer->get_id();
-			update_post_meta( $this->get_post_id(), self::VOLUNTEER_META_KEY, $id );
+			update_post_meta( $post_id, self::VOLUNTEER_META_KEY, $id );
+
 		} // endif
+
 		unset( $this->volunteer ); // allow it to be re-acquired
+		
 	} // function
 
 	/**
@@ -726,7 +648,6 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 		unset( $this->volunteer_roles_array ); // allow it to be re-acquired
 	} // function
 
-
 	/**
 	 * Get the fixer station for this volunteer at this event or NULL if no fixer station is assigned
 	 *
@@ -766,9 +687,49 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	 */
 	public function get_volunteer_public_name() {
 		$volunteer = $this->get_volunteer();
-		return isset( $volunteer ) ? $volunteer->get_public_name() : NULL;
+		$result = isset( $volunteer ) ? $volunteer->get_public_name() : NULL;
+		return $result;
 	} // function
 
+	/**
+	 * Get the most descriptive name available to this user in the current context for display purposes.
+	 * If we're rendering the admin interface and the user can view the full name then
+	 *   it will be returned (if known), otherwise the public name is used
+	 * @return string
+	 */
+	public function get_volunteer_display_name() {
+		
+		if ( ! isset( $this->volunteer_display_name ) ) {
+			
+			$volunteer = $this->get_volunteer();
+			$event = $this->get_event();
+			$event_key_string = $this->get_event_key_string();
+			
+			if ( empty( $event ) && ! empty( $event_key_string ) ) {
+				$event = Event::create_placeholder_event( $event_key_string );
+			} // endif
+			
+			$user_can_register_vols_for_any_event =
+					current_user_can( 'edit_others_' . User_Role_Controller::VOLUNTEER_REG_CAPABILITY_TYPE_PLURAL );
+
+			$user_can_register_vols_for_this_event = ! empty( $event ) ? $event->get_is_current_user_able_to_register_volunteers() : FALSE;
+
+			if ( $user_can_register_vols_for_any_event || $user_can_register_vols_for_this_event ) {
+			
+				$this->volunteer_display_name = isset( $volunteer ) ? $volunteer->get_display_name() : NULL;
+				
+			} else {
+				
+				$this->volunteer_display_name = NULL;
+					
+			} // endif
+					
+		} // endif
+		
+		return $this->volunteer_display_name;
+		
+	} // function
+	
 	/**
 	 * Get the volunteer's full name as a single string.
 	 * To protect the volunteer's privacy their full name is never shown in public.
@@ -779,7 +740,8 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	 */
 	public function get_volunteer_full_name() {
 		$volunteer = $this->get_volunteer();
-		return isset( $volunteer ) ? $volunteer->get_full_name() : NULL;
+		$result = isset( $volunteer ) ? $result = $volunteer->get_full_name() : NULL;
+		return $result;
 	} // function
 
 	/**
@@ -791,18 +753,17 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	 * @since	v0.1.0
 	 */
 	public function get_volunteer_email() {
-		$volunteer = $this->get_volunteer();
-		return isset( $volunteer ) ? $volunteer->get_email() : NULL;
-	} // function
-
-	/**
-	 * Get the key for the event that the volunteer is registered for.
-	 * @return	string|NULL		The key for the event for this volunteer registration
-	 * @since	v0.1.0
-	 */
-	public function get_event_key() {
-		$event = $this->get_event();
-		return isset( $event ) ? $event->get_key() : NULL;
+		if ( ! isset( $this->volunteer_email ) ) {
+			$volunteer = $this->get_volunteer();
+			$this->volunteer_email = isset( $volunteer ) ? $volunteer->get_email() : NULL;
+			if ( isset( $volunteer ) && ! isset( $this->volunteer_email ) ) {
+				// Certain users like Community event leaders need to have access to the
+				//  email addresses of registered volunteers for events they created,
+				//  even if they normally cannot access the email address of those volunteers
+				$this->volunteer_email = Volunteer::get_email_for_volunteer_registration( $this );
+			} // endif
+		} // endif
+		return $this->volunteer_email;
 	} // function
 
 	/**
@@ -947,19 +908,19 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	 */
 	public static function register() {
 		$labels = array(
-				'name'					=> _x( 'Fixer / Volunteer Registrations', 'Volunteer Registration post type general name', 'reg-man-rc'),
-				'singular_name'			=> _x( 'Fixer / Volunteer Registration', 'Volunteer Registration post type singular name', 'reg-man-rc'),
+				'name'					=> _x( 'Fixer / Volunteer Event Registrations', 'Volunteer Registration post type general name', 'reg-man-rc'),
+				'singular_name'			=> _x( 'Fixer / Volunteer Event Registration', 'Volunteer Registration post type singular name', 'reg-man-rc'),
 				'add_new'				=> __( 'Add New', 'reg-man-rc'),
-				'add_new_item'			=> __( 'Add New Fixer / Volunteer Registration' , 'reg-man-rc' ),
-				'edit_item'				=> __( 'Edit Fixer / Volunteer Registration', 'reg-man-rc'),
-				'new_item'				=> __( 'New Fixer / Volunteer Registration', 'reg-man-rc'),
-				'all_items'				=> __( 'Fixer / Volunteer Registrations', 'reg-man-rc'),
-				'view_item'				=> __( 'View Fixer / Volunteer Registration', 'reg-man-rc'),
-				'search_items'			=> __( 'Search Fixer / Volunteer Registrations', 'reg-man-rc'),
+				'add_new_item'			=> __( 'Add New Fixer / Volunteer Event Registration' , 'reg-man-rc' ),
+				'edit_item'				=> __( 'Edit Fixer / Volunteer Event Registration', 'reg-man-rc'),
+				'new_item'				=> __( 'New Fixer / Volunteer Event Registration', 'reg-man-rc'),
+				'all_items'				=> __( 'Fixer / Volunteer Event Registrations', 'reg-man-rc'),
+				'view_item'				=> __( 'View Fixer / Volunteer Event Registration', 'reg-man-rc'),
+				'search_items'			=> __( 'Search Fixer / Volunteer Event Registrations (by ID only)', 'reg-man-rc'),
 				'not_found'				=> __( 'Nothing found', 'reg-man-rc'),
 				'not_found_in_trash'	=> __( 'Nothing found in the trash', 'reg-man-rc'),
 				'parent_item_colon'		=> '',
-				'menu_name'				=> __( 'Fixer / Volunteer Registrations', 'reg-man-rc')
+				'menu_name'				=> __( 'Fixer / Volunteer Event Registrations', 'reg-man-rc')
 		);
 
 		$icon = 'dashicons-thumbs-up';
@@ -976,11 +937,11 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 				'show_in_rest'			=> FALSE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
 				'show_in_nav_menus'		=> FALSE, // available for selection in navigation menus?
 				'show_in_menu'			=> Admin_Menu_Page::get_CPT_show_in_menu( $capability_plural ), // Where to show in admin menu? The main menu page will determine this
-				'show_in_admin_bar'		=> TRUE, // Whether to include this post type in the admin bar
-				'menu_position'			=> 5, // Menu order position.
+				'show_in_admin_bar'		=> FALSE, // Whether to include this post type in the admin bar
+				'menu_position'			=> Admin_Menu_Page::get_menu_position(), // Menu order position
 				'menu_icon'				=> $icon,
 				'hierarchical'			=> FALSE, // Can each post have a parent?
-				'supports'				=> array( '' ), // I want nothing but my metaboxes
+				'supports'				=> array( '' ), // An array containing an empty string means support nothing
 				'taxonomies'			=> array(
 												Fixer_Station::TAXONOMY_NAME,
 												Volunteer_Role::TAXONOMY_NAME,

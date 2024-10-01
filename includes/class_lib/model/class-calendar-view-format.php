@@ -29,8 +29,8 @@ class Calendar_View_Format {
 
 			$grid_view = new self();
 			$grid_view->id						= self::GRID_VIEW;
-			$grid_view->name					= __( 'Calendar', 'reg-man-rc' );
-			$grid_view->desc					= __( 'A typical grid of days.', 'reg-man-rc' );
+			$grid_view->name					= __( 'Grid', 'reg-man-rc' );
+			$grid_view->desc					= __( 'A typical calendar with days shown in a grid.', 'reg-man-rc' );
 
 			$list_view = new self();
 			$list_view->id						= self::LIST_VIEW;

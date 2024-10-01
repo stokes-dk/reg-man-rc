@@ -118,7 +118,7 @@ class Item_Suggestion_Admin_View {
 		if ( ! empty( $default_array ) && ! empty( $all_fixer_stations ) ) {
 
 			echo '<p>';
-				$label = __( 'The following are typical item suggestions you may choose to create to help get you started quickly.', 'reg-man-rc' );
+				$label = __( 'The following are typical item suggestions.', 'reg-man-rc' );
 				echo '<b>' . esc_html( $label ) . '</b>';
 			echo '</p>';
 
@@ -220,7 +220,7 @@ class Item_Suggestion_Admin_View {
 
 					$group_count = count( $sugg_array );
 					/* Translators: %1$s is the name of a category of item suggestions, %2$s is a count of items in the category */
-					$group_heading_format = _n( 'Group: %1$s (%2$s item)', 'Group: %1$s (%2$s items)', $group_count, 'reg-man-rc' );
+					$group_heading_format = _n( '%1$s (%2$s item)', '%1$s (%2$s items)', $group_count, 'reg-man-rc' );
 					$group_label = sprintf( $group_heading_format, $group_name, $group_count );
 
 					$group_input_list = Form_Input_List::create();
@@ -364,19 +364,23 @@ class Item_Suggestion_Admin_View {
 			);
 
 			// Item Type
-			$view = Item_Type_Admin_View::create();
-			$new_id = Item_Suggestion::POST_TYPE . '-item_type-metabox';
-			$render_fn = array( $view, 'render_post_metabox' );
-			add_meta_box(
-					$new_id,								// Unique ID for the element
-					__( 'Item Type', 'reg-man-rc' ),		// Box title
-					$render_fn,								// Content callback, must be of type callable
-					Item_Suggestion::POST_TYPE, 			// Post type for this meta box
-					'side',									// Meta box position
-					'high'									// Meta box priority
-			);
-
+			$all_item_types = Item_Type::get_all_item_types();
+			if ( ! empty( $all_item_types ) )  {
+				$view = Item_Type_Admin_View::create();
+				$new_id = Item_Suggestion::POST_TYPE . '-item_type-metabox';
+				$render_fn = array( $view, 'render_post_metabox' );
+				add_meta_box(
+						$new_id,								// Unique ID for the element
+						__( 'Item Type', 'reg-man-rc' ),		// Box title
+						$render_fn,								// Content callback, must be of type callable
+						Item_Suggestion::POST_TYPE, 			// Post type for this meta box
+						'side',									// Meta box position
+						'high'									// Meta box priority
+				);
+			} // endif
+			
 		} // endif
+		
 	} // function
 
 	/**
@@ -606,4 +610,75 @@ class Item_Suggestion_Admin_View {
 		return $result;
 	} // function
 
+	/**
+	 * Get the set of tabs to be shown in the help for this type
+	 * @return array
+	 */
+	public static function get_help_tabs() {
+		$result = array(
+			array(
+				'id'		=> 'reg-man-rc-about',
+				'title'		=> __( 'About', 'reg-man-rc' ),
+				'content'	=> self::get_about_content(),
+			),
+		);
+		return $result;
+	} // function
+	
+	/**
+	 * Get the html content shown to the administrator in the "About" help for this post type
+	 * @return string
+	 */
+	private static function get_about_content() {
+		ob_start();
+			$heading = __( 'About item suggestions', 'reg-man-rc' );
+			echo "<h2>$heading</h2>";
+			echo '<p>';
+				$msg = __(
+					'Item suggestions help reduce typing when registering new items.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'When you register an item and begin typing the description, the system' .
+					' will find and display matching item suggestions.' .
+					'  For example, if you type "light" the system may show item suggestions like "Lamp", "Bike light" and "Nightlight".',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'An item suggestion contains a description like "Lamp",' .
+					' a comma-separated list of alternate descriptions like "Light, Desk lamp",' .
+					' a default item type like "Electrical / Electronic",' .
+					' and a default fixer station for the item like "Appliances & Housewares".',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'Item suggestions will pop up when a user begins typing an item description during registration.' .
+					'  Selecting a suggestion will fill in the fields for the item.' .
+					'  After selection the fields may be modified if necessary.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'Because item suggestions refer to fixer stations and item types, you should create those first ' .
+					' before creating your item suggestions.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			$result = ob_get_clean();
+		return $result;
+	} // function
+
+	
 } // class

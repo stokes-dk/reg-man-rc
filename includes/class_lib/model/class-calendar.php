@@ -18,20 +18,19 @@ class Calendar {
 	const POST_TYPE = 'reg-man-rc-calendar';
 	const DEFAULT_PAGE_SLUG = 'rc-calendars';
 
-	const CALENDAR_TYPE_EVENTS			= 'events-calendar';
-	const CALENDAR_TYPE_VISITOR_REG		= 'visitor-reg-calendar';
-	const CALENDAR_TYPE_VOLUNTEER_REG	= 'volunteer-reg-calendar';
-	const CALENDAR_TYPE_ADMIN_EVENTS	= 'admin-events-calendar';
-
+	const CALENDAR_TYPE_EVENTS				= 'events-calendar'; // usual event calendar
+	const CALENDAR_TYPE_VISITOR_REG			= 'visitor-reg-calendar'; // used for visitor registration
+	const CALENDAR_TYPE_VOLUNTEER_REG		= 'volunteer-reg-calendar'; // volunteer registration
+	const CALENDAR_TYPE_ADMIN				= 'admin-calendar'; // for admin, shows everything
+	const CALENDAR_TYPE_EVENT_DESCRIPTOR	= 'event-descriptor-calendar'; // shows events for a descriptor
+	
 	private static $ADMIN_CALENDAR; // An instance of this class that contains all events
 	private static $VISITOR_REG_CALENDAR; // An instance of this class used for visitor registration
 	private static $VOLUNTEER_REG_CALENDAR; // An instance of this class used for volunteer registration
 
-	// Option keys to store the post ID of special calendars in the db
-//	private static $VISITOR_REG_CALENDAR_OPTION_KEY				= self::POST_TYPE . '-visitor-reg-cal-id';
-//	private static $VOLUNTEER_REG_CALENDAR_OPTION_KEY			= self::POST_TYPE . '-volunteer-reg-cal-id';
-
 	// Meta keys used to store calendar specific settings
+	private static $ICAL_FEED_META_KEY							= self::POST_TYPE . '-ical-feed';
+	private static $ICAL_FEED_SUBSCRIBE_BUTTON_META_KEY			= self::POST_TYPE . '-ical-show-subscribe-button';
 	private static $EVENT_STATUSES_META_KEY						= self::POST_TYPE . '-event-statuses';
 	// Note that categories are a taxonomy so we don't store as metadata, they're acquired through get_terms()
 //	private static $SHOW_UNCATEGORIZED_META_KEY					= self::POST_TYPE . '-show-uncategorized';
@@ -44,6 +43,11 @@ class Calendar {
 	private $post_id; // Normally the id and post id are the same, except for special calendars like admin or visitor reg
 	private $calendar_type;
 	private $name;
+	private $icalendar_feed_name; // The name portion of the feed url, when this is assigned there is a feed
+	private $icalendar_feed_title; // The title used to describe the feed
+	private $icalendar_feed_url; // The URL of this calendar's iCal feed
+	private $icalendar_feed_file_name; // The file name for this calendar's iCal feed
+	private $icalendar_is_show_subscribe_button; // Whether to show a subscribe button for this calendar
 	private $event_class_array;
 	private $event_status_array;
 	private $event_category_array;
@@ -51,9 +55,14 @@ class Calendar {
 //	private $show_uncategorized;
 	private $view_format_ids_array;
 	private $duration_ids_array;
+	private $multi_month_min_width; // The minimum width of a month in a multi-month display (in pixels)
 	private $is_show_past_events;
 	private $is_show_past_events_toggle_button;
-
+	private $event_descriptor; // a reference to the event descriptor used to create the calendar (when used)
+	private $is_login_required_for_fullcalendar_feed; // TRUE if the FullCalendar feed requires a logged in user to access it, FALSE when it's public
+	private $is_nonce_required_for_fullcalendar_feed; // TRUE if the FullCalendar feed requires a valid nonce to access it, FALSE when it's public
+	// Note that the volunteer reg calendar does not necessarily require a logged in user but does require a nonce
+	
 	/**
 	 * Instantiate and return a new instance of this class using the specified post data
 	 *
@@ -85,21 +94,27 @@ class Calendar {
 	 */
 	public static function get_all_calendars() {
 		$result = array();
-		$statuses = self::get_visible_statuses();
-		$post_array = get_posts( array(
-						'post_type'				=> self::POST_TYPE,
-						'post_status'			=> $statuses,
-						'posts_per_page'		=> -1, // get all
-						'orderby'				=> 'post_title',
-						'order'					=> 'ASC',
-						'ignore_sticky_posts'	=> 1 // TRUE here means do not move sticky posts to the start of the result set
-		) );
+
+		$args = array(
+				'post_type'				=> self::POST_TYPE,
+				'posts_per_page'		=> -1, // get all
+				'orderby'				=> 'post_title',
+				'order'					=> 'ASC',
+				'ignore_sticky_posts'	=> 1 // TRUE here means do not move sticky posts to the start of the result set
+		);
+
+		$query = new \WP_Query( $args );
+		$post_array = $query->posts;
+
 		foreach ( $post_array as $post ) {
 			$calendar = self::instantiate_from_post( $post );
 			if ( $calendar !== NULL ) {
 				$result[] = $calendar;
 			} // endif
 		} // endfor
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
 	} // function
 
@@ -110,33 +125,85 @@ class Calendar {
 	 * @return	Calendar[]
 	 */
 	public static function get_calendars_with_event_category( $event_category ) {
+
 		$result = array();
+		
 		if ( ! empty( $event_category ) ) {
-			$statuses = self::get_visible_statuses();
+			
 			$cat_id = $event_category->get_id();
-			$post_array = get_posts( array(
-							'post_type'				=> self::POST_TYPE,
-							'post_status'			=> $statuses,
-							'posts_per_page'		=> -1, // get all
-							'orderby'				=> 'post_title',
-							'order'					=> 'ASC',
-							'tax_query'				=> array(
-									array(
-											'taxonomy'	=> Event_Category::TAXONOMY_NAME,
-											'field'		=> 'term_id',
-											'terms'		=> $cat_id,
-									)
-							),
-							'ignore_sticky_posts'	=> 1 // TRUE here means do not move sticky posts to the start of the result set
-			) );
+			
+			$args = array(
+					'post_type'				=> self::POST_TYPE,
+					'posts_per_page'		=> -1, // get all
+					'orderby'				=> 'post_title',
+					'order'					=> 'ASC',
+					'tax_query'				=> array(
+							array(
+									'taxonomy'	=> Event_Category::TAXONOMY_NAME,
+									'field'		=> 'term_id',
+									'terms'		=> $cat_id,
+							)
+					),
+					'ignore_sticky_posts'	=> 1 // TRUE here means do not move sticky posts to the start of the result set
+					
+			);
+
+			$query = new \WP_Query( $args );
+			$post_array = $query->posts;
+
 			foreach ( $post_array as $post ) {
 				$calendar = self::instantiate_from_post( $post );
 				if ( $calendar !== NULL ) {
 					$result[] = $calendar;
 				} // endif
 			} // endfor
+
+//			wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+			
 		} // endif
+		
 		return $result;
+		
+	} // function
+
+	
+	/**
+	 * Get calendars with an iCalendar event feed
+	 *
+	 * This method will return an array of instances of this class for calendars configured to provide
+	 *  a public iCalendar event feed
+	 *
+	 * @return	Calendar[]
+	 */
+	public static function get_all_calendars_with_icalendar_feed() {
+		$result = array();
+
+		$args = array(
+				'post_type'				=> self::POST_TYPE,
+				'posts_per_page'		=> -1, // get all
+				'ignore_sticky_posts'	=> 1, // TRUE here means do not move sticky posts to the start of the result set
+				'meta_key'				=> self::$ICAL_FEED_META_KEY,
+				'meta_query'			=> array(
+							array(
+									'key'		=> self::$ICAL_FEED_META_KEY,
+									'compare'	=> 'EXISTS',
+							)
+				)
+		);
+
+		$query = new \WP_Query( $args );
+		$posts = $query->posts;
+		foreach ( $posts as $post ) {
+			$instance = self::instantiate_from_post( $post );
+			if ( $instance !== NULL ) {
+				$result[] = $instance;
+			} // endif
+		} // endfor
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
+		return $result;
+
 	} // function
 
 	/**
@@ -144,23 +211,80 @@ class Calendar {
 	 */
 	public static function get_admin_calendar() {
 		if ( ! isset( self::$ADMIN_CALENDAR ) ) {
-			$capability = 'read_private_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL;
-			if ( current_user_can( $capability ) ) {
-				$result = new self();
-				$result->id = self::CALENDAR_TYPE_ADMIN_EVENTS; // we use the type name as the ID
-				$result->calendar_type = self::CALENDAR_TYPE_ADMIN_EVENTS;
-				$result->post_id = 0;
-				$result->name = __( 'Administrative Calendar', 'reg-man-rc' );
-//				$result->description =  __( 'A calendar showing all events for administrative purposes', 'reg-man-rc' );
-				$result->event_class_array = array( Event_Class::PUBLIC, Event_Class::PRIVATE, Event_Class::CONFIDENTIAL );
-				$result->event_status_array = array_keys( Event_Status::get_all_event_statuses() );
-				$result->event_category_array = Event_Category::get_all_event_categories();
-				$result->view_format_ids_array = Settings::get_admin_calendar_views();
-				$result->duration_ids_array = Settings::get_admin_calendar_durations();
-				self::$ADMIN_CALENDAR = $result;
-			} // endif
+
+			// NOTE - An admin calendar is used to do lots of things like populate the events dropdown on the Items admin page.
+			// We allow anybody to get an admin calendar, but only populate the events that are visible to that user
+			// So an admin calendar acquired by a user who cannot see private events, will not contain private events
+			// But what we do not want here, is to return NULL.  We need a calendar object, it just may have no events.
+
+			$result = new self();
+			$result->id = self::CALENDAR_TYPE_ADMIN; // we use the type name as the ID
+			$result->calendar_type = self::CALENDAR_TYPE_ADMIN;
+			$result->post_id = 0; // There is no post
+			$result->name = __( 'Administrative Calendar', 'reg-man-rc' );
+			$result->event_class_array = array( Event_Class::PUBLIC, Event_Class::PRIVATE, Event_Class::CONFIDENTIAL );
+			$result->event_status_array = array_keys( Event_Status::get_all_event_statuses() );
+			$result->event_category_array = Event_Category::get_all_event_categories();
+			$result->view_format_ids_array = Settings::get_admin_calendar_views();
+			$result->duration_ids_array = Settings::get_admin_calendar_durations();
+			self::$ADMIN_CALENDAR = $result;
+
 		} // endif
 		return self::$ADMIN_CALENDAR;
+	} // function
+
+	/**
+	 * Get an instance of this class that shows all event instances for the specified event descriptor
+	 * @param	Event_Descriptor	$event_descriptor
+	 * @return	Calendar
+	 */
+	public static function get_event_descriptor_calendar( $event_descriptor ) {
+
+//		Error_Log::var_dump( $event_descriptor );
+		$result = new self();
+		$result->calendar_type = self::CALENDAR_TYPE_EVENT_DESCRIPTOR;
+		$result->event_descriptor = $event_descriptor;
+		$result->id = self::get_calendar_id_for_event_descriptor( $event_descriptor );
+		$result->post_id = 0;
+		$result->name = __( 'Event Descriptor Calendar', 'reg-man-rc' );
+		$result->event_category_array = array();
+		$result->view_format_ids_array = array( Calendar_View_Format::GRID_VIEW, Calendar_View_Format::LIST_VIEW );
+		$result->duration_ids_array = array( Calendar_Duration::CALENDAR_YEAR );
+		
+		return $result;
+
+	} // function
+	
+	/**
+	 * Get a calendar ID for the specified event descriptor
+	 * @param	Event_Descriptor	$event_descriptor
+	 * @return	string
+	 */
+	private static function get_calendar_id_for_event_descriptor( $event_descriptor ) {
+		// The calendar needs to find the event descriptor during an ajax call so the events can be determined
+		// To do that, we will construct a string ID for the calendar using the event descriptor's provider and ID
+		// Later, those can be used to find the descriptor again
+		if ( isset( $event_descriptor ) ) {
+			$prov_id = $event_descriptor->get_provider_id();
+			$desc_id = $event_descriptor->get_event_descriptor_id();
+			$result = "$prov_id $desc_id";
+		} else {
+			$result = '';
+		} // endif
+		return $result;
+	} // function
+
+	/**
+	 * Get the event descriptor from a calendar ID
+	 * @param	string	$calendar_id
+	 * @return	Event_Descriptor
+	 */
+	public static function get_event_descriptor_for_calendar_id( $calendar_id ) {
+		$parts = explode( ' ', $calendar_id, $limit = 2 );
+		$prov_id	= isset( $parts[ 0 ] ) ? $parts[ 0 ] : NULL;
+		$desc_id	= isset( $parts[ 1 ] ) ? $parts[ 1 ] : NULL;
+		$result = Event_Descriptor_Factory::get_event_descriptor_by_id( $desc_id, $prov_id );
+		return $result;
 	} // function
 
 	/**
@@ -169,9 +293,10 @@ class Calendar {
 	 */
 	public static function get_visitor_registration_calendar() {
 		if ( ! isset( self::$VISITOR_REG_CALENDAR ) ) {
+			
 			$id = Settings::get_visitor_registration_calendar_post_id();
 			if ( ! empty( $id ) ) {
-				$calendar = self::get_calendar_by_id( $id );
+				$calendar = self::get_calendar_by_post_id( $id );
 				if ( ! empty( $calendar ) ) {
 					self::$VISITOR_REG_CALENDAR = $calendar;
 				} else {
@@ -180,20 +305,26 @@ class Calendar {
 					Settings::set_visitor_registration_calendar_post_id( NULL );
 				} // endif
 			} // endif
+			
 			if ( ! isset( self::$VISITOR_REG_CALENDAR ) ) {
-				$calendar = self::create_visitor_registration_calendar();
+				// There is no Visitor Registration calendar, we need to find or create one
+				$all_calendars = self::get_all_calendars();
+				$calendar = isset( $all_calendars[ 0 ] ) ? $all_calendars[ 0 ] : self::create_default_calendar();
 				if ( isset( $calendar ) ) {
 					self::$VISITOR_REG_CALENDAR = $calendar;
 					Settings::set_visitor_registration_calendar_post_id( $calendar->get_post_id() );
 				} // endif
 			} // endif
+			
 			if ( isset( self::$VISITOR_REG_CALENDAR ) ) {
-				// Make sure the ID and type are set so we know this is for a special purpose
-				self::$VISITOR_REG_CALENDAR->id				= self::CALENDAR_TYPE_VISITOR_REG;
+				// Make sure the type is set so we know this is for a special purpose
 				self::$VISITOR_REG_CALENDAR->calendar_type	= self::CALENDAR_TYPE_VISITOR_REG;
 			} // endif
+			
 		} // endif
+		
 		return self::$VISITOR_REG_CALENDAR;
+		
 	} // funciton
 
 	/**
@@ -202,10 +333,10 @@ class Calendar {
 	 */
 	public static function get_volunteer_registration_calendar() {
 		if ( ! isset( self::$VOLUNTEER_REG_CALENDAR ) ) {
+			
 			$id = Settings::get_volunteer_registration_calendar_post_id();
 			if ( ! empty( $id ) ) {
-				$calendar = self::get_calendar_by_id( $id );
-//				Error_Log::var_dump( $calendar );
+				$calendar = self::get_calendar_by_post_id( $id );
 				if ( ! empty( $calendar ) ) {
 					self::$VOLUNTEER_REG_CALENDAR = $calendar;
 				} else {
@@ -214,26 +345,35 @@ class Calendar {
 					Settings::set_volunteer_registration_calendar_post_id( NULL );
 				} // endif
 			} // endif
+			
 			if ( ! isset( self::$VOLUNTEER_REG_CALENDAR ) ) {
-				// There is no volunteer registration calendar so we'll use the visitor reg calendar for both
-				$calendar = self::get_visitor_registration_calendar();
+				// There is no volunteer registration calendar, we need to find or create one
+				$all_calendars = self::get_all_calendars();
+				$calendar = isset( $all_calendars[ 0 ] ) ? $all_calendars[ 0 ] : self::create_default_calendar();
 				if ( isset( $calendar ) ) {
 					self::$VOLUNTEER_REG_CALENDAR = $calendar;
 					Settings::set_volunteer_registration_calendar_post_id( $calendar->get_post_id() );
 				} // endif
 			} // endif
+			
 			if ( isset( self::$VOLUNTEER_REG_CALENDAR ) ) {
-				// Make sure the ID and type are set so we know this is for a special purpose
-				self::$VOLUNTEER_REG_CALENDAR->id				= self::CALENDAR_TYPE_VOLUNTEER_REG;
+				// Make sure the type is set so we know this is for a special purpose
 				self::$VOLUNTEER_REG_CALENDAR->calendar_type	= self::CALENDAR_TYPE_VOLUNTEER_REG;
 			} // endif
+			
 		} // endif
+		
 		return self::$VOLUNTEER_REG_CALENDAR;
+		
 	} // funciton
 
-	private static function create_visitor_registration_calendar() {
+	/**
+	 * When no calendars are present in the system we will create one to use for visitor and volunteer registration
+	 * @return Calendar
+	 */
+	private static function create_default_calendar() {
 
-		$title = _x( 'Upcoming Events', 'The title for the calendar showing events visitors can bring items for repair', 'reg-man-rc' );
+		$title = _x( 'Upcoming Events', 'The title for the default calendar created when none exist', 'reg-man-rc' );
 
 		$post_data_array = array(
 				'post_type'		=> self::POST_TYPE,
@@ -247,30 +387,12 @@ class Calendar {
 		$insert_result = wp_insert_post( $post_data_array, $wp_error = TRUE );
 
 		if ( is_wp_error( $insert_result ) ) {
-			$msg = __( 'Failure creating visitor registration calendar', 'reg-man-rc' );
+			$msg = __( 'Failure creating default calendar', 'reg-man-rc' );
 			Error_Log::log_wp_error( $msg, $insert_result );
 			$result = NULL;
 		} else {
-			$result = self::get_calendar_by_id( $insert_result );
-			$result->set_event_category_array( array( Event_Category::get_default_event_category() ) );
-		} // endif
-		return $result;
-	} // function
-
-	/**
-	 * Get an array of post statuses that indicates what is visible to the current user.
-	 * @param boolean	$is_look_in_trash	A flag set to TRUE if posts in trash should be visible.
-	 * @return string[]
-	 */
-	private static function get_visible_statuses( $is_look_in_trash = FALSE ) {
-		$capability = 'read_private_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL;
-		if ( current_user_can( $capability ) ) {
-			$result = array( 'publish', 'pending', 'draft', 'future', 'private', 'inherit' ); // don't get auto-draft
-			if ( $is_look_in_trash ) {
-				$result[] = 'trash';
-			} // endif
-		} else {
-			$result = array( 'publish' );
+			$result = self::get_calendar_by_post_id( $insert_result );
+			$result->set_event_category_array( Event_Category::get_all_event_categories() );
 		} // endif
 		return $result;
 	} // function
@@ -284,10 +406,29 @@ class Calendar {
 	 * @param	int|string	$calendar_id	The ID of the calendar to be returned
 	 * @return	Calendar|NULL
 	 */
-	public static function get_calendar_by_id( $calendar_id ) {
-		switch( $calendar_id ) {
+	public static function get_calendar_by_post_id( $calendar_id ) {
 
-			case self::CALENDAR_TYPE_ADMIN_EVENTS:
+		$post = get_post( $calendar_id );
+		$result = self::instantiate_from_post( $post );
+
+		return $result;
+
+	} // function
+
+	/**
+	 * Get a single calendar using its calendar type and ID
+	 *
+	 * This method will return a single instance of this class describing the calendar specified by the type and ID.
+	 * If the calendar is not found, this method will return NULL
+	 *
+	 * @param	string		$calendar_type	The type of the calendar, one of CALENDAR_TYPE_* constants in this class
+	 * @param	int|string	$calendar_id	The ID of the calendar to be returned
+	 * @return	Calendar|NULL
+	 */
+	public static function get_calendar_by_type( $calendar_type, $calendar_id ) {
+		switch( $calendar_type ) {
+
+			case self::CALENDAR_TYPE_ADMIN:
 				$result = self::get_admin_calendar();
 				break;
 
@@ -299,20 +440,13 @@ class Calendar {
 				$result = self::get_volunteer_registration_calendar();
 				break;
 
+			case self::CALENDAR_TYPE_EVENT_DESCRIPTOR:
+				$event_descriptor = self::get_event_descriptor_for_calendar_id( $calendar_id );
+				$result = self::get_event_descriptor_calendar( $event_descriptor );
+				break;
+
 			default:
-//				$visible_statuses = is_admin() ? self::get_visible_statuses() : array( 'publish' ); // Only return published calendars on front end
-				$visible_statuses = self::get_visible_statuses();
-				$post = get_post( $calendar_id );
-				if ( ( $post !== NULL ) && ( in_array( $post->post_status, $visible_statuses ) ) ) {
-					$post_type = $post->post_type; // make sure that the given post is the right type, there's no reason it shouldn't be
-					if ( $post_type == self::POST_TYPE ) {
-						$result = self::instantiate_from_post( $post );
-					} else {
-						$result = NULL;
-					} // endif
-				} else {
-					$result = NULL;
-				} // endif
+				$result = self::get_calendar_by_post_id( $calendar_id );
 				break;
 
 		} // endswitch
@@ -330,19 +464,23 @@ class Calendar {
 	 * @return	Calendar|NULL
 	 */
 	public static function get_calendar_by_slug( $calendar_slug ) {
+
 		$args = array(
 				'name'				=> $calendar_slug,
 				'post_type'			=> self::POST_TYPE,
 				'post_status'		=> 'publish',
 				'posts_per_page'	=> 1
 		);
-		$post_array = get_posts( $args );
+		
+		$query = new \WP_Query( $args );
+		$post_array = $query->posts;
+		
 		$post = ( is_array( $post_array ) && isset( $post_array[ 0 ] ) ) ? $post_array[ 0 ] : NULL;
-		if ( $post !== NULL ) {
-			$result = self::instantiate_from_post( $post );
-		} else {
-			$result = NULL;
-		} // endif
+
+		$result = ( $post !== NULL ) ? self::instantiate_from_post( $post ) : NULL;
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
 	} // function
 
@@ -353,6 +491,10 @@ class Calendar {
 	 */
 	private function get_post() {
 		return $this->post;
+	} // function
+	
+	private function get_event_descriptor() {
+		return $this->event_descriptor;
 	} // function
 
 	/**
@@ -384,7 +526,7 @@ class Calendar {
 			$id = $this->get_id();
 			switch ( $id ) {
 
-				case self::CALENDAR_TYPE_ADMIN_EVENTS:
+				case self::CALENDAR_TYPE_ADMIN:
 				case self::CALENDAR_TYPE_VISITOR_REG:
 				case self::CALENDAR_TYPE_VOLUNTEER_REG:
 					$this->calendar_type = $id;
@@ -406,18 +548,6 @@ class Calendar {
 	 */
 	public function get_name() {
 		return $this->name;
-	} // function
-
-	/**
-	 * Get an array of all events for this calendar.
-	 * This method will apply the calendar's settings for event status, categories and so on.
-	 * @return	Event[]		An array event objects representing all the events on this calendar.
-	 */
-	public function get_all_calendar_events() {
-		$event_filter = Event_Filter::create_for_calendar( $this );
-		$event_filter->set_sort_order( Event_Filter::SORT_BY_DATE_DESCENDING );
-		$result = Event::get_all_events_by_filter( $event_filter );
-		return $result;
 	} // function
 
 	/**
@@ -455,67 +585,11 @@ class Calendar {
 	 * @param	\DateTime			$end_date_time
 	 * @return	Calendar_Entry[]	An array of Calendar_Entry objects in the specified range
 	 */
-	 public function get_calendar_entries_in_date_range( $start_date_time, $end_date_time ) {
-/* FIXME - this does nothing
-	 	$calendar_type = $this->get_calendar_type();
-		// We will determine the type of calendar entries to return based on the calendar entry type
-		// For special calendar IDs like the volunteer registration calendar we will return special entries.
-		// But we may also have to ensure that the current user has the capability to view the special calendar
-	 	switch ( $calendar_type ) {
-
-			case self::CALENDAR_TYPE_VOLUNTEER_REG:
-			case self::CALENDAR_TYPE_VISITOR_REG:
-			case self::CALENDAR_TYPE_ADMIN_EVENTS:
-	 		case self::CALENDAR_TYPE_EVENTS:
-	 		default:
-*/
-	 			$result = $this->get_calendar_events_in_date_range( $start_date_time, $end_date_time );
-/*
-	 			break;
-
-	 	} // endswitch
-*/
-	 	return $result;
-
-	} // function
-
-	/**
-	 * Get an array of Calendar_Entry objects representing volunteer registration events on this calendar
-	 *  that fall within the specified date range.
-	 * This method will apply the calendar's settings for event status, categories and so on.
-	 * @param	\DateTime			$start_date_time
-	 * @param	\DateTime			$end_date_time
-	 * @return	Calendar_Entry[]	An array of Calendar_Entry objects in the specified range
-	 */
-/* FIXME - NO LONGER USED!
-	 public function get_volunteer_registration_calendar_entries_in_date_range( $start_date_time, $end_date_time ) {
-
-	 	$result = array();
-
-		$event_array = $this->get_calendar_events_in_date_range( $start_date_time, $end_date_time );
-		$event_keys_array = array();
-		foreach( $event_array as $event ) {
-			$event_keys_array[] = $event->get_key();
-		} // endfor
-
-		$volunteer = Volunteer::get_current_volunteer();
-		$vol_reg_array = Volunteer_Registration::get_registrations_for_volunteer_and_event_keys_array( $volunteer, $event_keys_array );
-
-		$assoc_vol_reg_array = array(); // key the array by event key to make them easy to find
-		foreach( $vol_reg_array as $vol_reg ) {
-			$assoc_vol_reg_array[ $vol_reg->get_event_key() ] = $vol_reg;
-		} // endfor
-
-		foreach( $event_array as $event ) {
-			$event_key = $event->get_key();
-			$vol_reg = isset( $assoc_vol_reg_array[ $event_key ] ) ? $assoc_vol_reg_array[ $event_key ] : NULL;
-			$event->set_volunteer_registration( $vol_reg ); // Tell the event if there is a volunteer reg or not
-			$result[] = $event;
-		} // endfor
-
+	 public function get_calendar_entries_in_date_range( $start_date_time, $end_date_time, $event_author_id = 0 ) {
+		$result = $this->get_calendar_events_in_date_range( $start_date_time, $end_date_time, $event_author_id );
 		return $result;
 	} // function
-*/
+
 	
 	/**
 	 * Get an array of Map_Marker objects for this calendar that fall within the specified date range.
@@ -524,14 +598,14 @@ class Calendar {
 	 * @param	\DateTime			$end_date_time
 	 * @return	Map_Marker[]		An array of Map_Marker objects in the specified range
 	 */
-	public function get_map_markers_in_date_range( $start_date_time, $end_date_time ) {
+	public function get_map_markers_in_date_range( $start_date_time, $end_date_time, $event_author_id = 0 ) {
 
-		$events_array = $this->get_calendar_events_in_date_range( $start_date_time, $end_date_time );
+		$events_array = $this->get_calendar_events_in_date_range( $start_date_time, $end_date_time, $event_author_id );
 
 		// What I have now is an array of events but what I need is an array of event groups so that the map markers
 		// for multiple events at the same location are not all stacked on top of each other.
 		// Events at one location are grouped together into a single marker.
-
+		
 		$group_markers = Event_Group_Map_Marker::create_array_for_events_array( $events_array );
 
 		return array_values( $group_markers );
@@ -543,23 +617,41 @@ class Calendar {
 	 * This method will apply the calendar's settings for event status, categories and so on.
 	 * @param	\DateTime	$start_date_time
 	 * @param	\DateTime	$end_date_time
-	 * @return	Event[]		An array of event objects in the specified range
+	 * @param	int|string	$event_author_id	A WordPress User ID whose events are to be shown
+	 * @return	Event[]		An array of event objects in the specified range, with the specified author
 	 */
-	 private function get_calendar_events_in_date_range( $start_date_time, $end_date_time ) {
+	 private function get_calendar_events_in_date_range( $start_date_time, $end_date_time, $event_author_id = 0 ) {
 
 		if ( ! isset( $start_date_time ) || ! isset( $end_date_time ) ) {
 
-			// One of both of the dates are invalid so return an empty set
+			// One or both of the dates are invalid so return an empty set
 			$result = array();
 
 		} else {
 
-			$event_filter = Event_Filter::create_for_calendar( $this );
-			$event_filter->set_accept_minimum_date_time( $start_date_time );
-			$event_filter->set_accept_maximum_date_time( $end_date_time );
-			$event_filter->set_sort_order( Event_Filter::SORT_BY_DATE_ASCENDING );
+			if ( $this->get_calendar_type() === self::CALENDAR_TYPE_EVENT_DESCRIPTOR ) {
+				
+				$event_descriptor = $this->get_event_descriptor();
+				$result = Event::get_events_array_for_event_descriptor( $event_descriptor );
+				
+			} else {
+				
+				$event_filter = Event_Filter::create_for_calendar( $this );
+				$event_filter->set_accept_minimum_date_time( $start_date_time );
+				$event_filter->set_accept_maximum_date_time( $end_date_time );
+				if ( ! empty( $event_author_id ) ) {
+					$event_filter->set_accept_event_author_id( $event_author_id );
+				} // endif
+				$event_filter->set_sort_order( Event_Filter::SORT_BY_DATE_ASCENDING );
 
-			$result = Event::get_all_events_by_filter( $event_filter );
+				// If this is the admin calendar then we need to add in placeholder events for registrations
+				//  whose original event objects do not exist
+				$calendar_type = $this->get_calendar_type();
+				$is_include_placeholder_events = ( $calendar_type == self::CALENDAR_TYPE_ADMIN );
+				
+				$result = Event::get_all_events_by_filter( $event_filter, $is_include_placeholder_events );
+
+			} // endif
 
 		} // endif
 
@@ -574,7 +666,9 @@ class Calendar {
 	 */
 	public static function get_default_view_format_ids_array() {
 		$result = array(
-			Calendar_View_Format::GRID_VIEW
+				Calendar_View_Format::GRID_VIEW,
+				Calendar_View_Format::LIST_VIEW,
+				Calendar_View_Format::MAP_VIEW,
 		);
 		return $result;
 	} // function
@@ -629,15 +723,6 @@ class Calendar {
 		unset( $this->view_format_ids_array ); // allow it to be re-acquired
 	} // function
 
-/* FIXME - not used
-	private function remove_map_view_format() {
-		$format_ids_array = $this->get_view_format_ids_array();
-		if ( in_array( Calendar_View_Format::MAP_VIEW, $format_ids_array ) ) {
-			$format_ids_array = array_values( array_diff( $format_ids_array, array( Calendar_View_Format::MAP_VIEW ) ) );
-			$this->view_format_ids_array = ! empty( $format_ids_array ) ? $format_ids_array : self::get_default_view_format_ids_array();
-		} // endif
-	} // function
-*/
 	/**
 	 * Get the default array of durations to be shown when no specific set is defined for the calendar.
 	 * @return	string[]	The durations to be shown on a calendar by default, e.g. array( Calendar_Duration::ONE_MONTH )
@@ -646,6 +731,7 @@ class Calendar {
 	public static function get_default_duration_ids_array() {
 		$result = array(
 				Calendar_Duration::ONE_MONTH,
+				Calendar_Duration::CALENDAR_YEAR,
 		);
 		return $result;
 	} // function
@@ -677,7 +763,7 @@ class Calendar {
 //				Calendar_Duration::TWO_MONTHS,
 //				Calendar_Duration::THREE_MONTHS,
 //				Calendar_Duration::SIX_MONTHS,
-				Calendar_Duration::ONE_YEAR,
+				Calendar_Duration::CALENDAR_YEAR,
 		);
 		return $result;
 	} // function
@@ -727,6 +813,36 @@ class Calendar {
 	} // function
 	
 	/**
+	 * Get the minimum width in pixels for a month when showing a multi-month view like Calendar Year 
+	 * @return int
+	 */
+	public function get_multi_month_min_width() {
+		
+		if ( ! isset( $this->multi_month_min_width ) ) {
+
+			// TODO: We could provide ways for the user to configure this
+			// For now, we just assign it based on the calendar type
+			$calendar_type = $this->get_calendar_type();
+			
+			switch( $calendar_type ) {
+				
+				case Calendar::CALENDAR_TYPE_EVENT_DESCRIPTOR:
+					$this->multi_month_min_width = 280;
+					break;
+					
+				default:
+					$this->multi_month_min_width = 360;
+					break;
+
+			} // endswitch
+			
+		} // endif
+		
+		return $this->multi_month_min_width;
+
+	} // function
+	
+	/**
 	 * Get the array of classes to be shown in the volunteer registration calendar.
 	 * @return	string[]	The event classes to be shown on the volunteer registration calendar
 	 * @since	v0.1.0
@@ -750,17 +866,12 @@ class Calendar {
 
 	/**
 	 * Get the default array of classes to be shown for the calendar.
-	 * By default a calendar will always show PUBLIC events, and never show CONFIDENTIAL.
-	 * A calendar will include PRIVATE events only if the logged-in user has authority to view private events.
+	 * By default a calendar will always show PUBLIC events, and not PRIVATE or CONFIDENTIAL.
 	 * @return	string[]	The event classes to be shown on a calendar by default, e.g. array( Event_Class::PUBLIC )
 	 * @since	v0.1.0
 	 */
 	public static function get_default_class_array() {
 		$result = array( Event_Class::PUBLIC );
-		$capability = 'read_private_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL;
-		if ( current_user_can( $capability ) ) {
-			$result[] = Event_Class::PRIVATE;
-		} // endif
 		return $result;
 	} // function
 
@@ -785,6 +896,145 @@ class Calendar {
 		return $result;
 	} // function
 
+	/**
+	 * Get the name of the iCalendar feed for this calendar or an empty string if there is no feed
+	 * @return	string	The name of the iCalendar feed for this calendar or empty string if there is no feed
+	 * @since	v0.7.0
+	 */
+	public function get_icalendar_feed_name() {
+		if ( ! isset( $this->icalendar_feed_name ) ) {
+			switch( $this->get_calendar_type() ) {
+
+				case self::CALENDAR_TYPE_EVENTS:
+					$post_id = $this->get_post_id();
+					$meta = ! empty( $post_id ) ? get_post_meta( $post_id, self::$ICAL_FEED_META_KEY, $single = TRUE ) : NULL;
+					$this->icalendar_feed_name = ! empty( $meta ) ? $meta : '';
+					break;
+					
+				case self::CALENDAR_TYPE_VOLUNTEER_REG:
+					$this->icalendar_feed_name = Settings::get_volunteer_calendar_feed_name();
+					break;
+					
+				default:
+					$this->icalendar_feed_name = '';
+					break;
+					
+			} // endswitch
+		} // endif
+		return $this->icalendar_feed_name;
+	} // function
+	
+	/**
+	 * Set the iCalendar feed name 
+	 * @param	string	$icalendar_feed_name	The name of the iCalendar feed for this calendar, or any empty value if the calendar has no feed.
+	 * @return	void
+	 * @since	v0.7.0
+	 */
+	public function set_icalendar_feed_name( $icalendar_feed_name ) {
+		$icalendar_feed_name = is_string( $icalendar_feed_name ) ? trim( $icalendar_feed_name ) : '';
+		if ( empty( $icalendar_feed_name ) ) {
+			// The new value is empty so we can remove the metadata
+			delete_post_meta( $this->get_post_id(), self::$ICAL_FEED_META_KEY );
+		} else {
+			update_post_meta( $this->get_post_id(), self::$ICAL_FEED_META_KEY, $icalendar_feed_name );
+		} // endif
+		unset( $this->icalendar_feed_name ); // allow it to be re-acquired
+	} // function
+
+	/**
+	 * Get a boolean flag indicating whether a "Subscribe" button should be shown for the iCalendar feed
+	 *  of this calendar when it appears on a public page
+	 * @return	boolean	TRUE if a subscribe button should be shown, FALSE otherwise
+	 * @since	v0.7.0
+	 */
+	public function get_icalendar_is_show_subscribe_button() {
+		if ( ! isset( $this->icalendar_is_show_subscribe_button ) ) {
+			switch ( $this->get_calendar_type() ) {
+				
+				case self::CALENDAR_TYPE_EVENTS:
+					$post_id = $this->get_post_id();
+					$meta = ! empty( $post_id ) ? get_post_meta( $post_id, self::$ICAL_FEED_SUBSCRIBE_BUTTON_META_KEY, $single = TRUE ) : NULL;
+					// We will assume this should be shown by default, so missing meta or anything other than FALSE means TRUE
+					$this->icalendar_is_show_subscribe_button = ! empty( $meta ) ? ( $meta !== 'FALSE' ) : TRUE;
+					break;
+
+				case self::CALENDAR_TYPE_VOLUNTEER_REG:
+					$this->icalendar_is_show_subscribe_button = Settings::get_is_create_volunteer_calendar_feed();
+					break;
+					
+				default:
+					$this->icalendar_is_show_subscribe_button = FALSE;
+					break;
+					
+			} // endswitch
+		} // endif
+		return $this->icalendar_is_show_subscribe_button;
+	} // function
+	
+	/**
+	 * Set the flag indicating whether a "Subscribe" button should be shown for the iCalendar feed
+	 *  of this calendar when it appears on a public page
+	 * @param	boolean	$is_show_subscribe_button	TRUE when the button should be shown, FALSE otherwise
+	 * @return	void
+	 * @since	v0.7.0
+	 */
+	public function set_icalendar_is_show_subscribe_button( $is_show_subscribe_button ) {
+		if ( $is_show_subscribe_button ) {
+			// We will assume this should be shown by default
+			delete_post_meta( $this->get_post_id(), self::$ICAL_FEED_SUBSCRIBE_BUTTON_META_KEY );
+		} else {
+			update_post_meta( $this->get_post_id(), self::$ICAL_FEED_SUBSCRIBE_BUTTON_META_KEY, 'FALSE' );
+		} // endif
+		unset( $this->icalendar_is_show_subscribe_button ); // allow it to be re-acquired
+	} // function
+
+	/**
+	 * Get the title used in the iCalendar feed for this calendar
+	 * @return	string	The title of the iCalendar feed
+	 * @since	v0.7.0
+	 */
+	public function get_icalendar_feed_title() {
+		if ( ! isset( $this->icalendar_feed_title ) ) {
+			$blog_name = get_bloginfo( 'name' );
+			$calendar_name = strip_tags( $this->get_name() ); // remove any tags from the name
+			/* Translators: %1$s is the blog name, %2$s is a calendar title */
+			$feed_title_format = _x( '%1$s %2$s', 'An iCalendar feed title using the blog name and calendar title, e.g. "Repair Café Toronto Upcoming Events"', 'reg-man-rc' );
+			$this->icalendar_feed_title = sprintf( $feed_title_format, $blog_name, $calendar_name );
+		} // endif
+		return $this->icalendar_feed_title;
+	} // function
+	
+	/**
+	 * Get the URL for the iCalendar feed for this calendar
+	 * @return	string	The URL of the iCalendar feed
+	 * @since	v0.7.0
+	 */
+	public function get_icalendar_feed_url() {
+		if ( ! isset( $this->icalendar_feed_url ) ) {
+			$feed_name = $this->get_icalendar_feed_name();
+			$blog_id = NULL; // I believe this is used for multi-site
+			$path = 'feed/' . $feed_name;
+			$this->icalendar_feed_url = get_site_url( $blog_id, $path );
+		} // endif
+		return $this->icalendar_feed_url;
+	} // function
+	
+	/**
+	 * Get the file name for the iCalendar feed for this calendar
+	 * @return	string	The file name of the iCalendar feed
+	 * @since	v0.7.0
+	 */
+	public function get_icalendar_feed_file_name() {
+		if ( ! isset( $this->icalendar_feed_file_name ) ) {
+			$feed_title = $this->get_icalendar_feed_title(); // The feed title includes the blog name
+			$date_time = new \DateTime();
+			$date_time->setTimezone( wp_timezone() );
+			$date = $date_time->format( 'Y-m-d' );
+			$this->icalendar_feed_file_name = sanitize_file_name( "$feed_title {$date}.ics" );
+		} // endif
+		return $this->icalendar_feed_file_name;
+	} // function
+	
 	/**
 	 * Get the array of statuses to be shown on this calendar.  Status values are defined as constants in the Event_Status class.
 	 * @return	string[]	The event statuses to be shown on this calendar, e.g. array( Event_Status::CONFIRMED, Event_Status::TENTATIVE )
@@ -873,6 +1123,28 @@ class Calendar {
 			$this->event_category_array = NULL; // reset my internal vars so they can be re-acquired
 		} // endif
 	} // function
+	
+	/**
+	 * Add an event category to this calendar
+	 * @param	Event_Category	$event_category
+	 */
+	public function add_event_category( $event_category ) {
+		$post_id = $this->get_post_id();
+		$event_category_id = $event_category->get_id();
+		wp_add_object_terms( $post_id, $event_category_id, Event_Category::TAXONOMY_NAME );
+		$this->event_category_array = NULL; // reset my internal vars so they can be re-acquired
+	} // function
+
+	/**
+	 * Remove an event category from this calendar
+	 * @param	Event_Category	$event_category
+	 */
+	public function remove_event_category( $event_category ) {
+		$post_id = $this->get_post_id();
+		$event_category_id = $event_category->get_id();
+		wp_remove_object_terms( $post_id, $event_category_id, Event_Category::TAXONOMY_NAME );
+		$this->event_category_array = NULL; // reset my internal vars so they can be re-acquired
+	} // function
 
 	/**
 	 * Get array of names of the event categories to be shown on this calendar.
@@ -926,18 +1198,18 @@ class Calendar {
 	} // function
 
 	/**
-	 * Get a boolean indicating whether this calendar contains the specified event.
-	 * This requires checking the event's categories, status and class to make sure they are all valid for this calendar.
-	 * @param	Event	$event
-	 * @return	boolean	TRUE if the event appears on this calendar, FALSE otherwise
+	 * Get a boolean indicating whether this calendar will display the specified event descriptor.
+	 * This requires checking the event descriptor's categories, status and class to make sure they are all valid for this calendar.
+	 * @param	Event_Descriptor	$event_descriptor
+	 * @return	boolean	TRUE if the event descriptor appears on this calendar, FALSE otherwise
 	 */
-	public function get_is_event_contained_in_calendar( $event ) {
-		if ( ! isset( $event ) ) {
+	public function get_is_event_descriptor_contained_in_calendar( $event_descriptor ) {
+		if ( ! isset( $event_descriptor ) ) {
 			$result = FALSE; // Defensive
 		} else {
-			$event_category_names = $event->get_categories();
-			$event_status = $event->get_status();
-			$event_class = $event->get_class();
+			$event_category_names = $event_descriptor->get_event_categories();
+			$event_status = $event_descriptor->get_event_status();
+			$event_class = $event_descriptor->get_event_class();
 			$calendar_category_names_array = $this->get_event_category_names_array();
 			$calendar_status_array = $this->get_event_status_array();
 			$calendar_class_array = $this->get_event_class_array();
@@ -948,6 +1220,103 @@ class Calendar {
 		} // endif
 		return $result;
 	} // function
+
+	/**
+	 * Get a boolean indicating whether this calendar contains the specified event.
+	 * This requires checking the event's categories, status and class to make sure they are all valid for this calendar.
+	 * @param	Event	$event
+	 * @return	boolean	TRUE if the event appears on this calendar, FALSE otherwise
+	 */
+	public function get_is_event_contained_in_calendar( $event ) {
+		if ( ! isset( $event ) ) {
+			$result = FALSE; // Defensive
+		} else {
+			$result = $this->get_is_event_descriptor_contained_in_calendar( $event->get_event_descriptor() );
+		} // endif
+		return $result;
+	} // function
+
+	/**
+	 * Get a boolean indicating whether a logged in user is required in order to access the FullCalendar
+	 *  event feed for this calendar
+	 * @return boolean
+	 */
+	public function get_is_login_required_for_fullcalendar_feed() {
+		if ( ! isset( $this->is_login_required_for_fullcalendar_feed ) ) {
+			
+			switch( $this->get_calendar_type() ) {
+				
+				case Calendar::CALENDAR_TYPE_EVENTS:
+					$post = $this->get_post();
+					// If the calendar is publicly visible then the feed is too, otherwise it requires a user
+					$is_public = isset( $post ) ? ( $post->post_status === 'publish' ) : FALSE;
+					$this->is_login_required_for_fullcalendar_feed = ! $is_public;
+					break;
+
+				case Calendar::CALENDAR_TYPE_ADMIN:
+				case Calendar::CALENDAR_TYPE_VISITOR_REG:
+				case Calendar::CALENDAR_TYPE_EVENT_DESCRIPTOR:
+					$this->is_login_required_for_fullcalendar_feed = TRUE;
+					break;
+				
+				case Calendar::CALENDAR_TYPE_VOLUNTEER_REG:
+					// If the configuration requires a logged in user then make sure we have one,
+					//  otherwise we need to make this feed accessible to non-logged in people too
+					$user_required = Settings::get_is_require_volunteer_area_registered_user();
+					$this->is_login_required_for_fullcalendar_feed = $user_required;
+					break;
+					
+				default:
+					// Defensive, there currently are no other options
+					$this->is_login_required_for_fullcalendar_feed = TRUE;
+					break;
+					
+			} // endswitch
+			
+		} // endif
+		return $this->is_login_required_for_fullcalendar_feed;
+	} // function
+	
+	/**
+	 * Get a boolean indicating whether a nonce is required in order to access the event feed for this calendar
+	 * @return boolean
+	 */
+	public function get_is_nonce_required_for_fullcalendar_feed() {
+		if ( ! isset( $this->is_nonce_required_for_fullcalendar_feed ) ) {
+			
+			switch( $this->get_calendar_type() ) {
+				
+				case Calendar::CALENDAR_TYPE_EVENTS:
+					$post = $this->get_post();
+					// If the calendar is publicly visible then the feed is too, otherwise it requires a user
+					$is_public = isset( $post ) ? ( $post->post_status === 'publish' ) : FALSE;
+					$this->is_nonce_required_for_fullcalendar_feed = ! $is_public;
+					break;
+
+				case Calendar::CALENDAR_TYPE_ADMIN:
+				case Calendar::CALENDAR_TYPE_VISITOR_REG:
+				case Calendar::CALENDAR_TYPE_EVENT_DESCRIPTOR:
+					$this->is_nonce_required_for_fullcalendar_feed = TRUE;
+					break;
+				
+				case Calendar::CALENDAR_TYPE_VOLUNTEER_REG:
+					// We should always use a nonce to access the volunteer reg calendar, whether there's a user or not
+					// We do not want to allow anybody with a browser and the right URL to see this feed,
+					//  we want to make sure the user is viewing the calendar on the Volunteer Area page
+					$this->is_nonce_required_for_fullcalendar_feed = TRUE;
+					break;
+					
+				default:
+					// Defensive, there currently are no other options
+					$this->is_nonce_required_for_fullcalendar_feed = TRUE;
+					break;
+					
+			} // endswitch
+			
+		} // endif
+		return $this->is_nonce_required_for_fullcalendar_feed;
+	} // function
+	
 	/**
 	 *  Register the Calendar custom post type during plugin init.
 	 *
@@ -969,26 +1338,26 @@ class Calendar {
 				'parent_item_colon'		=> '',
 				'menu_name'				=> __('Calendars', 'reg-man-rc')
 		);
-		$capability_singular = User_Role_Controller::EVENT_CAPABILITY_TYPE_SINGULAR;
-		$capability_plural = User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL;
+		$capability_singular = User_Role_Controller::CALENDAR_CAPABILITY_TYPE_SINGULAR;
+		$capability_plural = User_Role_Controller::CALENDAR_CAPABILITY_TYPE_PLURAL;
 		$args = array(
 				'labels'				=> $labels,
 				'description'			=> 'Event Calendar', // Internal description, not visible externally
-				'public'				=> TRUE, // is it publicly visible? e.g. does it have its own page?
-				'exclude_from_search'	=> FALSE, // exclude from regular search results?
-				'publicly_queryable'	=> TRUE, // is it queryable? e.g. ?post_type=item
+				'public'				=> FALSE, // is it for public use?
+				'exclude_from_search'	=> TRUE, // exclude from regular search results?
+				'publicly_queryable'	=> FALSE, // Does it have a public page, is it queryable? e.g. ?post_type=item
 				'show_ui'				=> TRUE, // is there a default UI for managing these in wp-admin?
-				'show_in_rest'			=> TRUE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
+				'show_in_rest'			=> FALSE, // is it accessible via REST, TRUE is required for the Gutenberg editor!!!
 				'show_in_nav_menus'		=> TRUE, // available for selection in navigation menus?
 				'show_in_menu'			=> Admin_Menu_Page::get_CPT_show_in_menu( $capability_plural ), // Where to show in admin menu? The main menu page will determine this
 				'show_in_admin_bar'		=> FALSE, // Whether to include this post type in the admin bar
-				'menu_position'			=> 5, // Menu order position.
+				'menu_position'			=> Admin_Menu_Page::get_menu_position(), // Menu order position
 				'menu_icon'				=> 'dashicons-calendar',
 				'hierarchical'			=> FALSE, // Can each post have a parent?
-				'supports'				=> array( 'title', 'editor' ),
+				'supports'				=> array( 'title' ),
 				'taxonomies'			=> array( Event_Category::TAXONOMY_NAME ),
 				'has_archive'			=> FALSE, // is there an archive page?
-				// Rewrite determines how the public page url will look.  Here it will be http://site/reg-man-rc-calendar
+				// Rewrite determines how the public page url will look
 				'rewrite'				=> array(
 					'slug'			=> Settings::get_calendars_slug(),
 					'with_front'	=> FALSE,

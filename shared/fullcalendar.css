@@ -10,26 +10,18 @@
 .reg-man-rc-calendar-container .fc-daygrid a, .reg-man-rc-calendar-container .fc-list a {
 	color: #2C3E50;
 }
+/* Not sure what this was for but it's a problem for cancelled event dates in repeating event on the map 
 .reg-man-rc-calendar-view.fc a {
   text-decoration: none;
+}*/
+
+.reg-man-rc-calendar-view .fc-event.event-placeholder,
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item.event-placeholder .legend-item-container {
+	background: #ff9;	
 }
-.object-view-event-list-date-time-item.completed,
-.reg-man-rc-calendar-view .fc-event.completed,
-.reg-man-rc-calendar-map-container .reg-man-rc-map-marker-label.completed,
-.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item.completed {
-    text-decoration: line-through;
-    opacity: 0.5;
-}
-.object-view-event-list-date-time-item.completed a, .object-view-event-list-date-time-item.completed span,
-.object-view-event-list-date-time-item.cancelled a, .object-view-event-list-date-time-item.cancelled span,
-.reg-man-rc-calendar-legend-item .legend-item-container, .reg-man-rc-calendar-legend-item .legend-item-part {
-	text-decoration: inherit;
-}
-.object-view-event-list-date-time-item.cancelled,
-.reg-man-rc-calendar-view .fc-event.cancelled-status,
-.reg-man-rc-calendar-map-container .reg-man-rc-map-marker-label.cancelled-status,
-.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item.cancelled {
-	text-decoration: line-through double #c00 1px;
+.reg-man-rc-calendar-view .fc-event.event-with-registrations,
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item.event-with-registrations .legend-item-container {
+	background: #fc3;	
 }
 .reg-man-rc-calendar-view .fc-list .fc-list-event td {
 	vertical-align: middle; /* fix offset graphic dots in list view */
@@ -60,6 +52,9 @@
 .reg-man-rc-calendar-view .fc-event {
 	cursor: pointer;
 }
+.reg-man-rc-calendar-view a.fc-event, .reg-man-rc-calendar-view  a.fc-event:hover {
+	text-decoration: none;
+}
 .reg-man-rc-calendar-view.fc .fc-toolbar {
 	flex-wrap: wrap;
 	margin-bottom: 0.5em;
@@ -75,21 +70,27 @@
 }
 */
 .reg-man-rc-calendar-view.fc .fc-button-group > .fc-button.fc-button-active {
-	background-color: #eee;
+	background-color: #fff;
 	color: #000;
+	border: 0.15em solid #3cf;
 }
 .reg-man-rc-calendar-container .reg-man-rc-calendar-view + .reg-man-rc-calendar-map-container {
 	display: none;
 }
 .reg-man-rc-calendar-container .reg-man-rc-calendar-legend {
-	margin: 0.25em;
+	margin: 0.5em 0;
 	font-size: small;
-}
+	background: rgba( 0, 0, 0, 0.02 );
+	padding: 1em;
+	border: 1px solid #ccc;
+ }
 .reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-title {
-	font-size: 1em;
+	font-size: 1.1em;
 	font-weight: bold;
-	margin: 0;
+	margin: 0 0 0.5em 0;
 	padding: 0;
+	text-align: center;
+	text-transform: uppercase;
 }
 .reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-list {
 	list-style: none;
@@ -101,9 +102,16 @@
 	margin: 0;
 	padding: 0;
 }
+.reg-man-rc-calendar-container .reg-man-rc-calendar-footer {
+	display: flex;
+	justify-content: space-between;
+	column-gap: 1em;
+}
+/*
 .reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item .legend-item-container {
 	padding: 0 0.2em;
 }
+*/
 .reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item .legend-item-container,
 .reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item .legend-item-part {
 	display: inline-block;
@@ -116,4 +124,38 @@
 	border-radius: 0.75em;
 	margin: 0 0.25em;
 	box-sizing: content-box;
+}
+.reg-man-rc-calendar-container .reg-man-rc-calendar-footer .reg-man-rc-calendar-subscribe {
+	margin-top: 0.5em;
+	background: rgba( 0, 0, 0, 0.02 );
+;
+}
+.reg-man-rc-calendar-container .reg-man-rc-calendar-footer .reg-man-rc-calendar-subscribe ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.reg-man-rc-calendar-container .reg-man-rc-calendar-footer .reg-man-rc-calendar-subscribe ul li {
+	margin: 0.25em;
+}
+.reg-man-rc-calendar-container .reg-man-rc-calendar-footer .reg-man-rc-calendar-subscribe a {
+	display: block;
+	padding: 0.25em 0.5em;
+	border: 1px solid transparent;
+	border-radius: 0.25em;
+	color: inherit;
+	text-decoration: none;
+}
+.reg-man-rc-calendar-container .reg-man-rc-calendar-footer .reg-man-rc-calendar-subscribe a:HOVER {
+	background: #eee;
+	border-color: #ccc;
+}
+
+.reg-man-rc-calendar-container.popup-showing .reg-man-rc-calendar-legend,
+.reg-man-rc-calendar-container.popup-showing .fc-event:NOT( .popup-showing ),
+.reg-man-rc-calendar-container.popup-showing .fc-more-link {
+	filter: blur( 0.1em );
+}
+.reg-man-rc-calendar-container .fc .fc-toolbar-title {
+	font-size: 2.5em;
 }

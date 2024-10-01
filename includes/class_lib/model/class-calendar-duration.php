@@ -18,7 +18,7 @@ class Calendar_Duration {
 	const FOUR_MONTHS		= 'duration_4_months';
 	const SIX_MONTHS		= 'duration_6_months';
 	const TWELVE_MONTHS		= 'duration_12_months';
-	const ONE_YEAR			= 'duration_1_year';
+	const CALENDAR_YEAR		= 'duration_1_year'; // FullCalendar calls it 1 year
 
 	private static $ALL_DURATIONS_ARRAY;
 
@@ -61,10 +61,10 @@ class Calendar_Duration {
 			$twelve_months->name	= __( '12 months', 'reg-man-rc' );
 			$twelve_months->desc	= __( 'Twelve calendar months (may span two years).', 'reg-man-rc' );
 			
-			$one_year = new self();
-			$one_year->id		= self::ONE_YEAR;
-			$one_year->name	= __( 'Calendar year', 'reg-man-rc' );
-			$one_year->desc	= __( 'One calendar year.', 'reg-man-rc' );
+			$calendar_year = new self();
+			$calendar_year->id		= self::CALENDAR_YEAR;
+			$calendar_year->name	= __( 'Calendar year', 'reg-man-rc' );
+			$calendar_year->desc	= __( 'One calendar year.', 'reg-man-rc' );
 			
 			self::$ALL_DURATIONS_ARRAY = array(
 					self::ONE_MONTH		=> $one_month,
@@ -73,7 +73,7 @@ class Calendar_Duration {
 					self::FOUR_MONTHS	=> $four_months,
 					self::SIX_MONTHS	=> $six_months,
 					self::TWELVE_MONTHS	=> $twelve_months,
-					self::ONE_YEAR		=> $one_year,
+					self::CALENDAR_YEAR	=> $calendar_year,
 			);
 
 		} // endif

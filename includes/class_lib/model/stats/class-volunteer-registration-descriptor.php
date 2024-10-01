@@ -12,6 +12,14 @@ namespace Reg_Man_RC\Model\Stats;
 interface Volunteer_Registration_Descriptor {
 
 	/**
+	 * Get the most descriptive name available to this user in the current context for display purposes.
+	 * If we're rendering the admin interface and the user can view the full name then
+	 *   it will be returned (if known), otherwise the public name is used
+	 * @return string
+	 */
+	public function get_volunteer_display_name();
+	
+	/**
 	 * Get the volunteer's public name.
 	 * To protect the volunteer's privacy this name is the one shown in public and should be something like
 	 * the volunteer's first name and last initial.
@@ -45,7 +53,7 @@ interface Volunteer_Registration_Descriptor {
 	 * @return	string|NULL		The key for the event for this volunteer registration
 	 * @since	v0.1.0
 	 */
-	public function get_event_key();
+	public function get_event_key_string();
 
 	/**
 	 * Get the name fixer station the volunteer has requested as her preferred station

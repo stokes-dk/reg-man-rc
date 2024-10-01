@@ -2,6 +2,7 @@
 namespace Reg_Man_RC\Control;
 
 use const Reg_Man_RC\PLUGIN_BOOTSTRAP_FILENAME;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * Controller for page templates
@@ -30,11 +31,6 @@ class Template_Controller {
 	 */
 	public static function register() {
 
-		// Filter all template includess so we can replace the ones used for our pages
-		// We allow the user to select the template for our pages
-		// And we use the standard post template for our events
-//		add_filter( 'template_include', array( __CLASS__, 'filter_template_include' ) );
-
 		// Filter the filename for the page template returning our minimal template file name when appropriate
 		add_filter( 'page_template', array( __CLASS__, 'filter_page_template' ), 10, 4 );
 
@@ -52,11 +48,13 @@ class Template_Controller {
 	 */
 	public static function filter_page_template( $template, $type, $template_array ) {
 //		Error_Log::var_dump( $template, $type, $template_array );
+//		Error_Log::var_dump( get_page_template_slug(), self::MINIMAL_TEMPLATE_SLUG );
 		if ( get_page_template_slug() == self::MINIMAL_TEMPLATE_SLUG ) {
 			$result = self::get_minimal_template_file_name();
 		} else {
 			$result = $template;
 		} // endif
+//		Error_Log::var_dump( $template, $result );
 		return $result;
 	} // function
 
@@ -106,6 +104,7 @@ class Template_Controller {
 	 * @since	v0.1.0
 	 */
 	public static function dequeue_theme_styles_and_scripts() {
+//		Error_Log::log_msg( 'inside ' . __METHOD__ );
 		global $wp_scripts, $wp_styles;
 
 		foreach ( $wp_styles->queue as $handle ) {

@@ -271,15 +271,8 @@ class Venue_View extends Abstract_Object_View {
 
 			$location = $venue->get_location();
 			echo '<p>' . $location . '</p>';
-
-			$url = $venue->get_page_url();
-			if ( ! empty( $url ) ) {
-				echo '<p>';
-					$link_text = esc_html__( 'Venue details &raquo;', 'reg-man-rc' );
-					echo "<a class=\"venue-details-page-link\" href=\"$url\">$link_text</a>";
-				echo '</p>';
-			} // endif
 		} // endif
+		
 	} // function
 
 } // class

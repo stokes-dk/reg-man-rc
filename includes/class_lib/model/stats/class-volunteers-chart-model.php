@@ -5,6 +5,7 @@ namespace Reg_Man_RC\Model\Stats;
 
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Volunteer_Role;
+use Reg_Man_RC\Model\Events_Collection;
 
 class Volunteers_Chart_Model implements Chart_Model {
 	
@@ -13,8 +14,8 @@ class Volunteers_Chart_Model implements Chart_Model {
 	const CHART_TYPE_NON_FIXERS_PER_EVENT			= 'non-fixers-per-event';
 	const CHART_TYPE_VISITORS_PER_VOLUNTEER_ROLE	= 'visitors-per-volunteer';
 	
-	private $event_keys_array;
 	private $chart_type;
+	private $events_collection;
 	private $volunteer_stats_col;
 	
 	private function __construct() {}
@@ -22,24 +23,36 @@ class Volunteers_Chart_Model implements Chart_Model {
 	/**
 	 * Create an instance of this class showing fixer stats for the specified events
 	 *
-	 * @param	string[]	$event_keys_array	The collection of keys for events whose stats are to be shown
-	 * @param	string		$chart_type			The type of chart, one of the CHART_TYPE_* constants in this class
+	 * @param	Events_Collection	$events_collection	The collection of  events whose stats are to be shown in the chart
+	 * @param	string				$chart_type			The type of chart, one of the CHART_TYPE_* constants in this class
 	 * @return	Volunteers_Chart_Model
 	 * @since	v0.4.0
 	 */
-	public static function create_bar_chart( $event_keys_array, $chart_type ) {
+	public static function create_bar_chart_for_events_collection( $events_collection, $chart_type ) {
+
 		$result = new self();
-		$result->event_keys_array = $event_keys_array;
+		$result->events_collection = $events_collection;
 		$result->chart_type = $chart_type;
+		
+		switch( $chart_type ) {
+			
+			case self::CHART_TYPE_NON_FIXERS_PER_EVENT:
+			case self::CHART_TYPE_VISITORS_PER_VOLUNTEER_ROLE:
+				$group_by = Volunteer_Stats_Collection::GROUP_BY_VOLUNTEER_ROLE;
+				break;
+				
+			default:
+			case self::CHART_TYPE_FIXERS_PER_EVENT:
+			case self::CHART_TYPE_ITEMS_PER_FIXER_BY_STATION:
+				$group_by = Volunteer_Stats_Collection::GROUP_BY_FIXER_STATION;
+				break;
+				
+		} // endswitch
+
+		$result->volunteer_stats_col = Volunteer_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
+
 		return $result;
-	} // function
-	
-	/**
-	 * Get the array of event keys for this chart
-	 * @return string[]
-	 */
-	private function get_event_keys_array() {
-		return $this->event_keys_array;
+		
 	} // function
 	
 	/**
@@ -51,33 +64,27 @@ class Volunteers_Chart_Model implements Chart_Model {
 	} // function
 	
 	/**
+	 * Get the collection of events for this chart
+	 * @return Events_Collection
+	 */
+	private function get_events_collection() {
+		return $this->events_collection;
+	} // function
+	
+		/**
+	 * Get the array of event keys for this chart
+	 * @return string[]
+	 */
+	private function get_event_keys_array() {
+		return $this->event_keys_array;
+	} // function
+	
+/**
 	 * Get the volunteer stats collection object for this chart
 	 * @return Volunteer_Stats_Collection
 	 */
 	private function get_volunteer_stats_collection() {
-		if ( ! isset( $this->volunteer_stats_col ) ) {
-
-			switch( $this->chart_type ) {
-				
-				case self::CHART_TYPE_NON_FIXERS_PER_EVENT:
-				case self::CHART_TYPE_VISITORS_PER_VOLUNTEER_ROLE:
-					$group_by = Volunteer_Stats_Collection::GROUP_BY_VOLUNTEER_ROLE;
-					break;
-					
-				default:
-				case self::CHART_TYPE_FIXERS_PER_EVENT:
-				case self::CHART_TYPE_ITEMS_PER_FIXER_BY_STATION:
-					$group_by = Volunteer_Stats_Collection::GROUP_BY_FIXER_STATION;
-					break;
-					
-			} // endswitch
-
-			$event_keys_array = $this->get_event_keys_array();
-			$this->volunteer_stats_col = Volunteer_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
-
-		} // function
 		return $this->volunteer_stats_col;
-		
 	} // funciton
 	
 	/**
@@ -211,14 +218,14 @@ class Volunteers_Chart_Model implements Chart_Model {
 	 */
 	private function get_visitors_per_volunteer_by_role_chart_config() {
 		
-		$event_keys_array = $this->get_event_keys_array();
+		$events_collection = $this->get_events_collection();
 
 		// break up the volunteers by role, note that one volunteer may play multiple roles
 		$volunteer_stats_col = $this->get_volunteer_stats_collection();
 		$all_stats_array = $volunteer_stats_col->get_all_stats_array();
 
 		$group_by = Visitor_Stats_Collection::GROUP_BY_TOTAL;
-		$visitor_stats_col = Visitor_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
+		$visitor_stats_col = Visitor_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
 		$visitor_stats_array = array_values( $visitor_stats_col->get_all_stats_array() );
 		$total_visitor_stats = isset( $visitor_stats_array[ 0 ] ) ? $visitor_stats_array[ 0 ] : NULL;
 
@@ -264,8 +271,8 @@ class Volunteers_Chart_Model implements Chart_Model {
 
 	private function get_items_per_fixer_by_station_chart_config() {
 
-		$event_keys_array = $this->get_event_keys_array();
-
+		$events_collection = $this->get_events_collection();
+		
 		$chart_config = Chart_Config::create_bar_chart();
 		$label = __( 'Fixer Stations', 'reg-man-rc' );
 		$chart_config->set_labels( array( $label ) );
@@ -281,7 +288,7 @@ class Volunteers_Chart_Model implements Chart_Model {
 		} // endfor
 
 		$group_by = Item_Stats_Collection::GROUP_BY_FIXER_STATION;
-		$item_stats_collection = Item_Stats_Collection::create_for_event_key_array( $event_keys_array , $group_by );
+		$item_stats_collection = Item_Stats_Collection::create_for_events_collection( $events_collection , $group_by );
 		$event_count = $item_stats_collection->get_event_count();
 		$total_item_stats_array = $item_stats_collection->get_all_stats_array();
 //	Error_Log::var_dump( $total_item_stats_array );

@@ -6,20 +6,22 @@
  	font-size: 125%;
  }
   
-.reg-man-rc-admin-stats-view-container .reg-man-rc-stats-view-filter-container .form-input-list {
-	margin: 0;
-	padding: 0;
+.reg-man-rc-admin-stats-view-container .reg-man-rc-stats-view-filter-container > .form-input-list {
+	margin: 0 !important;
+	padding: 0 !important;
 }
  .reg-man-rc-chart-group-container {
 	display: flex;
 	flex-wrap: wrap;
 	justify-content: flex-start;
+	max-width: calc(100% - 0.5em);
 }
 .reg-man-rc-ajax-chart-view, .reg-man-rc-stats-table-view {
 	border: 1px solid #ccc;
 	background: #fcfcfc;
 	padding: 0;
 	position: relative;
+	max-width: inherit;
 }
 .reg-man-rc-chart-group-container .reg-man-rc-ajax-chart-view {
 	margin: 0.5em;
@@ -28,17 +30,19 @@
 	width: 100%;
 }
 .reg-man-rc-ajax-chart-view .heading-container, .reg-man-rc-stats-table-view .heading-container {
-	padding: 0.25em;
+	padding: 0.25em 0.5em;
 	margin: 0;
 	color: #333;
 	background: #f0f0f0;
 	border-bottom: 1px solid #ccc;
 	display: flex;
 	justify-content: space-between;
+	flex-wrap: wrap;
+	font-weight: bold;
 }
 .reg-man-rc-ajax-chart-view .heading-container h4, .reg-man-rc-stats-table-view .heading-container h4 {
 	padding: 0;
-	margin: 0.5em;
+	margin: 0.5em 0;
 }
 .reg-man-rc-ajax-chart-view .heading-container .toolbar-container select,
 .reg-man-rc-stats-table-view .heading-container .toolbar-container select {
@@ -55,6 +59,7 @@
 	width: 24em;
 	height: 24em;
 	padding: 0.5em;
+	max-width: inherit;
 }
 
 .reg-man-rc-ajax-chart-view .reg-man-rc-chart-loading-indicator,
@@ -103,8 +108,10 @@
 	height: 67vh;
 }
 
+.datatable-container .dataTables_wrapper .dataTables_length,
+.datatable-container .dataTables_wrapper .dataTables_filter,
 .datatable-container .dataTables_wrapper .dt-buttons {
-	margin: 0 1em;
+	margin: 0.25em;
 }
 .datatable th.text-align-right {
   text-align: right;

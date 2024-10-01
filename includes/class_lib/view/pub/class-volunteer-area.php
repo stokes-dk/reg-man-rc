@@ -30,9 +30,6 @@ class Volunteer_Area {
 
 	const POST_ID_OPTION_KEY = 'reg-man-rc-volunteer-area-page-post-id';
 
-	/** The shortcode used to render the volunteer area on any page */
-	const SHORTCODE = 'rc-volunteer-area';
-
 	const PAGE_NAME_GET_KEY			= 'rc-page';
 
 	const PAGE_NAME_HOME			= 'home';
@@ -75,7 +72,7 @@ class Volunteer_Area {
 
 		echo '<div class="volunteer-area-container">';
 
-			$volunteer = Volunteer::get_current_volunteer();
+			$volunteer = Volunteer::get_volunteer_for_current_request();
 
 			if ( ! empty( $volunteer ) ) {
 
@@ -205,7 +202,7 @@ class Volunteer_Area {
 
 	private function render_main_content() {
 
-		$volunteer = Volunteer::get_current_volunteer();
+		$volunteer = Volunteer::get_volunteer_for_current_request();
 		if ( empty( $volunteer ) ) {
 			return; // <== EXIT POINT!!! Defensive
 		} // endif
@@ -239,35 +236,49 @@ class Volunteer_Area {
 
 	private function render_header() {
 
-		// The back to calendar page
-		$page_name = $this->get_page_name_from_request();
-		if ( $page_name !== self::PAGE_NAME_HOME ) {
-			$href = self::get_href_for_main_page();
-			echo '<div class="reg-man-rc-volunteer-area-header-part volunteer-area-title-back-link">';
-				$text = esc_html__( 'Calendar', 'reg-man-rc' );
-				$icon = '<span class="volunteer-area-title-back-link-icon dashicons dashicons-arrow-left-alt2"></span>';
-				echo "<a href=\"$href\">$icon<span class=\"volunteer-area-title-back-link-text\">$text</a>";
-			echo '</div>';
-		} else {
-			echo '<div class="reg-man-rc-volunteer-area-header-part"></div>'; // To push the user to the right
-		} // endif
-
-		// User
-		echo '<div class="reg-man-rc-volunteer-area-header-part">';
-			$this->render_header_user();
+		echo '<div class="reg-man-rc-volunteer-area-header-part volunteer-area-header_menu">';
+			$this->render_header_menu();
 		echo '</div>';
-
+		
 	} // function
+	
+	private function render_header_menu() {
+		$menu_title_array = array(
+				self::PAGE_NAME_HOME		=> __( 'Calendar', 'reg-man-rc' ),
+		);
+		
+		$menu_href_array = array(
+				self::PAGE_NAME_HOME		=> self::get_href_for_main_page(),
+		);
+		
+		$curr_page_name = $this->get_page_name_from_request();
+		$item_format = '<li class="reg-man-rc-volunteer-area-header-menu-item %2$s">%1$s</li>';
+		$href_format = '<a href=%2$s>%1$s</a>';
+		echo '<ul class="reg-man-rc-volunteer-area-header-menu">';
+			foreach( $menu_title_array as $page_name => $menu_title ) {
+				if ( $curr_page_name == $page_name ) {
+					$menu_item = $menu_title;
+					$item_class = 'reg-man-rc-volunteer-area-header-menu-item-selected';
+				} else {
+					$menu_item = sprintf( $href_format, $menu_title, $menu_href_array[ $page_name ] ); 
+					$item_class = '';
+				} // endif
+				printf( $item_format, $menu_item, $item_class );
+			} // endfor
+			
+			// Add the user name with pulldown
+			echo '<li class="reg-man-rc-volunteer-area-header-menu-item">';
+				$this->render_header_user();
+			echo '</li>';
+			
+		echo '</ul>';
+	} // endif
 
 	private function render_header_user() {
-		$volunteer = Volunteer::get_current_volunteer();
+		$volunteer = Volunteer::get_volunteer_for_current_request();
 		if ( isset( $volunteer ) ) {
 			$public_name = $volunteer->get_public_name();
 			
-			// Note that the volunteer object is in the public space here and DOES NOT contain the original email
-			// We must get the email adderss out of the cookie
-			$email = Volunteer::get_volunteer_email_cookie();
-
 			$item_format =
 				'<li class="reg-man-rc-dropdown-menu-item %4$s">' .
 					'<a href="%2$s">' .
@@ -277,27 +288,23 @@ class Volunteer_Area {
 				'</li>';
 
 			// Create menu items
-			$page_name = $this->get_page_name_from_request();
 
 			// Preferences
-			if ( $page_name !== self::PAGE_NAME_PREFERENCES ) {
-				$items = array();
-				$text = esc_html__( 'Preferences', 'reg-man-rc' );
-				$href = self::get_href_for_volunteer_preferences();
-				$items[] = array(
-						$text,
-						$href,
-						'admin-generic',
-						'reg-man-rc-volunteer-area-preferences-button'
-				);
-			} // endif
+			$items = array();
+			$text = esc_html__( 'Preferences', 'reg-man-rc' );
+			$href = self::get_href_for_volunteer_preferences();
+			$items[] = array(
+					$text,
+					$href,
+					'admin-generic',
+					'reg-man-rc-volunteer-area-preferences-button'
+			);
 
 			// Exit
-			if ( Volunteer::get_is_exist_registered_user_for_email( $email ) ) {
-				// Registered users should log out the normal way
-				// TODO: We could add a "Logout" option here
-			} else {
-				// We will only add the "Exit" option for volunteers who are not registered users
+			// If the admin bar is showing then the user can just log out that way if they want
+			// Otherwise, maybe we should show logout option here?
+			// TODO: If the logged in user is NOT a volunteer then we probably should include Exit
+			if ( ! is_admin_bar_showing() ) {
 				$text = esc_html__( 'Exit', 'reg-man-rc' );
 				$href = Volunteer_Controller::get_volunteer_area_exit_href();
 				$items[] = array(
@@ -357,7 +364,7 @@ class Volunteer_Area {
 	 */
 	private function render_quick_signup_form() {
 
-		$volunteer = Volunteer::get_current_volunteer();
+		$volunteer = Volunteer::get_volunteer_for_current_request();
 
 		$ajax_action = Volunteer_Registration_Controller::AJAX_VOLUNTEER_REGISTRATION_ACTION;
 		$classes = 'reg-man-rc-volunteer-area-quick-signup-form no-busy'; // I will use calendar's busy indicator
@@ -392,7 +399,7 @@ class Volunteer_Area {
 	 */
 	private function render_event( $event ) {
 
-		$volunteer = Volunteer::get_current_volunteer();
+		$volunteer = Volunteer::get_volunteer_for_current_request();
 		if ( empty( $volunteer ) || empty( $event ) ) {
 			return; // <== EXIT POINT! Defensive
 		} // endif
@@ -408,7 +415,7 @@ class Volunteer_Area {
 	 * Render the volunteer prefernces page
 	 */
 	private function render_preferences() {
-		$volunteer = Volunteer::get_current_volunteer();
+		$volunteer = Volunteer::get_volunteer_for_current_request();
 		$pref_form = Volunteer_Registration_Form::create_for_volunteer_preferences( NULL );
 		$ajax_form = $pref_form->get_ajax_form();
 		$ajax_form->render();
@@ -426,19 +433,37 @@ class Volunteer_Area {
 	public static function register() {
 
 		// Add my scripts and styles
-		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'handle_wp_enqueue_scripts_for_shortcode' ) );
-
-		// Create my shortcode
-		add_shortcode( self::SHORTCODE, array( __CLASS__, 'get_shortcode_content' ) );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'handle_wp_enqueue_scripts_and_styles' ) );
 
 		// Filter query vars to include mine
 		add_filter( 'query_vars', array( __CLASS__, 'filter_query_vars' ), 10, 1 );
 
-		// Filter query vars to include mine
+		// Filter the page title
 		add_filter( 'the_title', array( __CLASS__, 'filter_the_title' ), 10, 2 );
+
+		// Add a filter to change the content written for my page
+		add_filter( 'the_content', array(__CLASS__, 'modify_post_content') );
 
 	} // function
 
+	/**
+	 * Modify the contents for my page
+	 * @param	string	$content	The post content retrieved from the database
+	 * @return	string	The post content modified for my page
+	 * @since	v0.1.0
+	 */
+	public static function modify_post_content( $content ) {
+		global $post;
+		$result = $content; // return the original content by default
+		if ( ( $post->ID == self::get_post_id() ) && in_the_loop() && is_main_query() ) {
+			if ( ! post_password_required( $post ) ) {
+				$result = self::get_volunteer_area_content();
+			} // endif
+		} // endif
+		return $result;
+	} // function
+
+	
 	/**
 	 * Filter the title for the volunteer area so we can add a page subtitle for an event
 	 * @param string $post_title
@@ -456,9 +481,11 @@ class Volunteer_Area {
 			
 			if ( ! empty( $sub_page_title ) ) {
 				
-				/* Translators: %1$s is a sub page title inside the volunteer area, %2$s is the volunteer area main title */
-				$format = _x( '%1$s — %2$s', 'A title for a subpage in the volunteer area', 'reg-man-rc' );
-				$result = sprintf( $format, $sub_page_title, $post_title );
+				$href = self::get_href_for_main_page();
+				$main_page_link = "<a href=\"$href\">$post_title</a>";
+				/* Translators: %1$s is the volunteer area main title, %2$s is a sub page title inside the volunteer area */
+				$format = _x( '%1$s &rsaquo; %2$s', 'A title for a subpage in the volunteer area', 'reg-man-rc' );
+				$result = sprintf( $format, $main_page_link, $sub_page_title );
 
 			} else {
 				
@@ -473,7 +500,7 @@ class Volunteer_Area {
 		} // endif
 		
 		return $result;
-		
+
 	} // function
 
 	public static function filter_query_vars( $public_query_vars ) {
@@ -487,8 +514,8 @@ class Volunteer_Area {
 	 */
 	private static function get_page_name_from_request() {
 		if ( ! isset( self::$PAGE_NAME ) ) {
-			$event_key = self::get_event_key_from_request();
-			if ( ! empty( $event_key ) ) {
+			$event = self::get_event_from_request();
+			if ( ! empty( $event ) ) {
 				// If an event is specified then we're on an event page
 				self::$PAGE_NAME = self::PAGE_NAME_EVENT;
 			} else {
@@ -550,16 +577,16 @@ class Volunteer_Area {
 	} // function
 
 	/**
-	 * Generate content for the shortcode
+	 * Get the content for the volunteer area
 	 *
-	 * This method is called automatically when the shortcode is inserted into a page
+	 * This method is called automatically when the Volunteer Area page is rendered
 	 *
-	 * @return	string	The contents of the Visitor Registration Manager view
+	 * @return	string	The contents of the Volunteer Area
 	 *
 	 * @since	v0.1.0
 	 */
-	public static function get_shortcode_content() {
-		// Returns the contents for the shortcode.  WP will insert the result into the page.
+	public static function get_volunteer_area_content() {
+		// Returns the contents for the volunteer area.
 
 		ob_start();
 			$me = self::create();
@@ -577,21 +604,19 @@ class Volunteer_Area {
 	 * @return void
 	 * @since	v0.1.0
 	 */
-	public static function handle_wp_enqueue_scripts_for_shortcode() {
+	public static function handle_wp_enqueue_scripts_and_styles() {
 		global $post;
-		if ( ( $post instanceof \WP_Post ) && has_shortcode( $post->post_content, self::SHORTCODE ) ) {
-			self::enqueue_scripts();
+		$vol_area_post_id = self::get_post_id();
+		if ( ( $post instanceof \WP_Post ) && ( $post->ID == $vol_area_post_id ) ) {
+			self::enqueue_scripts_and_styles();
 		} // endif
 	} // function
 
 	/**
 	 * Enqueue the correct scripts when showing this view
 	 */
-	public static function enqueue_scripts() {
-//		Scripts_And_Styles::enqueue_public_base_scripts_and_styles();
-//		Scripts_And_Styles::enqueue_ajax_forms();
+	private static function enqueue_scripts_and_styles() {
 		Scripts_And_Styles::enqueue_volunteer_area_scripts_and_styles();
-		Scripts_And_Styles::enqueue_fullcalendar();
 	} // function
 
 	/**
@@ -684,7 +709,7 @@ class Volunteer_Area {
 			if ( ! $is_on_cal ) {
 				$result = NULL;
 			} else {
-				$event_key = $event->get_key();
+				$event_key = $event->get_key_string();
 				$args = array( Event_Key::EVENT_KEY_QUERY_ARG_NAME => $event_key );
 				$result = add_query_arg( $args, $base_url );
 			} // endif
@@ -695,12 +720,10 @@ class Volunteer_Area {
 	private static function insert_page() {
 		// Create my page in the database
 		$title = __( 'Volunteer Area', 'reg-man-rc' );
-		$content = '[' . self::SHORTCODE . ']';
-//		$template = Template_Controller::MINIMAL_TEMPLATE_SLUG;
+		$content = '';
 		$page_post = array(
 			'post_title'		=> $title,
 			'post_content'	 	=> $content,
-//			'page_template'		=> $template,
 			'post_status'		=> 'publish',
 			'post_name'			=> self::DEFAULT_PAGE_SLUG,
 			'post_type'			=> 'page',

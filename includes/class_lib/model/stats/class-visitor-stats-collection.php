@@ -5,6 +5,7 @@ use Reg_Man_RC\Model\Item;
 use Reg_Man_RC\Model\Event_Key;
 use Reg_Man_RC\Model\Visitor;
 use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Model\Events_Collection;
 
 /**
  * An instance of this class provides sets of Visitor_Stats objects based on a set of event keys.
@@ -17,7 +18,7 @@ class Visitor_Stats_Collection {
 	const GROUP_BY_EVENT		= 'event'; // group by event
 	const GROUP_BY_TOTAL		= 'total'; // group all visitors together so we can count the totals
 
-	private $event_key_array;
+	private $event_keys_array;
 	private $group_by;
 
 	private $event_count;
@@ -31,20 +32,25 @@ class Visitor_Stats_Collection {
 	private function __construct() { }
 
 	/**
-	 * Create an instance of this class providing stats for the events specified by the given event key array
-	 * @param	string[]	$event_key_array	An array of event keys specifying the events whose stats are required
-	 * @param	string			$group_by			A string specifying how the results should be grouped.
+	 * Create a Visitor_Stats_Collection for the specified event collection and grouped in the specified way
+	 *
+	 * @param	Events_Collection	$events_collection	A collection specifying which event's visitors are to be included
+	 * @param	string				$group_by			A string specifying how the results should be grouped.
 	 * The value must be one of the GROUP_BY_* constants defined in this class.
+	 *
+	 * @return Visitor_Stats_Collection	An instance of this class which provides the stats and their related data.
 	 */
-	public static function create_for_event_key_array( $event_key_array, $group_by ) {
+	public static function create_for_events_collection( $events_collection, $group_by ) {
 		$result = new self();
-		$result->event_key_array = $event_key_array;
+		$result->event_count = $events_collection->get_event_count();
+		// We will store NULL for the event keys array if this collection is for ALL events
+		$result->event_keys_array = $events_collection->get_is_all_events() ? NULL : $events_collection->get_event_keys_array();
 		$result->group_by = $group_by;
 		return $result;
-	} // function
+	} // endif
 
-	private function get_event_key_array() {
-		return $this->event_key_array;
+	private function get_event_keys_array() {
+		return $this->event_keys_array;
 	} // function
 
 	private function get_group_by() {
@@ -101,9 +107,9 @@ class Visitor_Stats_Collection {
 	 */
 	public function get_supplemental_stats_array() {
 		if ( ! isset( $this->supplemental_stats_array ) ) {
-			$event_key_array = $this->get_event_key_array();
+			$event_keys_array = $this->get_event_keys_array();
 			$group_by = $this->get_group_by();
-			$this->supplemental_stats_array = Supplemental_Visitor_Registration::get_supplemental_group_stats_array( $event_key_array, $group_by );
+			$this->supplemental_stats_array = Supplemental_Visitor_Registration::get_supplemental_group_stats_array( $event_keys_array, $group_by );
 		} // endif
 		return $this->supplemental_stats_array;
 	} // function
@@ -118,12 +124,17 @@ class Visitor_Stats_Collection {
 	public function get_internal_registered_stats_array() {
 		if ( ! isset( $this->internal_stats_array ) ) {
 
-			$event_key_array = $this->get_event_key_array();
+			$event_keys_array = $this->get_event_keys_array();
 			$group_by = $this->get_group_by();
 
-			if ( is_array( $event_key_array) && ( count( $event_key_array ) == 0 ) ) {
+			if ( is_array( $event_keys_array ) && ( count( $event_keys_array ) == 0 ) ) {
+
 				$this->internal_stats_array = array(); // The request is for an empty set of events so return an empty set
+
 			} else {
+
+				// Otherwise, the request is for ALL events (event keys array is NULL) or some subset
+
 				global $wpdb;
 
 				// We need a subquery here because we're looking at items and counting visitors
@@ -131,27 +142,31 @@ class Visitor_Stats_Collection {
 
 				$posts_table = $wpdb->posts;
 				$meta_table = $wpdb->postmeta;
-				$visitor_table = $wpdb->prefix . Visitor::VISITOR_SIDE_TABLE_NAME;
+
 				$event_meta_key = Item::EVENT_META_KEY;
 				$visitor_meta_key = Item::VISITOR_META_KEY;
 				$is_join_meta_key = Visitor::IS_JOIN_MAIL_LIST_META_KEY;
 				$first_event_meta_key = Visitor::FIRST_EVENT_KEY_META_KEY;
+				$email_meta_key = Visitor::EMAIL_META_KEY;
 				$item_post_type = Item::POST_TYPE;
 
 				switch ( $group_by ) {
+					
 					case self::GROUP_BY_EVENT:
 						$name_col = 'event_meta.meta_value';
 						break;
+						
 					case self::GROUP_BY_TOTAL:
 					default:
 						$name_col = "''";
 						break;
+						
 				} // endswitch
 
 				$subquery_select =
 							"event_meta.meta_value as event_key, " .
 							' CASE WHEN ( first_event_meta.meta_value IS NOT NULL AND first_event_meta.meta_value = event_meta.meta_value ) THEN 1 ELSE 0 END AS is_first_time,' .
-							' CASE WHEN ( visitor_side_table.email IS NOT NULL AND visitor_side_table.email != \'\' ) THEN 1 ELSE 0 END AS provided_email, ' .
+							' CASE WHEN ( email_meta.meta_value IS NOT NULL AND email_meta.meta_value != \'\' ) THEN 1 ELSE 0 END AS provided_email, ' .
 							" CASE WHEN ( is_join_meta.meta_value IS NOT NULL AND is_join_meta.meta_value != '' ) THEN 1 ELSE 0 END AS join_mail_list ";
 				$subquery_from =
 						" $posts_table AS p " .
@@ -159,18 +174,17 @@ class Visitor_Stats_Collection {
 						" LEFT JOIN $meta_table AS event_meta ON p.ID = event_meta.post_id AND event_meta.meta_key = '$event_meta_key' " .
 						" LEFT JOIN $meta_table AS is_join_meta ON is_join_meta.post_id = visitor_meta.meta_value AND is_join_meta.meta_key = '$is_join_meta_key' " .
 						" LEFT JOIN $meta_table AS first_event_meta ON first_event_meta.post_id = visitor_meta.meta_value AND first_event_meta.meta_key = '$first_event_meta_key' " .
-						" LEFT JOIN $visitor_table AS visitor_side_table ON visitor_meta.meta_value = visitor_side_table.post_id ";
+						" LEFT JOIN $meta_table AS email_meta ON email_meta.post_id = visitor_meta.meta_value AND email_meta.meta_key = '$email_meta_key' ";
 				$subquery_where = " ( post_type = '$item_post_type' ) AND ( p.post_status = 'publish' ) ";
 
 				// Create the where clause for searching by event
-				if ( ! empty( $event_key_array ) ) {
-					$placeholder_array = array_fill( 0, count( $event_key_array ), '%s' );
+				if ( ! empty( $event_keys_array ) ) {
+					$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
 					$placeholders = implode( ',', $placeholder_array );
 					$subquery_where .= " AND ( event_meta.meta_value IN ( $placeholders ) ) ";
 				} // endif
-
-				$subquery = "SELECT $subquery_select FROM $subquery_from WHERE $subquery_where GROUP BY visitor_side_table.post_id, event_key";
-
+				$subquery = "SELECT $subquery_select FROM $subquery_from WHERE $subquery_where GROUP BY event_key";
+				
 				// Now create the main query using the subquer
 				$select = "$name_col AS name, count(*) AS visitor_count, " .
 							' SUM( is_first_time ) AS first_time_count, ' .
@@ -179,14 +193,14 @@ class Visitor_Stats_Collection {
 
 				$query = "SELECT $select FROM ( $subquery ) AS derived_table_1 GROUP BY name";
 //		Error_Log::var_dump( $query );
-				if ( empty( $event_key_array ) ) {
+				if ( empty( $event_keys_array ) ) {
 					$data_array = $wpdb->get_results( $query, ARRAY_A );
 				} else {
-					$stmt = $wpdb->prepare( $query, $event_key_array );
+					$stmt = $wpdb->prepare( $query, $event_keys_array );
 					$data_array = $wpdb->get_results( $stmt, ARRAY_A );
 				} // endif
 
-//				Error_Log::var_dump( $query, $event_key_array );
+//				Error_Log::var_dump( $query, $event_keys_array );
 				$this->internal_stats_array = array();
 
 				if ( is_array( $data_array ) ) {
@@ -217,15 +231,15 @@ class Visitor_Stats_Collection {
 		if ( ! isset( $this->external_stats_array ) ) {
 			$this->external_stats_array = array();
 
-			$event_key_array = $this->get_event_key_array();
+			$event_keys_array = $this->get_event_keys_array();
 			$group_by = $this->get_group_by();
 
-			if ( $event_key_array === NULL ) {
+			if ( $event_keys_array === NULL ) {
 				$key_data_array = NULL;
 			} else {
 				// Convert the Event_Key objects into associative arrays that can be understood by external sources
 				$key_data_array = array();
-				foreach( $event_key_array as $event_key ) {
+				foreach( $event_keys_array as $event_key ) {
 					$key_obj = Event_Key::create_from_string( $event_key );
 					$key_data_array[] = $key_obj->get_as_associative_array();
 				} // endfor
@@ -234,7 +248,20 @@ class Visitor_Stats_Collection {
 			$ext_data = apply_filters( 'reg_man_rc_get_visitor_registration_stats', array(), $key_data_array, $group_by );
 			// The above returns an array of data arrays.  I will convert those into my internal objects
 			foreach( $ext_data as $ext_data_row ) {
-				$name			= isset( $ext_data_row[ 'name' ] )					? $ext_data_row[ 'name' ]							: '';
+				
+				$name	= isset( $ext_data_row[ 'name' ] )	? $ext_data_row[ 'name' ]	: '';
+				
+				// When grouping by event then we need to find the right internal event key
+				switch( $group_by ) {
+					
+					case self::GROUP_BY_EVENT:
+						$key_obj = Event_Key::create_from_string( $name );
+						$name = ! empty( $key_obj ) ? $key_obj->get_as_string() : $name;
+//						Error_Log::var_dump( $name );
+						break;
+						
+				} // endswitch
+				
 				$first_count	= isset( $ext_data_row[ 'first_time_count' ] )		? intval( $ext_data_row[ 'first_time_count' ] )		: 0;
 				$return_count	= isset( $ext_data_row[ 'returning_count' ] )		? intval( $ext_data_row[ 'returning_count' ] ) 		: 0;
 				$unknown_count	= isset( $ext_data_row[ 'unknown_count' ] )			? intval( $ext_data_row[ 'unknown_count' ] )		: 0;
@@ -249,7 +276,6 @@ class Visitor_Stats_Collection {
 
 		return $this->external_stats_array;
 	} // function
-
 
 	/**
 	 * Merge two arrays of Visitor_Stats objects

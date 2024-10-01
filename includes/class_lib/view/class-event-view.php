@@ -13,9 +13,10 @@ use Reg_Man_RC\View\Pub\Volunteer_Area;
 use Reg_Man_RC\View\Object_View\Event_Descriptor_Item_Provider;
 use Reg_Man_RC\Model\Event_Filter;
 use Reg_Man_RC\View\Object_View\Object_View_Section;
-use Reg_Man_RC\View\Admin\Admin_Dashboard_Page;
+use Reg_Man_RC\View\Admin\Admin_Event_Calendar_Page;
 use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\View\Pub\Visitor_Reg_Manager;
+use Reg_Man_RC\Model\Volunteer_Registration;
 
 /**
  * An instance of this class provides rendering for an Event object.
@@ -103,14 +104,23 @@ class Event_View extends Abstract_Object_View {
 	 * @param	string		$classes			The css classes to be used in the select element
 	 * @param	Calendar	$calendar			The calendar whose events are to be shown in the select
 	 * @param	string		$selected_event_key	The key for the event to be initially selected
-	 * @param	string		$first_option		The contents of the first option to appear in the select
+	 * @param	Event[]		$events_array		The array of events to show in the select
+	 * @param	string		$first_option		The contents of the first <option> to appear in the select,
+	 *  e.g. an option for "Please Select" or "All Events"
 	 * @param	boolean		$is_required		TRUE if the element should be marked as required, FALSE otherwise
+	 * @param	boolean		$is_vol_reg			TRUE when this select is shown in the volunteer registration editor.
+	 *   In that case, each event will include a list of IDs for volunteers already registered.
 	 * @return	void
 	 */
-	public static function render_event_select( $input_name, $classes, $calendar, $selected_event_key, $first_option = NULL, $is_required = FALSE ) {
+	public static function render_event_select( $input_name, $classes, $calendar, $selected_event_key, $events_array = NULL, $first_option = NULL, $is_required = FALSE, $is_vol_reg = FALSE ) {
 
+		if ( ! isset( $events_array ) ) {
+			$events_array = Event::get_all_events();
+		} // endif
+		
 		// Disabled to start with until it is initialized on the client side
-		echo "<select class=\"combobox $classes\" name=\"$input_name\" autocomplete=\"off\" disabled=\"disabled\">";
+		$required_attr = $is_required ? 'required="required"' : '';
+		echo "<select class=\"combobox $classes\" name=\"$input_name\" autocomplete=\"off\" disabled=\"disabled\" $required_attr>";
 
 			if ( ! empty( $first_option ) ) {
 				echo $first_option;
@@ -121,23 +131,34 @@ class Event_View extends Abstract_Object_View {
 			$event_filter = Event_Filter::create_for_calendar( $calendar );
 			$event_filter->set_accept_minimum_date_time( $now );
 			$event_filter->set_sort_order( Event_Filter::SORT_BY_DATE_ASCENDING );
-			$upcoming_events_array = Event::get_all_events_by_filter( $event_filter );
-
+			$upcoming_events_array = $event_filter->apply_filter( $events_array );
+			
 			$event_filter = Event_Filter::create();
 			$event_filter->set_accept_maximum_date_time( $now );
 			$event_filter->set_is_accept_boundary_spanning_events( FALSE ); // ongoing events are in "upcoming" array
 			$event_filter->set_sort_order( Event_Filter::SORT_BY_DATE_DESCENDING );
-			$past_events_array = Event::get_all_events_by_filter( $event_filter );
-
+			$past_events_array = $event_filter->apply_filter( $events_array );
+			
+			if ( $is_vol_reg ) {
+				$option_format = '<option value="%1$s" %3$s data-vol-ids="%4$s">%2$s</option>';
+			} else {
+				$option_format = '<option value="%1$s" %3$s>%2$s</option>';
+			} // endif
 			if ( ! empty( $upcoming_events_array ) ) {
 				$label = esc_attr__( 'Upcoming Events', 'reg-man-rc' );
 				echo "<optgroup label=\"$label\">";
 					foreach( $upcoming_events_array as $event ) {
 						$name = esc_html( $event->get_label() );
-						$id = $event->get_key();
-						$id_attr = esc_attr( $id );
-						$selected = selected( $selected_event_key, $id, FALSE );
-						echo "<option value=\"$id_attr\" $selected>$name</option>";
+						$event_key = $event->get_key_string();
+						$event_key_attr = esc_attr( $event_key );
+						$selected = selected( $selected_event_key, $event_key, FALSE );
+						if ( $is_vol_reg ) {
+							$vol_id_array = Volunteer_Registration::get_all_volunteer_ids_registered_for_event( $event_key );
+							$vol_id_json = json_encode( $vol_id_array );
+							printf( $option_format, $event_key_attr, $name, $selected, $vol_id_json );
+						} else {
+							printf( $option_format, $event_key_attr, $name, $selected );
+						} // endif
 					} // endfor
 				echo '</optgroup>';
 			} // endif
@@ -147,10 +168,11 @@ class Event_View extends Abstract_Object_View {
 				echo "<optgroup label=\"$label\">";
 					foreach( $past_events_array as $event ) {
 						$name = esc_html( $event->get_label() );
-						$id = $event->get_key();
-						$id_attr = esc_attr( $id );
-						$selected = selected( $selected_event_key, $id, FALSE );
-						echo "<option value=\"$id_attr\" $selected>$name</option>";
+						$event_key = $event->get_key_string();
+						$event_key_attr = esc_attr( $event_key );
+						$selected = selected( $selected_event_key, $event_key, FALSE );
+						$vol_id_array = Volunteer_Registration::get_all_volunteer_ids_registered_for_event( $event_key );
+						echo "<option value=\"$event_key_attr\" $selected>$name</option>";
 					} // endfor
 				echo '</optgroup>';
 			} // endif
@@ -217,7 +239,9 @@ class Event_View extends Abstract_Object_View {
 	 * Get the item names array for the details section
 	 */
 	private function get_after_title_item_names_array() {
+		
 		if ( $this->get_is_calendar_agenda_entry() ) {
+			
 			$result = array(
 					List_Item::EVENT_STATUS,
 					List_Item::EVENT_VISIBILITY,
@@ -225,11 +249,84 @@ class Event_View extends Abstract_Object_View {
 					List_Item::EVENT_DATE,
 					List_Item::LOCATION_NAME,
 			);
+			
+		} elseif ( $this->get_is_object_page() ) {
+			
+			$object_page_type = $this->get_object_page_type();
+			
+			switch( $object_page_type ) {
+			
+				case Object_View::OBJECT_PAGE_TYPE_ADMIN_CALENDAR_EVENT_DETAILS:
+					$result = array(
+							List_Item::EVENT_PLACEHOLDER_INFO,
+							List_Item::EVENT_STATUS,
+							List_Item::EVENT_VISIBILITY,
+					);
+					break;
+					
+				default:
+					$result = array(
+							List_Item::EVENT_STATUS,
+							List_Item::EVENT_VISIBILITY,
+					);
+					break;
+					
+			} // endswitch
+			
+		} elseif ( $this->get_is_calendar_info_window() ) {
+			
+			$cal_type = $this->get_info_window_calendar_type();
+			
+			switch( $cal_type ) {
+				
+				case Calendar::CALENDAR_TYPE_ADMIN:
+					$result = array(
+							List_Item::EVENT_PLACEHOLDER_INFO,
+							List_Item::EVENT_STATUS,
+							List_Item::EVENT_VISIBILITY,
+					);
+					break;
+					
+				default:
+					$result = array(
+							List_Item::EVENT_STATUS,
+							List_Item::EVENT_VISIBILITY,
+					);
+					break;
+					
+			} // endswitch
+			
+		} elseif ( $this->get_is_map_info_window() ) {
+			
+			$map_type = $this->get_info_window_map_type();
+			
+			switch( $map_type ) {
+				
+				case Map_View::MAP_TYPE_CALENDAR_ADMIN:
+				case Map_View::MAP_TYPE_ADMIN_STATS:
+					$result = array(
+							List_Item::EVENT_PLACEHOLDER_INFO,
+							List_Item::EVENT_STATUS,
+							List_Item::EVENT_VISIBILITY,
+					);
+					break;
+					
+				default:
+					$result = array(
+							List_Item::EVENT_STATUS,
+							List_Item::EVENT_VISIBILITY,
+					);
+					break;
+					
+			} // endswitch
+			
 		} else {
+			
 			$result = array(
 					List_Item::EVENT_STATUS,
 					List_Item::EVENT_VISIBILITY,
 			);
+			
 		} // endif
 		return $result;
 	} // function
@@ -258,17 +355,19 @@ class Event_View extends Abstract_Object_View {
 					);
 					break;
 
-				case Object_View::OBJECT_PAGE_TYPE_ADMIN_DASHBOARD_EVENT_DETAILS:
+				case Object_View::OBJECT_PAGE_TYPE_ADMIN_CALENDAR_EVENT_DETAILS:
 					$result = array(
 							List_Item::EVENT_CATEGORIES,
 							List_Item::EVENT_DATE,
 							List_Item::LOCATION_NAME,
 							List_Item::LOCATION_ADDRESS,
 							List_Item::EVENT_FIXER_STATIONS,
-							List_Item::ADMIN_EVENT_VIEW_LINK,
 							List_Item::ADMIN_EVENT_EDIT_LINK,
-							List_Item::ADMIN_EVENT_ITEMS_ITEMIZED,
-							List_Item::ADMIN_EVENT_VOLUNTEERS_ITEMIZED,
+//							List_Item::ADMIN_EVENT_ITEMS_ITEMIZED,
+							List_Item::ADMIN_EVENT_ITEMS,
+//							List_Item::ADMIN_EVENT_VOLUNTEERS_ITEMIZED,
+							List_Item::ADMIN_EVENT_VOLUNTEERS,
+							List_Item::ADMIN_EVENT_VIEW_LINK,
 							List_Item::ADMIN_EVENT_VOL_AREA_LINK,
 							List_Item::EVENT_DESCRIPTION,
 							List_Item::VENUE_DESCRIPTION,
@@ -326,7 +425,7 @@ class Event_View extends Abstract_Object_View {
 				);
 				break;
 
-			case Calendar::CALENDAR_TYPE_ADMIN_EVENTS:
+			case Calendar::CALENDAR_TYPE_ADMIN:
 				$result = array(
 						List_Item::EVENT_CATEGORIES,
 						List_Item::EVENT_DATE,
@@ -334,13 +433,23 @@ class Event_View extends Abstract_Object_View {
 						List_Item::LOCATION_ADDRESS,
 						List_Item::EVENT_FIXER_STATIONS,
 						List_Item::ADMIN_EVENT_EDIT_LINK,
-						List_Item::ADMIN_EVENT_ITEMS,
 						List_Item::ADMIN_EVENT_VOLUNTEERS,
-						List_Item::ADMIN_EVENT_VOL_AREA_LINK,
+						List_Item::ADMIN_EVENT_ITEMS,
+//						List_Item::ADMIN_EVENT_VOL_AREA_LINK,
 						List_Item::ADMIN_EVENT_MORE_DETAILS_LINK,
 				);
 				break;
 				
+			case Calendar::CALENDAR_TYPE_EVENT_DESCRIPTOR:
+				$result = array(
+						List_Item::EVENT_DATE,
+						List_Item::ADMIN_EVENT_VOLUNTEERS,
+						List_Item::ADMIN_EVENT_ITEMS,
+						List_Item::ADMIN_EVENT_MORE_DETAILS_LINK,
+						List_Item::ADMIN_RECUR_DATE_CANCEL_BUTTON,
+				);
+				break;
+
 			default:
 				$result = array(
 						List_Item::EVENT_CATEGORIES,
@@ -415,9 +524,9 @@ class Event_View extends Abstract_Object_View {
 						List_Item::LOCATION_ADDRESS,
 						List_Item::EVENT_FIXER_STATIONS,
 						List_Item::ADMIN_EVENT_EDIT_LINK,
-						List_Item::ADMIN_EVENT_ITEMS,
 						List_Item::ADMIN_EVENT_VOLUNTEERS,
-						List_Item::ADMIN_EVENT_VOL_AREA_LINK,
+						List_Item::ADMIN_EVENT_ITEMS,
+//						List_Item::ADMIN_EVENT_VOL_AREA_LINK,
 						List_Item::ADMIN_EVENT_MORE_DETAILS_LINK,
 				);
 				break;
@@ -429,16 +538,24 @@ class Event_View extends Abstract_Object_View {
 	} // function
 
 
-
 	/**
 	 * Get the label for an event date.
 	 * @param	Event	$event	An event whose date label is to be returned
 	 */
 	public static function create_event_date_label_for_event( $event, $href = NULL ) {
 
-		$start_dt = $event->get_start_date_time_local_timezone_object();
-		$end_dt = $event->get_end_date_time_local_timezone_object();
-		$classes = 'reg-man-rc-object-view-event-date-label';
+		$start_dt = $event->get_start_date_time_object();
+		$end_dt = $event->get_end_date_time_object();
+		
+		$event_status = $event->get_status();
+		$class_array = array();
+		$class_array[] = strtolower( $event_status->get_id() );
+		if ( $event->get_is_event_complete() ) {
+			$class_array[] = 'completed';
+		} // endif
+		$classes = implode( ' ', $class_array );
+		
+		$classes = "reg-man-rc-object-view-event-date-label $classes";
 
 		if ( ! isset( $start_dt ) && ! isset( $end_dt ) ) {
 
@@ -477,7 +594,7 @@ class Event_View extends Abstract_Object_View {
 
 		$html_title = esc_html( $title );
 
-		$exclude_key = isset( $exclude_event ) ? $exclude_event->get_key() : NULL;
+		$exclude_key = isset( $exclude_event ) ? $exclude_event->get_key_string() : NULL;
 		ob_start();
 			$open_attr = $is_open ? 'open="open"' : '';
 			echo "<details class=\"reg-man-rc-object-view-event-group-details\" $open_attr>";
@@ -490,7 +607,7 @@ class Event_View extends Abstract_Object_View {
 						echo '<li class="object-view-event-list-date-time-item">' . $no_events_label . '<li>';
 					} else {
 						foreach ( $event_array as $event ) {
-							$event_key = $event->get_key();
+							$event_key = $event->get_key_string();
 							$event_status = $event->get_status();
 							$class_array = array();
 							$class_array[] = strtolower( $event_status->get_id() );
@@ -513,12 +630,12 @@ class Event_View extends Abstract_Object_View {
 												break;
 
 											case Object_View::OBJECT_PAGE_TYPE_VISITOR_REGISTRATION:
-												$event_key = $event->get_key();
+												$event_key = $event->get_key_string();
 												$link_url = Visitor_Reg_Manager::get_event_registration_href( $event_key );
 												break;
 
-											case Object_View::OBJECT_PAGE_TYPE_ADMIN_DASHBOARD_EVENT_DETAILS:
-												$link_url = Admin_Dashboard_Page::get_href_for_event_page( $event );
+											case Object_View::OBJECT_PAGE_TYPE_ADMIN_CALENDAR_EVENT_DETAILS:
+												$link_url = Admin_Event_Calendar_Page::get_href_for_event_page( $event );
 												break;
 												
 											case Object_View::OBJECT_PAGE_TYPE_EVENT:

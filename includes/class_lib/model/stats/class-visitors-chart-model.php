@@ -3,11 +3,12 @@
 namespace Reg_Man_RC\Model\Stats;
 
 
+use Reg_Man_RC\Model\Events_Collection;
+
 class Visitors_Chart_Model implements Chart_Model {
 	
 	const CHART_TYPE = 'visitors';
 	
-	private $event_keys_array;
 	private $visitor_stats_col;
 	
 	private function __construct() {}
@@ -15,22 +16,15 @@ class Visitors_Chart_Model implements Chart_Model {
 	/**
 	 * Create an instance of this class showing visitor stats for the specified events in a bar chart
 	 *
-	 * @param	string[]	$event_keys_array	The collection of keys for events whose stats are to be shown in the chart
-	 * @return	Items_Chart_Model
+	 * @param	Events_Collection	$events_collection	The collection of events whose stats are to be shown in the chart
+	 * @return	Visitors_Chart_Model
 	 * @since	v0.4.0
 	 */
-	public static function create_bar_chart( $event_keys_array ) {
+	public static function create_bar_chart_for_events_collection( $events_collection ) {
 		$result = new self();
-		$result->event_keys_array = $event_keys_array;
+		$group_by = Visitor_Stats_Collection::GROUP_BY_TOTAL;
+		$result->visitor_stats_col = Visitor_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
 		return $result;
-	} // function
-	
-	/**
-	 * Get the array of event keys for this chart
-	 * @return string[]
-	 */
-	private function get_event_keys_array() {
-		return $this->event_keys_array;
 	} // function
 	
 	/**
@@ -38,13 +32,6 @@ class Visitors_Chart_Model implements Chart_Model {
 	 * @return Visitor_Stats_Collection
 	 */
 	private function get_visitor_stats_collection() {
-		if ( ! isset( $this->visitor_stats_col ) ) {
-
-			$group_by = Visitor_Stats_Collection::GROUP_BY_TOTAL;
-			$event_keys_array = $this->get_event_keys_array();
-			$this->visitor_stats_col = Visitor_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
-
-		} // function
 		return $this->visitor_stats_col;
 	} // funciton
 	
@@ -64,22 +51,10 @@ class Visitors_Chart_Model implements Chart_Model {
 	private function get_visitors_summary_chart_config() {
 		
 		$visitor_stats_col = $this->get_visitor_stats_collection();
-		$event_keys_array = $this->get_event_keys_array();
-
-		// We will only show first-time visitors for a single event
-		if ( is_array( $event_keys_array ) ) {
-			$event_count = count( $event_keys_array );
-		} else {
-			$event_count = Event_Stats_Collection::get_all_known_events_count();
-		} // endif
+		$event_count = $visitor_stats_col->get_event_count();
 
 		$is_single_event = ( $event_count == 1 );
-//		if ( $is_single_event ) {
-//			$single_event_key = $event_keys_array[ 0 ]; // We need this to test for "is first time"
-//		} // endif
 
-		$group_by = Visitor_Stats_Collection::GROUP_BY_TOTAL;
-		$visitor_stats_col = Visitor_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
 		$all_stats_array = array_values( $visitor_stats_col->get_all_stats_array() );
 		$total_stats = isset( $all_stats_array[ 0 ] ) ? $all_stats_array[ 0 ] : NULL;
 

@@ -7,6 +7,8 @@ use Reg_Man_RC\View\Form_Input_List;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Volunteer_Role;
 use Reg_Man_RC\View\Volunteer_Registration_List_View;
+use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Control\User_Role_Controller;
 
 /**
  * The administrative view for Volunteer
@@ -32,6 +34,16 @@ class Volunteer_Admin_View {
 		// Change the placeholder text for "Enter Title Here"
 		add_filter( 'enter_title_here', array(__CLASS__, 'rewrite_enter_title_here') );
 
+		// Add filter for post row actions so I can replace "Trash"
+		// TODO: This is work in progress
+//		add_filter( 'post_row_actions', array( __CLASS__, 'handle_post_row_actions' ), 10, 2 );
+		
+		// Register hook to insert my remove dialog onto the page
+		// Note that the dialog contains a form so must be rendered outside the open <form> tag that encloses the entire
+		//  table including the tablenav sections, so I can't use the 'manage_posts_extra_tablenav' action here
+		// TODO: This is incomplete work in progress
+//		add_action( 'admin_notices', array( __CLASS__, 'add_remove_dialog' ) );
+
 		// Change the messages that are shown when the post is updated
 		add_filter( 'post_updated_messages', array(__CLASS__, 'update_post_messages') );
 
@@ -51,7 +63,60 @@ class Volunteer_Admin_View {
 		add_filter( 'months_dropdown_results' , array( __CLASS__, 'remove_dates_filter' ), 10, 2 );
 
 	} // function
+	
+	/**
+	 * Filter the actions shown in the admin interface for a post row
+	 * @param	string[]	$actions
+	 * @param	\WP_Post	$post
+	 * @return	string[]
+	 */
+	public static function handle_post_row_actions( $actions, $post ) {
 
+		$result = $actions;
+		
+		// To avoid orphaned registrations we will replace the usual 'Trash' option and add our own 'Remove'
+		
+		if ( ( $post->post_type === Volunteer::POST_TYPE ) && isset( $actions[ 'trash' ] ) ) {
+			
+			unset( $result[ 'trash' ] ); // Remove the usual trash operation
+
+			$label = __( 'Trash&hellip;', 'reg-man-rc' );
+			$title = __( 'Remove registration records and trash this record', 'reg-man-rc' );
+			
+			$format = '<button class="reg-man-rc-remove-cpt-button volunteer-remove-button button-link" type="button" data-record-id="%3$s" title="%2$s">%1$s</button>';
+			
+			$result[ 'remove' ] = sprintf( $format, $label, $title, $post->ID );
+
+		} // endif
+		
+		return $result;
+	} // function
+
+	/**
+	 * Insert our remove dialog onto the page
+	 */
+	public static function add_remove_dialog( $which ) {
+
+		global $pagenow;
+		$post_type = isset( $_GET[ 'post_type' ] ) ? $_GET[ 'post_type' ] : '';
+//		Error_Log::var_dump( $pagenow, $post_type );
+
+		if ( ( $pagenow === 'edit.php' ) && ( $post_type === Volunteer::POST_TYPE ) ) {
+		
+			$title = __( 'Remove Volunteer', 'reg-man-rc' );
+			
+			echo "<div class=\"reg-man-rc-remove-cpt-dialog remove-volunteer-dialog dialog-container\" title=\"$title\">";
+	
+				$view = Remove_Volunteer_Form::create();
+				$view->render();
+	
+			echo '</div>';
+
+		} // endif
+		
+	} // function
+	
+	
 	/**
 	 * Add the meta boxes for Volunteers
 	 * @return	void
@@ -69,15 +134,6 @@ class Volunteer_Admin_View {
 					'high'														// Meta box priority
 			);
 
-			add_meta_box(
-					'custom-metabox-volunteer-is-public',						// Unique ID for the element
-					__( 'Public Profile', 'reg-man-rc' ),						// Box title
-					array( __CLASS__, 'render_volunteer_is_public_meta_box' ),	// Content callback, must be of type callable
-					Volunteer::POST_TYPE, 										// Post type for this meta box
-					'side',														// Meta box position
-					'high'														// Meta box priority
-			);
-
 			$new_id = Volunteer::POST_TYPE . '-fixer-station-metabox';
 			$view = Fixer_Station_Admin_View::create();
 			$label = __( 'Preferred Fixer Station', 'reg-man-rc' );
@@ -86,8 +142,8 @@ class Volunteer_Admin_View {
 					$label,
 					array( $view, 'render_post_metabox' ),
 					Volunteer::POST_TYPE,
-					'side', // section to place the metabox (normal, side or advanced)
-					'default' // priority within the section (high, low or default)
+					'normal',	// section to place the metabox (normal, side or advanced)
+					'high'		// priority within the section (high, low or default)
 			);
 
 			$new_id = Volunteer::POST_TYPE . '-volunteer-roles-metabox';
@@ -98,8 +154,8 @@ class Volunteer_Admin_View {
 					$label,
 					array( $view, 'render_post_metabox' ),
 					Volunteer::POST_TYPE,
-					'side',		// section to place the metabox (normal, side or advanced)
-					'default'	// priority within the section (high, low or default)
+					'normal',	// section to place the metabox (normal, side or advanced)
+					'high'		// priority within the section (high, low or default)
 			);
 
 			add_meta_box(
@@ -118,40 +174,9 @@ class Volunteer_Admin_View {
 					array( __CLASS__, 'render_volunteer_reg_list_meta_box' ),	// Content callback, must be of type callable
 					Volunteer::POST_TYPE, 										// Post type for this meta box
 					'normal', 													// Meta box position
-					'high'													// Meta box priority
+					'default'													// Meta box priority
 			);
 		} // endif
-	} // function
-
-	/**
-	 * Render the metabox for choosing whether the Volunteer has a public profile page
-	 * @param	\WP_Post	$post
-	 * @return	void
-	 * @since 	v0.1.0
-	 */
-	public static function render_volunteer_is_public_meta_box( $post ) {
-
-		// We need a flag to distinguish the case where no user input is provided
-		//  versus the case where no inputs were shown at all like in quick edit mode
-		echo '<input type="hidden" name="volunteer_is_public_selection_flag" value="TRUE">';
-
-		$volunteer = Volunteer::get_volunteer_by_id( $post->ID );
-
-		$input_list = Form_Input_List::create();
-
-		$label = __( 'Profile this volunteer on the public website?', 'reg-man-rc' );
-		$name = 'volunteer_public_profile';
-		$options = array(
-				__( 'Yes, include this volunteer\'s profile on the public website', 'reg-man-rc' )		=> 'TRUE',
-				__( 'No, DO NOT show this volunteer on the website', 'reg-man-rc' )			=> 'FALSE'
-		);
-		$curr_val = $volunteer->get_has_public_profile();
-		$selected = $curr_val ? 'TRUE' : 'FALSE';
-		$hint = __( 'Public profiles NEVER contain identifying personal information like full name or email address.', 'reg-man-rc' );
-		$input_list->add_radio_group( $label, $name, $options, $selected, $hint );
-
-		$input_list->render();
-
 	} // function
 
 	/**
@@ -202,9 +227,8 @@ class Volunteer_Admin_View {
 
 			$label = __( 'WordPress User', 'reg-man-rc' );
 			$input_name = 'wp_user';
-			$wp_user = isset( $volunteer ) ? $volunteer->get_wp_user() : NULL;
-			$display_name = ! empty( $wp_user ) ? $wp_user->display_name : __( '[ none ]', 'reg-man-rc' );
-			$input_list->add_information( $label, $display_name );
+			$wp_user_display_name = isset( $volunteer ) ? $volunteer->get_wp_user_display_name() : NULL;
+			$input_list->add_information( $label, $wp_user_display_name );
 
 		$input_list->render();
 
@@ -246,7 +270,6 @@ class Volunteer_Admin_View {
 						if ( $id == $volunteer->get_id() ) {
 							continue; // a volunteer should not be proxy to herself : )
 						} // endif
-//						$name = $curr_vol->get_full_name();
 						$name = $curr_vol->get_label();
 						$html_name = esc_html( $name );
 						$selected = selected( $id, $current_proxy_id, $echo = FALSE );
@@ -282,6 +305,7 @@ class Volunteer_Admin_View {
 				( $screen->post_type == Volunteer::POST_TYPE ) &&
 				( empty( $screen->taxonomy ) ) ) {
 			Scripts_And_Styles::enqueue_base_admin_script_and_styles();
+//			Scripts_And_Styles::enqueue_remove_cpt_admin_scripts();
 		} // endif
 	} // function
 
@@ -338,7 +362,6 @@ class Volunteer_Admin_View {
 		$result = array(
 			'cb'						=> $columns[ 'cb' ],
 			'title'						=> __( 'Public Name',				'reg-man-rc' ),
-			'is_public'					=> __( 'Public Profile',			'reg-man-rc' ),
 			'full_name'					=> __( 'Full Name',					'reg-man-rc' ),
 			'email'						=> __( 'Email',						'reg-man-rc' ),
 			'proxy'						=> __( 'Proxy',						'reg-man-rc' ),
@@ -347,6 +370,7 @@ class Volunteer_Admin_View {
 			$volunteer_role_tax_col		=> __( 'Preferred Roles',			'reg-man-rc' ),
 			'reg_count'					=> __( 'Events',					'reg-man-rc' ),
 			'wp_user'					=> __( 'WP User',					'reg-man-rc' ),
+			'vol_area_login'			=> __( 'Last Login to Volunteer Area',	'reg-man-rc' ),
 			'date'						=> __( 'Last Update',				'reg-man-rc' ),
 			'author'					=> __( 'Author',					'reg-man-rc' ),
 		);
@@ -372,12 +396,6 @@ class Volunteer_Admin_View {
 					$result = ! empty( $public_name ) ? esc_html( $public_name ) : $em_dash;
 					break;
 
-				case 'is_public':
-					$is_public = $volunteer->get_has_public_profile();
-					$val = $is_public ? __( 'Yes', 'reg-man-rc' ) : $em_dash; //__( 'No', 'reg-man-rc' );
-					$result = esc_html( $val );
-					break;
-
 				case 'full_name':
 					$full_name = $volunteer->get_full_name();
 					$result = ! empty( $full_name ) ? esc_html( $full_name ) : $em_dash;
@@ -396,32 +414,29 @@ class Volunteer_Admin_View {
 					$proxy_id = $volunteer->get_my_proxy_volunteer_id();
 					if ( ! empty( $proxy_id ) ) {
 						$proxy_volunteer = Volunteer::get_volunteer_by_id( $proxy_id );
-						$result = ! empty( $proxy_volunteer ) ? esc_html( $proxy_volunteer->get_full_name() ) : $em_dash;
+						$result = ! empty( $proxy_volunteer ) ? esc_html( $proxy_volunteer->get_display_name() ) : $em_dash;
 					} // endif
 					break;
 				
-/* FIXME - Not currently used
-				case 'access_key':
-					$access_key = $volunteer->get_access_key();
-					$result = ! empty( $access_key ) ? esc_html( $access_key ) : $em_dash;
-					break;
-*/
 				case 'is_apprentice':
 					$is_apprentice = $volunteer->get_is_fixer_apprentice();
 					$result = $is_apprentice ? __( 'Yes', 'reg-man-rc' ) : $em_dash;
 					break;
 
 				case 'reg_count':
-					$reg_array = $volunteer->get_registration_descriptors();
-					$result = ! empty( $reg_array ) ? esc_html( count( $reg_array ) ) : $em_dash;
+					$reg_count = $volunteer->get_registration_descriptor_count();
+					$result = ! empty( $reg_count ) ? esc_html( $reg_count ) : $em_dash;
 					break;
 
 				case 'wp_user':
-					$wp_user = $volunteer->get_wp_user();
-					if ( ! empty( $wp_user ) ) {
-						$display_name = $wp_user->display_name;
-						$result = $display_name;
-					} // endif
+					$display_name = $volunteer->get_wp_user_display_name();
+					$result = ! empty( $display_name ) ? $display_name : $em_dash;
+					break;
+					
+				case 'vol_area_login':
+					$datetime = $volunteer->get_volunteer_area_last_login_datetime();
+					$date_format = get_option( 'date_format' );
+					$result = ! empty( $datetime ) ? $datetime->format( $date_format ) : $em_dash;
 					break;
 					
 				default:
@@ -496,4 +511,121 @@ class Volunteer_Admin_View {
 		return $result;
 	} // function
 
+	/**
+	 * Get the set of tabs to be shown in the help for this type
+	 * @return array
+	 */
+	public static function get_help_tabs() {
+		$result = array(
+			array(
+				'id'		=> 'reg-man-rc-about',
+				'title'		=> __( 'About', 'reg-man-rc' ),
+				'content'	=> self::get_about_content(),
+			),
+		);
+		return $result;
+	} // function
+	
+	/**
+	 * Get the html content shown to the administrator in the "About" help for this post type
+	 * @return string
+	 */
+	private static function get_about_content() {
+		ob_start();
+			$heading = __( 'About Fixers & Volunteers', 'reg-man-rc' );
+			
+			echo "<h2>$heading</h2>";
+			echo '<p>';
+				$msg = __(
+					'A fixer & volunteer record contains the details of a single fixer or non-fixer volunteer.' .
+					'  It includes the following:',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+
+				$item_format = '<dt>%1$s</dt><dd>%2$s</dd>';
+				echo '<dl>';
+
+					$title = esc_html__( 'Public Name', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The name used to represent this volunteer.' .
+							'  This is usually the volunteer\'s first name or first name and last initial.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Full Name', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The volunteer\'s full name.' .
+							'  Note that this is for internal records only and is never shown on the public website.' .
+							'  Also, note that this data is encrypted in the database and is not searchable.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Email', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The volunteer\'s email address if known.' .
+							'  Note that this is for internal records only and is never shown on the public website.' .
+							'  Also, note that this data is encrypted in the database and is not searchable.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Proxy', 'reg-man-rc' );
+					$msg = esc_html__(
+							'Another volunteer who is authorized to act as a proxy and register this volunteer for events.' .
+							'  This can be used when a volunteer has no email address and so cannot access the volunteer area' .
+							' or when two volunteers, like a married couple, usually attend events together and want to be able to register each other.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Preferred Fixer Station', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The fixer station this volunteer prefers, e.g. "Appliances & Housewares".' .
+							'  This fixer station will be automatically assigned for the volunteer when they register for an event.' .
+							'  If the volunteer is a non-fixer then this field is empty.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Apprentice', 'reg-man-rc' );
+					$msg = esc_html__(
+							'A volunteer who will work as a fixer apprentice.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Preferred Volunteer Roles', 'reg-man-rc' );
+					$msg = esc_html__(
+							'A list of non-fixer roles this volunteer prefers to play at the event, e.g. "Setup & Cleanup, Refreshments".' .
+							'  These roles will be automatically assigned for the volunteer when they register for an event.' .
+							'  This field may be empty for fixer volunteers.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Events', 'reg-man-rc' );
+					$msg = esc_html__(
+							'A count or list of events this volunteer has registered to attend.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'WP User', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The WordPress User ID with the same email address as this volunteer.' .
+							'  Note that if a volunteer has an associated WordPress User ID then they will be required' .
+							' to provide the password when they access the volunteer area.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Author', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The author of this volunteer record.' .
+							'  Note that the author of the record has authority to view the volunteer\'s email address.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+				echo '</dl>';
+			echo '</p>';
+
+		$result = ob_get_clean();
+		return $result;
+	} // function
+	
+	
 } // class

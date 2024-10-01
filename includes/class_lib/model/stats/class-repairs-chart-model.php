@@ -3,6 +3,8 @@
 namespace Reg_Man_RC\Model\Stats;
 
 use Reg_Man_RC\Model\Settings;
+use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Model\Events_Collection;
 
 class Repairs_Chart_Model implements Chart_Model {
 	
@@ -18,13 +20,13 @@ class Repairs_Chart_Model implements Chart_Model {
 	/**
 	 * Create an instance of this class showing repair stats for the specified events in a detailed bar chart
 	 *
-	 * @param	string[]	$event_keys_array	The collection of keys for events whose stats are to be shown in the chart
+	 * @param	Events_Collection	$events_collection	The collection of events whose stats are to be shown in the chart
 	 * @return	Repairs_Chart_Model
 	 * @since	v0.1.0
 	 */
-	public static function create_detailed_bar_chart( $event_keys_array ) {
+	public static function create_detailed_bar_chart_for_events_collection( $events_collection ) {
 		$result = new self();
-		$result->item_stats = Item_Stats::get_total_item_stats_for_event_keys_array( $event_keys_array );
+		$result->item_stats = Item_Stats::get_total_item_stats_for_events_collection( $events_collection );
 		$result->type = self::CHART_TYPE_DETAILED;
 		return $result;
 	} // function
@@ -32,31 +34,22 @@ class Repairs_Chart_Model implements Chart_Model {
 	/**
 	 * Create an instance of this class showing repair stats for the specified events in a simplified bar chart
 	 *
-	 * @param	string[]	$event_keys_array	The collection of keys for events whose stats are to be shown in the chart
+	 * @param	Events_Collection	$events_collection	The collection of events whose stats are to be shown in the chart
 	 * @return	Repairs_Chart_Model
 	 * @since	v0.1.0
 	 */
-	public static function create_simplified_bar_chart( $event_keys_array ) {
+	public static function create_simplified_bar_chart_for_events_collection( $events_collection ) {
 		$result = new self();
-		$result->item_stats = Item_Stats::get_total_item_stats_for_event_keys_array( $event_keys_array );
+		$result->item_stats = Item_Stats::get_total_item_stats_for_events_collection( $events_collection );
 		$result->type = self::CHART_TYPE_SIMPLIFIED;
 		return $result;
 	} // function
-	
+		
 	/**
 	 * Get the item stats object for this chart
 	 * @return Item_Stats
 	 */
 	private function get_item_stats() {
-		if ( ! isset( $this->item_stats ) ) {
-
-			$item_stats_collection = $this->get_item_stats_collection();
-			$stats_array = $item_stats_collection->get_all_stats_array();
-			$index = '';
-
-			$this->item_stats = isset( $stats_array[ $index ] ) ? $stats_array[ $index ] : Item_Stats::create( '', 0, 0, 0, 0 );
-			
-		} // function
 		return $this->item_stats;
 	} // funciton
 	
@@ -110,6 +103,7 @@ class Repairs_Chart_Model implements Chart_Model {
 	private function get_detailed_bar_chart_config() {
 
 		$item_stats = $this->get_item_stats();
+//		Error_Log::var_dump( $item_stats );
 		
 		$chart_config = Chart_Config::create_stacked_bar_chart();
 
@@ -127,7 +121,8 @@ class Repairs_Chart_Model implements Chart_Model {
 		$diverted_range		= $item_stats->get_estimated_diversion_count_range_as_string();
 		$diverted_percent	= $item_stats->get_estimated_diversion_rate_as_percent_string();
 
-		$labels[] = __( 'Repair Status', 'reg-man-rc' );
+//		Error_Log::var_dump( $diverted_lower, $diverted_upper, $diverted_range, $diverted_percent );
+		$labels[] = __( 'Repair Outcome', 'reg-man-rc' );
 
 		$fixed_dataset = Chart_Dataset::create( __( 'Fixed', 'reg-man-rc' ) );
 		$fixed_dataset->set_stack( 'Reported' );
@@ -139,15 +134,15 @@ class Repairs_Chart_Model implements Chart_Model {
 		$repairable_dataset->add_datapoint( Chart_Model::REPAIRABLE_ITEM_COLOUR, $repairable_count );
 		$chart_config->add_dataset( $repairable_dataset );
 
-		$eol_dataset = Chart_Dataset::create( __( 'End of Life', 'reg-man-rc' ) );
-		$eol_dataset->set_stack( 'Reported' );
-		$eol_dataset->add_datapoint( self::EOL_ITEM_COLOUR, $eol_count );
-		$chart_config->add_dataset( $eol_dataset );
-
 		$unknown_dataset = Chart_Dataset::create( __( 'Outcome Not Reported', 'reg-man-rc' ) );
 		$unknown_dataset->set_stack( 'Reported' );
 		$unknown_dataset->add_datapoint( Chart_Model::UNKNOWN_STATUS_ITEM_COLOUR, $unsampled_count );
 		$chart_config->add_dataset( $unknown_dataset );
+
+		$eol_dataset = Chart_Dataset::create( __( 'End of Life', 'reg-man-rc' ) );
+		$eol_dataset->set_stack( 'Reported' );
+		$eol_dataset->add_datapoint( self::EOL_ITEM_COLOUR, $eol_count );
+		$chart_config->add_dataset( $eol_dataset );
 
 		$est_diverted_dataset = Chart_Dataset::create( __( 'Estimated Minimum Items Diverted', 'reg-man-rc' ) );
 		$est_diverted_dataset->set_stack( 'Estimated' );

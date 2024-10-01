@@ -16,9 +16,10 @@ class Fixer_Station {
 
 	const UNSPECIFIED_FIXER_STATION_ID	= 0; // An ID used to indicate that the fixer station is not specified
 
-	const COLOUR_META_KEY			= self::TAXONOMY_NAME . '-colour';
-	const ICON_ATTACH_ID_META_KEY	= self::TAXONOMY_NAME . '-icon-id';
-	const EXTERNAL_NAMES_META_KEY	= self::TAXONOMY_NAME . '-external-names';
+	const COLOUR_META_KEY				= self::TAXONOMY_NAME . '-colour';
+	const ICON_ATTACH_ID_META_KEY		= self::TAXONOMY_NAME . '-icon-id';
+	const ICON_IMAGE_ID_ARRAY_META_KEY	= self::TAXONOMY_NAME . '-icon-ids';
+	const EXTERNAL_NAMES_META_KEY		= self::TAXONOMY_NAME . '-external-names';
 
 	// Default Fixer Stations come with their own icon.  Those icons are loaded into the media library as attachments.
 	// Each attchment contains metadata to indicate which fixer station the icon is used for.
@@ -32,12 +33,13 @@ class Fixer_Station {
 	private $count;
 	private $item_types_array;
 	private $colour;
+	private $icon_image_attachment_id_array;
+	private $icon_image_attachment_array;
 	private $icon_attachment_id;
 	private $icon_url;
 	private $external_names; // An array of string names used to refer to this fixer station externally
 	// $external_names are used to map item types from external systems like our legacy data to internal names
 
-	private static $types_mapping;
 	private static $all_stations; // A cached array of all fixer stations indexed by their ID
 	private static $all_stations_by_name; // an array of all fixer stations indexed by name used to find stations by name
 	private static $term_tax_ids_array; // an array of all term taxonomy IDs in this taxonomy
@@ -342,41 +344,20 @@ class Fixer_Station {
 	} // function
 
 	/**
-	 * Get the count of Items using this fixer stations
+	 * Get the count of Items using this fixer station
 	 *
 	 * @return	int		The count of Items using this fixer station
 	 *
 	 * @since v0.1.0
 	 */
 	public function get_item_count() {
-		$item_types = Item_Type::get_item_types_by_default_fixer_station( $this->get_id() );
-		$item_type_ids = array();
-		foreach ( $item_types as $type ) {
-			$item_type_ids[] = $type->get_id();
-		} // endfor
 
 		$tax_query = array(
-				'relation' => 'OR',
-
 						array(
 								'taxonomy'	=> self::TAXONOMY_NAME,
 								'field'		=> 'id',
 								'terms'		=> array( $this->get_id() )
 						),
-
-						array(
-								'relation' => 'AND',
-								array(
-										'taxonomy'	=> self::TAXONOMY_NAME,
-										'field'		=> 'id',
-										'operator'	=> 'NOT EXISTS'
-								),
-								array(
-										'taxonomy'	=> Item_Type::TAXONOMY_NAME,
-										'field'		=> 'id',
-										'terms'		=> $item_type_ids
-								),
-						)
 			);
 
 		$args = array(
@@ -384,9 +365,12 @@ class Fixer_Station {
 			'posts_per_page'	=> -1, // Get all posts
 			'tax_query'			=> $tax_query,
 		);
+		
 		$query = new \WP_Query( $args );
 		$result = $query->found_posts;
-		wp_reset_postdata(); // Required after using WP_Query()
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
 
 	} // function
@@ -412,8 +396,11 @@ class Fixer_Station {
 		);
 		$query = new \WP_Query( $args );
 		$result = $query->found_posts;
-		wp_reset_postdata(); // Required after using WP_Query()
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
+
 	} // function
 
 	/**
@@ -437,144 +424,77 @@ class Fixer_Station {
 		);
 		$query = new \WP_Query( $args );
 		$result = $query->found_posts;
-		wp_reset_postdata(); // Required after using WP_Query()
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
+
 	} // function
 
 	/**
-	 * Get an array of item types where this fixer station is assigned as their default
+	 * Get the array of icon image attachment IDs for this fixer station.
+	 * This is used to graphically represent what is being fixed at an event with this fixer station
 	 *
-	 * @return	Item_Type[]	An array of items whose default fixer station is this one
+	 * @return	string	The attachment ID array for the icons used for this fixer station.
 	 *
-	 * @since v0.1.0
+	 * @since v0.8.9
 	 */
-	public function get_item_types_array() {
-		if ( !isset( $this->item_types_array ) ) {
-			$mapping = self::get_item_types_mapping();
-			$name = $this->get_name();
-			$this->item_types_array = isset( $mapping[ $name ] ) ? $mapping[ $name ] : array();
+	public function get_icon_image_attachment_id_array() {
+		if ( ! isset( $this->icon_image_attachment_id_array ) )  {
+			$meta = get_term_meta( $this->get_id(), self::ICON_IMAGE_ID_ARRAY_META_KEY, $single = TRUE);
+			$this->icon_image_attachment_id_array = is_array( $meta ) ? $meta : array();
 		} // endif
-		return $this->item_types_array;
+		return $this->icon_image_attachment_id_array;
 	} // function
-
+	
 	/**
-	 * Set the array of item types where this fixer station is assigned as their default
+	 * Set the array of icon image attachment IDs for this fixer station.
 	 *
-	 * @param	Item_Type[]		$item_types_array	An array of items whose default fixer station is to be assigned as this one
-	 * @return	void
-	 * @since v0.1.0
+	 * @param	string[]|int[]	$icon_image_attachment_id_array	The attachment ID array for the icons used for this fixer station.
+	 *
+	 * @since v0.8.9
 	 */
-	public function set_item_types_array( $item_types_array ) {
-		if ( $item_types_array === NULL ) {
-			$item_types_array = array(); // NULL should be considered the same as an empty array
-		} // endif
-		if ( is_array( $item_types_array ) ) {
-			// The easiest way to do this is to remove any old assignments and then create the new ones
-			$station_name = $this->get_name();
-			$my_types = self::get_item_types_array();
-			foreach ( $my_types as $item_type ) {
-				$item_type->set_fixer_station_id( NULL ); // This means remove the fixer station
-			} // endfor
-			$station_id = $this->get_id();
-			foreach ( $item_types_array as $item_type_id ) {
-				$item_type = Item_Type::get_item_type_by_id( $item_type_id );
-				if ( !empty( $item_type ) ) {
-					$item_type->set_fixer_station_id( $station_id );
-				} // endif
-			} // endfor
-		} // endif
-	} // function
-
-	/**
-	 * Get an array of mappings from fixer stations to the item types
-	 *
-	 * @return	array[string]Item_Type[]	An associative array mapping fixer station names to the
-	 * set of item types who use it as their default
-	 *
-	 * @since v0.1.0
-	 */
-	private static function get_item_types_mapping() {
-		if ( !isset( self::$types_mapping ) ) {
-			self::$types_mapping = array();
-			$types_array = Item_Type::get_all_item_types();
-			foreach ( $types_array as $item_type ) {
-				$station = $item_type->get_fixer_station();
-				if ( !empty( $station ) ) {
-					$station_name = $station->get_name();
-					if ( !isset( self::$types_mapping[ $station_name ] ) ) {
-						self::$types_mapping[ $station_name ] = array( $item_type );
-					} else {
-						array_push( self::$types_mapping[ $station_name ], $item_type );
-					} // endif
-				} // endif
-			} // endfor
-		} // endif
-		return self::$types_mapping;
-	} // function
-
-
-	/**
-	 * Get the icon attachment ID for this fixer station.
-	 * This is used to graphically represent the fixer station in event details.
-	 *
-	 * @return	string	The attachment ID for the icon used to represent this fixer station.
-	 *
-	 * @since v0.1.0
-	 */
-	public function get_icon_attachment_id() {
-		if ( ! isset( $this->icon_attachment_id ) )  {
-			$meta = get_term_meta( $this->get_id(), self::ICON_ATTACH_ID_META_KEY, $single = TRUE);
-			if ( ( $meta !== FALSE ) && ( $meta !== NULL ) ) {
-				$this->icon_attachment_id = $meta;
-			} // endif
-		} // endif
-		return $this->icon_attachment_id;
-	} // function
-
-	/**
-	 * Get the URL for the icon for this fixer station.
-	 * This is used to graphically represent the fixer station in event details.
-	 *
-	 * @return	string	The URL for the icon used to represent this fixer station.
-	 *
-	 * @since v0.1.0
-	 */
-	public function get_icon_url() {
-		if ( ! isset( $this->icon_url ) ) {
-			$attach_id = $this->get_icon_attachment_id();
-			if ( isset( $attach_id ) ) {
-				$url = wp_get_attachment_image_url( $attach_id );
-				if ( ! empty( $url ) ) {
-					$this->icon_url = $url;
-				} // endif
-			} // endif
-		} // endif
-		return $this->icon_url;
-	} // function
-
-	/**
-	 * Set the icon attachment ID for this fixer station.
-	 *
-	 * @param	int|string	$attachment_id	The attachment ID for the icon used to represent this fixer station.
-	 *
-	 * @since v0.1.0
-	 */
-	public function set_icon_attachment_id( $attachment_id ) {
-		if ( ( $attachment_id === '' ) || ( $attachment_id === NULL ) || ( $attachment_id === FALSE ) ) {
-			delete_term_meta( $this->get_id(), self::ICON_ATTACH_ID_META_KEY );
+	public function set_icon_image_attachment_id_array( $icon_image_attachment_id_array ) {
+		if ( empty( $icon_image_attachment_id_array ) || ( ! is_array( $icon_image_attachment_id_array ) ) ) {
+			delete_term_meta( $this->get_id(), self::ICON_IMAGE_ID_ARRAY_META_KEY );
 		} else {
-			// We need to make sure there is only one value so if none exists add it, otherwise update it
-			$curr = get_term_meta( $this->get_id(), self::ICON_ATTACH_ID_META_KEY, $single = TRUE );
-			if ( ( $curr === '' ) || ( $curr === NULL ) || ( $curr === FALSE ) ) {
-				add_term_meta( $this->get_id(), self::ICON_ATTACH_ID_META_KEY, $attachment_id );
-			} else {
-				update_term_meta( $this->get_id(), self::ICON_ATTACH_ID_META_KEY, $attachment_id, $curr );
-			} // endif
+			update_term_meta( $this->get_id(), self::ICON_IMAGE_ID_ARRAY_META_KEY, $icon_image_attachment_id_array );
 		} // endif
-		unset( $this->icon_attachment_id ); // Allow this to be re-acquired
-		unset( $this->icon_url ); // Allow this to be re-acquired
+		unset( $this->icon_image_attachment_id_array ); // Allow this to be re-acquired
+		unset( $this->icon_image_attachment_array ); // Allow this to be re-acquired
 	} // function
-
+	
+	
+	/**
+	 * Get the icon image attachment array for this fixer station.
+	 * The icons are used to graphically represent the fixer station in event details.
+	 *
+	 * @return	Image_Attachment[]	An array of image attachment objects for this fixer station's icons
+	 *
+	 * @since v0.8.9
+	 */
+	public function get_icon_image_attachment_array() {
+		if ( ! isset( $this->icon_image_attachment_array ) ) {
+			$this->icon_image_attachment_array = array();
+			$attach_id_array = $this->get_icon_image_attachment_id_array();
+//			$meta = get_term_meta( $this->get_id(), self::ICON_ATTACH_ID_META_KEY, $single = TRUE);
+//			if ( ! empty( $meta ) ) {
+//				$attach_id_array = array( $meta );
+				foreach( $attach_id_array as $attachment_id ) {
+					// Make sure the attachment still exists and we can get its url
+					$size = 'thumbnail';
+					$url = wp_get_attachment_image_url( $attachment_id, $size );
+					if ( ! empty( $url ) ) {
+						$image_attachment = Image_Attachment::create( $attachment_id );
+						$this->icon_image_attachment_array[] = $image_attachment;
+					} // endif
+				} // endfor
+//			} // endif
+		} // endif
+		return $this->icon_image_attachment_array;
+	} // function
+	
+	
 	/**
 	 * Get the colour for this fixer station.
 	 * This is used to colour code fixer stations on charts and graphs.
@@ -728,53 +648,6 @@ class Fixer_Station {
 			} // endif
 		} // endif
 
-
-
-	} // function
-
-	/**
-	 * Get the html content shown to the administrator in the "About" help for this taxonomy
-	 * @return string
-	 */
-	public static function get_about_content() {
-		ob_start();
-			$heading = __( 'About fixer stations', 'reg-man-rc' );
-			echo "<h2>$heading</h2>";
-			echo '<p>';
-				$msg = __(
-					'A fixer station is an area at an event for fixers who repair certain kinds of items;' .
-					' for example, Appliances & Housewares.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'When an item is registered at an event it will be assigned to a fixer station. ' .
-					' For example, a lamp would normally be assigned to the Appliances & Housewares fixer station. ',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'When you create an event you will specify which fixer stations it will have' .
-					' and the event description on the website will list those stations.' .
-					' This lets visitors know what kinds of items to bring to an event,' .
-					' and it lets volunteers know what kinds of fixers are needed.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'Fixer stations are colour coded for display in statistical charts.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			$result = ob_get_clean();
-		return $result;
 	} // function
 
 	/**
@@ -860,8 +733,9 @@ class Fixer_Station {
 			$post = $posts[ 0 ];
 			$result = isset( $post ) ? $post->ID : NULL;
 		} // endif
-		wp_reset_postdata(); // Required after using WP_Query()
 
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		if ( empty( $result ) ) {
 			// Try to create it if we didn't find it
 			$result = self::create_default_fixer_station_icon_media_attachment_id( $name, $title, $file_name );
@@ -909,7 +783,8 @@ class Fixer_Station {
 					'post_content'		=> '',
 					'post_status'		=> 'inherit',
 				);
-				$attach_id = wp_insert_attachment( $attach_args, $target_file_path, $parent = 0, $wp_error = TRUE );
+				$attachment_file_path = $target_dir_path . '/' . $file_name; // WP REQUIRES the separator to be forward slash!
+				$attach_id = wp_insert_attachment( $attach_args, $attachment_file_path, $parent = 0, $wp_error = TRUE );
 				if ( is_wp_error( $attach_id ) ) {
 					/* translators: %s is the name of a fixer station */
 					$err_msg = sprintf( __( 'Failed to insert icon media attachment for default fixer station: %s', 'reg-man-rc' ), $title );
@@ -917,7 +792,7 @@ class Fixer_Station {
 					$result = NULL;
 				} else {
 					require_once( ABSPATH . 'wp-admin/includes/image.php' );
-					$attach_data = wp_generate_attachment_metadata( $attach_id, $target_file_path );
+					$attach_data = wp_generate_attachment_metadata( $attach_id, $attachment_file_path );
 					wp_update_attachment_metadata( $attach_id, $attach_data );
 					add_post_meta( $attach_id, self::ICON_STATION_NAME_META_KEY, $name );
 					$result = $attach_id;

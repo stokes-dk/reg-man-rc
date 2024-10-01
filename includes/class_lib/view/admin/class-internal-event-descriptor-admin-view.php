@@ -16,6 +16,14 @@ use Reg_Man_RC\Model\Event_Key;
 use Reg_Man_RC\Model\Stats\Item_Stats_Collection;
 use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Stats\Volunteer_Stats_Collection;
+use Reg_Man_RC\Model\Events_Collection;
+use Reg_Man_RC\Control\User_Role_Controller;
+use Reg_Man_RC\Model\Recurrence_Rule;
+use Reg_Man_RC\Model\Calendar;
+use Reg_Man_RC\View\Calendar_View;
+use Reg_Man_RC\Model\Stats\Visitor_Stats_Collection;
+use Reg_Man_RC\Model\Event_Descriptor;
+use Reg_Man_RC\Control\Internal_Event_Descriptor_Controller;
 
 /**
  * The administrative view for internal event descriptors
@@ -32,7 +40,7 @@ class Internal_Event_Descriptor_Admin_View {
 
 		// Add the metaboxes for things that are not taxonomies and therefore don't already have metaboxes like the event date
 		add_action( 'add_meta_boxes', array( __CLASS__, 'add_event_meta_boxes' ), 10, 2 );
-
+		
 		// Change the placeholder text for "Enter Title Here"
 		add_filter( 'enter_title_here', array( __CLASS__, 'rewrite_enter_title_here' ) );
 
@@ -68,6 +76,7 @@ class Internal_Event_Descriptor_Admin_View {
 				( empty( $screen->taxonomy ) ) ) {
 			Scripts_And_Styles::enqueue_base_admin_script_and_styles();
 			Scripts_And_Styles::enqueue_select2();
+			Scripts_And_Styles::enqueue_fullcalendar();
 		} // endif
 	} // function
 
@@ -79,53 +88,27 @@ class Internal_Event_Descriptor_Admin_View {
 	public static function add_event_meta_boxes( $post_type, $post ) {
 		if ( $post_type == Internal_Event_Descriptor::POST_TYPE ) {
 
+			if ( current_user_can( 'edit_others_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+				// Don't bother showing the owner metabox if there's only one option
+				$event_editors = Internal_Event_Descriptor::get_event_editors_array();
+				if ( count( $event_editors ) > 1 ) {
+					add_meta_box(
+						'reg-man-rc-event-owner-metabox',
+						__( 'Event Owner', 'reg-man-rc' ),
+						array( __CLASS__, 'render_event_owner_metabox' ),
+						Internal_Event_Descriptor::POST_TYPE,
+						'side', // section to place the metabox (normal, side or advanced)
+						'default' // priority within the section (high, low or default)
+					);
+				} // endif
+			} // endif
+
 			add_meta_box(
 				'reg-man-rc-event-date-metabox',
 				__( 'Event Date and Time', 'reg-man-rc' ),
 				array( __CLASS__, 'render_event_date_metabox' ),
 				Internal_Event_Descriptor::POST_TYPE,
-				'side', // section to place the metabox (normal, side or advanced)
-				'high' // priority within the section (high, low or default)
-			);
-
-			add_meta_box(
-				'reg-man-rc-event-status-metabox',
-				__( 'Event Status', 'reg-man-rc' ),
-				array( __CLASS__, 'render_event_status_metabox' ),
-				Internal_Event_Descriptor::POST_TYPE,
-				'side', // section to place the metabox (normal, side or advanced)
-				'high' // priority within the section (high, low or default)
-			);
-
-			$view = Event_Category_Admin_View::create();
-			$is_multi = Settings::get_is_allow_event_multiple_categories();
-			$label = $is_multi ? __( 'Event Categories', 'reg-man-rc' ) : __( 'Event Category', 'reg-man-rc' );
-			add_meta_box(
-				'reg-man-rc-event-category-metabox',
-				$label,
-				array( $view, 'render_post_metabox' ),
-				Internal_Event_Descriptor::POST_TYPE,
-				'side', // section to place the metabox (normal, side or advanced)
-				'high' // priority within the section (high, low or default)
-			);
-
-			$view = Fixer_Station_Admin_View::create();
-			$label = __( 'Fixer Stations', 'reg-man-rc' );
-			add_meta_box(
-				'reg-man-rc-event-fixer-station-metabox',
-				$label,
-				array( $view, 'render_post_metabox' ),
-				Internal_Event_Descriptor::POST_TYPE,
-				'side', // section to place the metabox (normal, side or advanced)
-				'high' // priority within the section (high, low or default)
-			);
-
-			add_meta_box(
-				'reg-man-rc-event-class-metabox',
-				__( 'Event Class', 'reg-man-rc' ),
-				array( __CLASS__, 'render_event_class_metabox' ),
-				Internal_Event_Descriptor::POST_TYPE,
-				'side', // section to place the metabox (normal, side or advanced)
+				'normal', // section to place the metabox (normal, side or advanced)
 				'high' // priority within the section (high, low or default)
 			);
 
@@ -138,9 +121,110 @@ class Internal_Event_Descriptor_Admin_View {
 				'high' // priority within the section (high, low or default)
 			);
 
+			add_meta_box(
+				'reg-man-rc-event-status-metabox',
+				__( 'Event Status', 'reg-man-rc' ),
+				array( __CLASS__, 'render_event_status_metabox' ),
+				Internal_Event_Descriptor::POST_TYPE,
+				'side', // section to place the metabox (normal, side or advanced)
+				'default' // priority within the section (high, low or default)
+			);
+
+			$view = Event_Category_Admin_View::create();
+			$is_multi = Settings::get_is_allow_event_multiple_categories();
+			$label = $is_multi ? __( 'Event Categories', 'reg-man-rc' ) : __( 'Event Category', 'reg-man-rc' );
+			add_meta_box(
+				'reg-man-rc-event-category-metabox',
+				$label,
+				array( $view, 'render_post_metabox' ),
+				Internal_Event_Descriptor::POST_TYPE,
+				'side', // section to place the metabox (normal, side or advanced)
+				'default' // priority within the section (high, low or default)
+			);
+
+			$view = Fixer_Station_Admin_View::create();
+			$label = __( 'Fixer Stations', 'reg-man-rc' );
+			add_meta_box(
+				'reg-man-rc-event-fixer-station-metabox',
+				$label,
+				array( $view, 'render_post_metabox' ),
+				Internal_Event_Descriptor::POST_TYPE,
+				'side', // section to place the metabox (normal, side or advanced)
+				'default' // priority within the section (high, low or default)
+			);
+			
+			$label = __( 'Volunteer Pre-Registration Notes', 'reg-man-rc' );
+			add_meta_box(
+				'reg-man-rc-event-volunteer-pre-reg-note-metabox',
+				$label,
+				array( __CLASS__, 'render_volunteer_pre_reg_note_post_metabox' ),
+				Internal_Event_Descriptor::POST_TYPE,
+				'side', // section to place the metabox (normal, side or advanced)
+				'default' // priority within the section (high, low or default)
+			);
+			
 		} // endif
 	} // function
 
+	/**
+	 * Render the event owner metabox for the event
+	 * @param	\WP_Post	$post
+	 * @return	void
+	 * @since	v0.5.0
+	 */
+	public static function render_event_owner_metabox( $post ) {
+//		$curr_event_desc = Internal_Event_Descriptor::get_internal_event_descriptor_by_id( $post->ID );
+		$curr_event_author_id = $post->post_author;
+		
+		// We need a flag to distinguish the case where no user input is provided
+		//  versus the case where no inputs were shown at all like in quick edit mode
+		echo '<input type="hidden" name="event_owner_input_flag" value="TRUE">';
+		
+		$event_editors = Internal_Event_Descriptor::get_event_editors_array();
+		
+		$input_name = 'post_author_override'; // WordPress will handle this automatically as author
+
+		echo "<select name=\"$input_name\" autocomplete=\"off\">";
+		
+			foreach( $event_editors as $editor_id => $editor_name ) {
+				$selected = ( $curr_event_author_id == $editor_id ) ? 'selected="selected"' : '';
+				$html_name = esc_html( $editor_name );
+				echo "<option value=\"$editor_id\" $selected>$html_name</option>";
+			} // endfor
+			
+		echo '</select>';
+
+		$msg = __( 'Delegate this event to the selected user.  You will retain the ability to edit the event details, including its owner.',
+				'reg-man-rc' );
+		echo '<p>' . $msg . '</p>';
+		
+	} // function
+	
+	/**
+	 * Render the metabox for the note to be shown only in the volunteer area the event
+	 * @param	\WP_Post	$post
+	 * @return	void
+	 * @since	v0.8.7
+	 */
+	public static function render_volunteer_pre_reg_note_post_metabox( $post ) {
+		$curr_event_desc = Internal_Event_Descriptor::get_internal_event_descriptor_by_id( $post->ID );
+		
+		// We need a flag to distinguish the case where no user input is provided
+		//  versus the case where no inputs were shown at all like in quick edit mode
+		echo '<input type="hidden" name="volunteer_pre_reg_note_input_flag" value="TRUE">';
+		
+		$note = $curr_event_desc->get_volunteer_pre_reg_note();
+		
+		$input_name = 'vol_pre_reg_note';
+
+		echo "<textarea name=\"$input_name\" autocomplete=\"off\">$note</textarea>";
+
+		$msg = __( 'This note will be shown only in the volunteer area before the volunteer registers for the event.',
+				'reg-man-rc' );
+		echo '<p>' . $msg . '</p>';
+		
+	} // function
+	
 	/**
 	 * Render the event status metabox for the event
 	 * @param	\WP_Post	$post
@@ -151,9 +235,9 @@ class Internal_Event_Descriptor_Admin_View {
 
 		// We need a flag to distinguish the case where no user input is provided
 		//  versus the case where no inputs were shown at all like in quick edit mode
-		echo '<input type="hidden" name="item_status_input_flag" value="TRUE">';
+		echo '<input type="hidden" name="event_status_input_flag" value="TRUE">';
 
-		$desc = Internal_Event_Descriptor::get_internal_event_descriptor_by_event_id( $post->ID );
+		$desc = Internal_Event_Descriptor::get_internal_event_descriptor_by_id( $post->ID );
 		$status = isset( $desc ) ? $desc->get_event_status() : NULL;
 		$selected_id = isset( $status ) ? $status->get_id() : Event_Status::get_default_event_status_id();
 		self::render_status_radio_buttons( $selected_id );
@@ -164,57 +248,20 @@ class Internal_Event_Descriptor_Admin_View {
 		$input_name = 'event_status';
 		// Note that we can't use the same input id for multiple radio buttons
 		$format =
-			'<div><label title="%1$s">' .
+			'<div><label title="%1$s" class="reg-man-rc-metabox-radio-label">' .
 				'<input type="radio" name="' . $input_name . '" value="%2$s" %3$s>' .
 				'<span>%4$s</span>' .
 			'</label></div>';
 		foreach ( $all_status as $status ) {
 			$id = $status->get_id();
 			$name = $status->get_name();
+			$desc = $status->get_description();
 			$html_name = esc_html( $name );
-			$attr_name = esc_attr( $name );
+			$attr_desc = esc_attr( $desc );
 			$checked = checked( $id, $selected_id, $echo = FALSE );
-			printf( $format, $attr_name, $id, $checked, $html_name );
+			printf( $format, $attr_desc, $id, $checked, $html_name );
 		} // endfor
 	} // function
-
-	/**
-	 * Render the event class metabox for the event
-	 * @param	\WP_Post	$post
-	 * @return	void
-	 * @since	v0.1.0
-	 */
-	public static function render_event_class_metabox( $post ) {
-		$desc = Internal_Event_Descriptor::get_internal_event_descriptor_by_event_id( $post->ID );
-		$class = isset( $desc ) ? $desc->get_event_class() : NULL;
-		$selected_id = isset( $class ) ? $class->get_id() : Event_Class::PUBLIC;
-		self::render_class_radio_buttons( $selected_id );
-
-		$msg = __( 'The event class is determined automatically based on the published status and visibility.',
-				'reg-man-rc' );
-		echo '<p>' . $msg . '</p>';
-	} // function
-
-	private static function render_class_radio_buttons( $selected_id ) {
-
-		$event_classes = Event_Class::get_all_event_classes();
-		$input_name = 'event_class';
-
-		$format =
-			'<div><label title="%1$s">' .
-				'<input type="radio" name="' . $input_name . '" value="%2$s" %3$s autocomplete="off" disabled="disabled">' .
-				'<span>%4$s</span>' .
-			'</label></div>';
-		foreach ( $event_classes as $class_obj ) {
-			$id = $class_obj->get_id();
-			$name = $class_obj->get_name();
-			$html_name = esc_html( $name );
-			$attr_name = esc_attr( $name );
-			$checked = checked( $id, $selected_id, $echo = FALSE );
-			printf( $format, $attr_name, $id, $checked, $html_name );
-		} // endfor
-	} // function
-
 
 	/**
 	 * Render the event date meta box
@@ -224,14 +271,75 @@ class Internal_Event_Descriptor_Admin_View {
 	 */
 	public static function render_event_date_metabox( $post ) {
 
-		// We need a flag to distinguish the case where no user input is provided
-		//  versus the case where no inputs were shown at all like in quick edit mode
-		echo '<input type="hidden" name="event_dates_input_flag" value="TRUE">';
+		$event_descriptor = Internal_Event_Descriptor::get_internal_event_descriptor_by_id( $post->ID );
+//		Error_Log::var_dump( $event_descriptor );
 
-		$event = Internal_Event_Descriptor::get_internal_event_descriptor_by_event_id( $post->ID );
-		if ( isset( $event ) && ( $event instanceof Internal_Event_Descriptor ) ) {
-			$start_date_time = $event->get_event_start_date_time();
-			$end_date_time = $event->get_event_end_date_time();
+		$item_total = $event_descriptor->get_total_items_count();
+		$visitor_total = $event_descriptor->get_total_visitors_count();
+		$volunteer_total = $event_descriptor->get_total_volunteers_count();
+	
+//		Error_Log::var_dump( $item_total, $visitor_total, $volunteer_total );
+	
+		$has_registrations = ( $item_total !== 0 || $visitor_total !== 0 || $volunteer_total !== 0 );
+		
+		$addn_classes = $has_registrations ? 'inputs-require-enablement' : '';
+		
+		echo "<div class=\"event-dates-times-metabox-container $addn_classes\">";
+		
+			if ( $has_registrations ) {
+	
+				$warning_title = __( 'Warning: Items and/or volunteers have been registered to this event', 'reg-man-rc' );
+				echo '<h3>' . $warning_title . '</h3>';
+				
+				$warning_msg = __(
+						'Each registration includes the event date.' . 
+						'  Changing the date of this event or the settings for a repeating event may cause registrations to become orphaned.',
+						'reg-man-rc' );
+				echo '<p>' . $warning_msg . '</p>';
+				
+				$input_list = Form_Input_List::create();
+				$label = __( 'Modify event date settings', 'reg-man-rc' );
+				$name = 'event_dates_input_flag';
+				$val = 'TRUE';
+				$is_checked = FALSE;
+				$hint = __( 'To modify the event date settings you must check this box', 'reg-man-rc' );
+				$classes = 'event-dates-input-unlock-item';
+				$is_required = FALSE;
+				$addn_attrs = 'class="event-dates-input-unlock"';
+				$input_list->add_checkbox_input( $label, $name, $val, $is_checked, $hint, $classes, $is_required, $addn_attrs );
+				
+				$input_list->render();
+				
+			} else {
+				
+				// We need a flag to distinguish the case where no user input is provided
+				//  versus the case where no inputs were shown at all like in quick edit mode
+				echo '<input type="hidden" name="event_dates_input_flag" value="TRUE">';
+				
+			} // endif
+
+			echo '<div class="event-dates-times-input-container">';
+			
+				self::render_event_dates_times_inputs( $event_descriptor );
+	
+			echo '</div>';
+		
+		echo '</div>';
+		
+	} // function
+
+
+	/**
+	 * Render the inputs for the event's dates and times
+	 * @param	Internal_Event_Descriptor	$event_descriptor
+	 * @return	void
+	 * @since	v0.5.0
+	 */
+	public static function render_event_dates_times_inputs( $event_descriptor ) {
+		
+		if ( isset( $event_descriptor ) && ( $event_descriptor instanceof Internal_Event_Descriptor ) ) {
+			$start_date_time = $event_descriptor->get_event_start_date_time();
+			$end_date_time = $event_descriptor->get_event_end_date_time();
 		} else {
 			$start_date_time = NULL;
 			$end_date_time = NULL;
@@ -239,38 +347,419 @@ class Internal_Event_Descriptor_Admin_View {
 
 		$input_list = Form_Input_List::create();
 		$input_list->set_style_compact();
-
+		$input_list->add_list_classes( 'event-dates-times-input-list basic-event-dates-times-input-list' );
+		
 		$date_input_format = 'Y-m-d'; // The date input requires the value to be formated using ISO 8601
 		$time_input_format = 'H:i';   // The time input requires the value to be formated using 24-hour clock with leading zeros
 
-		$label = __( 'Event Date', 'reg-man-rc' );
+		$label = __( 'Event date', 'reg-man-rc' );
 		$name = 'event_start_date';
 		$val = isset( $start_date_time ) ? $start_date_time->format( $date_input_format ) : '';
 		$hint = '';
-		$classes = '';
+		$classes = 'recur-rule-input rrule-text-input';  // used to construct recurring event date/times
 		$is_required = TRUE;
 		$input_list->add_date_input( $label, $name, $val, $hint, $classes, $is_required );
 
-		$label = __( 'Start Time', 'reg-man-rc' );
+		$label = __( 'Start time', 'reg-man-rc' );
 		$name = 'event_start_time';
 		$val = isset( $start_date_time ) ? $start_date_time->format( $time_input_format ) : Settings::get_default_event_start_time();
 		$hint = '';
-		$classes = '';
+		$classes = 'recur-rule-input rrule-text-input';  // used to construct recurring event date/times
 		$is_required = TRUE;
 		$addn_attrs = 'step="1800"'; // 60 seconds * 30 minutes
 		$input_list->add_time_input( $label, $name, $val, $hint, $classes, $is_required, $addn_attrs );
 
-		$label = __( 'End Time', 'reg-man-rc' );
+		$label = __( 'End time', 'reg-man-rc' );
 		$name = 'event_end_time';
 		$val = isset( $end_date_time ) ? $end_date_time->format( $time_input_format ) : Settings::get_default_event_end_time();
 		$hint = '';
-		$classes = '';
+		$classes = 'recur-rule-input rrule-text-input';  // used to construct recurring event date/times
 		$is_required = TRUE;
 		$addn_attrs = 'step="1800"'; // 60 seconds * 30 minutes
 		$input_list->add_time_input( $label, $name, $val, $hint, $classes, $is_required, $addn_attrs );
 
+		// Is recurring
+		$is_allow_recurring = Settings::get_is_allow_recurring_events();
+		if ( $is_allow_recurring ) {
+			$label = __( 'Repeat this event', 'reg-man-rc' );
+			$name = 'event_recur_flag';
+			$rrule = $event_descriptor->get_event_recurrence_rule();
+			$val = '1';
+			$is_checked = ! empty( $rrule );
+			$hint = __( 'E.g. every month until the end of the year', 'reg-man-rc' );
+			$classes = 'recur-rule-input event-recur-flag rrule-text-input'; // used to construct recurring event date/times
+			$is_required = FALSE;
+			$addn_attrs = 'autocomplete="off"';
+			$input_list->add_checkbox_input( $label, $name, $val, $is_checked, $hint, $classes, $is_required, $addn_attrs );
+		} // endif
+
+		$ajax_url = esc_url( admin_url( 'admin-ajax.php' ) );
+		$ajax_action = Internal_Event_Descriptor_Controller::GET_RECUR_EVENT_DATES_AJAX_ACTION;
+		$nonce = wp_create_nonce( $ajax_action );
+		$data = array();
+		$data[] = "data-get-recur-event-dates-ajax-url=\"$ajax_url\"";
+		$data[] = "data-get-recur-event-dates-ajax-action=\"$ajax_action\"";
+		$data[] = "data-get-recur-event-dates-ajax-nonce=\"$nonce\"";
+		$data_str = implode( ' ', $data );
+		
+		echo "<div class=\"event-dates-and-times-container\" $data_str>";
+
+			$input_list->render();
+	
+			if ( $is_allow_recurring ) {
+				
+				echo '<div class="recurring-event-input-container">';
+
+					self::render_recurrence_inputs( $event_descriptor );
+
+				echo '</div>';
+					
+			} // endif
+		
+		echo '</div>';
+		
+	} // function
+	
+	/**
+	 * Render the inputs for a recurring event
+	 * @param	Internal_Event_Descriptor	$event_descriptor
+	 */
+	private static function render_recurrence_inputs( $event_descriptor ) {
+		
+		$rrule = $event_descriptor->get_event_recurrence_rule();
+		
+		$input_list = Form_Input_List::create();
+		$list_classes = 'recurring-event-input-list event-dates-times-input-list';
+		$input_list->add_list_classes( $list_classes );
+		$input_list->set_style_compact();
+		
+		// Until
+		$label = __( 'Repeat until', 'reg-man-rc' );
+		$name = 'event_recur_until_date';
+		$recur_until_date_time = isset( $rrule ) ? $rrule->get_until() : NULL;
+		$date_input_format = 'Y-m-d'; // The date input requires the value to be formated using ISO 8601
+		$val = isset( $recur_until_date_time ) ? $recur_until_date_time->format( $date_input_format ) : '';
+		$hint = '';
+		$classes = 'recur-rule-input rrule-text-input';
+		$is_required = TRUE;
+		$addn_attrs = 'disabled="disabled"';
+		$input_list->add_date_input( $label, $name, $val, $hint, $classes, $is_required, $addn_attrs );
+		
+		// Repeat Every...
+		$freq_input_list = Form_Input_List::create();
+		$freq_input_list->set_style_compact();
+
+		$label = __( 'Interval', 'reg-man-rc' );
+		$name = 'event_recur_interval';
+		$val = isset( $rrule ) ? $rrule->get_interval() : 1;
+		$hint = '';
+		$classes = 'recur-rule-input rrule-text-input';
+		$is_required = TRUE;
+		$addn_attrs = 'min=1 size=3 disabled="disabled"';
+		$freq_input_list->add_number_input( $label, $name, $val, $hint, $classes, $is_required, $addn_attrs );
+
+		$label = __( 'Frequency', 'reg-man-rc' );
+		$name = 'event_recur_frequency';
+		$options = array(
+				__( 'Day(s)', 'reg-man-rc' )	=> Recurrence_Rule::DAILY,
+				__( 'Week(s)', 'reg-man-rc' )	=> Recurrence_Rule::WEEKLY,
+				__( 'Month(s)', 'reg-man-rc' )	=> Recurrence_Rule::MONTHLY,
+				__( 'Year(s)', 'reg-man-rc' )	=> Recurrence_Rule::YEARLY,
+		);
+		$selected = isset( $rrule ) ? $rrule->get_frequency() : Recurrence_Rule::MONTHLY;
+		$hint = '';
+		$classes = 'recur-rule-input rrule-text-input';
+		$is_required = TRUE;
+		$addn_attrs = 'disabled="disabled"';
+		$freq_input_list->add_select_input( $label, $name, $options, $selected, $hint, $classes, $is_required, $addn_attrs );
+		
+		$label = __( 'Repeat every', 'reg-man-rc' );
+		$hint = '';
+		$classes = '';
+		$is_required = TRUE;
+		$input_list->add_fieldset( $label, $freq_input_list, $hint, $classes, $is_required );
+
+		// On...
+		self::render_recur_weekly_on_inputs( $input_list, $rrule );
+
+		self::render_recur_monthly_on_inputs( $input_list, $rrule );
+		
+		self::render_recur_yearly_on_inputs( $input_list, $rrule );
+		
+		// TODO: Add inputs for additional dates and exclude dates (RDATE and EXDATE)
+		//  Maybe also support cancellation dates?  I.e. dates marked on the calendar but cancelled
+
 		$input_list->render();
 
+		self::render_cancelled_dates_inputs( $event_descriptor );
+		
+		self::render_event_dates_calendar( $event_descriptor );
+		
+	} // function
+
+	/**
+	 * Render the calendar for a repeating event's dates
+	 * @param Internal_Event_Descriptor $event_descriptor
+	 */
+	private static function render_cancelled_dates_inputs( $event_descriptor ) {
+		echo '<div class="recurring-event-input-list cancel-dates-container">';
+		
+			echo '<input type="hidden" name="cancel_recurring_event_dates_input_flag" value="1">';
+
+			$input_list = Form_Input_List::create();
+			$list_classes = 'recurring-event-input-list event-cancel-dates-input-list';
+			$input_list->add_list_classes( $list_classes );
+		
+
+			$events_array = $event_descriptor->get_event_object_array();
+			$options_array = array();
+		
+			foreach( $events_array as $event ) {
+				$event_start_date = $event->get_start_date_time_object();
+				if ( ! empty( $event_start_date ) ) {
+					$event_date_label = $event->get_start_date_string_in_display_format();
+					$event_date_data = $event->get_start_date_string_in_data_format();
+					$options_array[ $event_date_label ] = $event_date_data;
+				} // endif
+			} // endfor
+
+			$cancel_dates = $event_descriptor->get_cancelled_event_dates();
+			$selected = array();
+			foreach( $cancel_dates as $cancel_date_time ) {
+				$date_str = $cancel_date_time->format( Event_Key::EVENT_DATE_FORMAT );
+				$selected[] = $date_str;
+			} // endfor
+		
+			$select_classes = 'combobox recur-event-dates-change-listener recur-event-dates-multi-select';
+			$label = __( 'Mark these dates as "Cancelled"', 'reg-man-rc' );
+			$name = 'recur_cancel_dates[]';
+			$hint = '';
+			$classes = '';
+			$addn_attrs = "multiple=\"multiple\" class=\"$select_classes\"";
+			$is_required = FALSE;
+			$input_list->add_select_input( $label, $name, $options_array, $selected, $hint, $classes, $is_required, $addn_attrs );
+		
+			$input_list->render();
+		
+		echo '</div>';
+	} // function
+
+	/**
+	 * Render the calendar for a repeating event's dates
+	 * @param Internal_Event_Descriptor $event_descriptor
+	 */
+	private static function render_event_dates_calendar( $event_descriptor ) {
+
+		$input_list = Form_Input_List::create();
+		$list_classes = 'recurring-event-input-list event-dates-calendar';
+		$input_list->add_list_classes( $list_classes );
+		
+		$label = __( 'Event dates', 'reg-man-rc' );
+		$calendar_fieldset = Form_Input_List::create();
+		$calendar = Calendar::get_event_descriptor_calendar( $event_descriptor );
+		$calendar_view = Calendar_View::create( $calendar );
+		ob_start();
+			$calendar_view->render();
+		$calendar_content = ob_get_clean();
+		$calendar_fieldset->add_custom_html_input( '', '', $calendar_content );
+		$input_list->add_fieldset( $label, $calendar_fieldset );
+
+		$input_list->render();
+		
+	} // function
+
+	/**
+	 * Get an array of keys for the days of the week starting with the correct start of week day for this installation
+	 * @return string[]
+	 */
+	private static function get_week_day_keys_array() {
+		$keys_array = array( 'SU', 'MO', 'TU', 'WE','TH', 'FR', 'SA' );
+		$result = array();
+		$start_of_week = get_option( 'start_of_week' );
+		$index = $start_of_week;
+		for( $count = 0; $count < 7; $count++ ) {
+			$index = ( $start_of_week + $count ) % 7;
+			$result[] = $keys_array[ $index ];
+		} // endfor
+		return $result;
+	} // function
+	
+	/**
+	 * Get an array of days of the week starting with the correct start of week day for this installation and keyed by
+	 *  RRULE standard BYDAY keys, e.g. 'SU', 'MO' etc.
+	 * @return string[][]
+	 */
+	private static function get_week_days_array() {
+		$result = array();
+		$keys = self::get_week_day_keys_array();
+		$labels_array = array(
+			'SU'	=> __( 'Sunday'		, 'reg-man-rc' ),
+			'MO'	=> __( 'Monday'		, 'reg-man-rc' ),
+			'TU'	=> __( 'Tuesday'	, 'reg-man-rc' ),
+			'WE'	=> __( 'Wednesday'	, 'reg-man-rc' ),
+			'TH'	=> __( 'Thursday'	, 'reg-man-rc' ),
+			'FR'	=> __( 'Friday'		, 'reg-man-rc' ),
+			'SA'	=> __( 'Saturday'	, 'reg-man-rc' ),
+		);
+		foreach( $keys as $key ) {
+			$result[ $key ] = $labels_array[ $key ];
+		} // endfor
+		
+		return $result;
+	} // function
+	
+	/**
+	 * Get an array of days of the month ordered by the correct start of week day for this installation and keyed by
+	 *  RRULE standard BYDAY keys, e.g. '1SU' => 'First Sunday', '1MO' => 'First Monday' ... '-1SA' => 'Last Saturday'
+	 * @return string[][]
+	 */
+	private static function get_days_of_month_array() {
+		
+		$result = array(); 
+		
+		// Get the week days keys in the correct order based on start_of_week
+		$week_days_array = self::get_week_days_array();
+		
+		$weeks_array = array(
+				'1'		=> __( 'First'	, 'reg-man-rc' ), 
+				'2'		=> __( 'Second'	, 'reg-man-rc' ),
+				'3'		=> __( 'Third'	, 'reg-man-rc' ),
+				'4'		=> __( 'Fourth'	, 'reg-man-rc' ),
+				'5'		=> __( 'Fifth'	, 'reg-man-rc' ),
+				'-1'	=> __( 'Last'	, 'reg-man-rc' ),
+		);
+		
+		/* Translators: %1$s is a week ordinal like "Third", %2$s is a day of the week like "Friday" */
+		$format = _x( '%1$s %2$s', 'A format for combining a week ordinal number and week day in a month, like "Third Friday"', 'reg-man-rc' );
+		foreach( $weeks_array as $week_num => $week_label ) {
+			
+			foreach( $week_days_array as $day_key => $day_label ) {
+				
+				$label = sprintf( $format, $week_label, $day_label ); // E.g. "Third Friday"
+				$val = $week_num . $day_key; // E.g. "3FR"
+				$result[ $label ] = $val;
+				
+			} // endfor
+			
+		} // endfor
+
+		return $result;
+		
+	} // function
+	
+	/**
+	 * Render the inputs for recur weekly on days of the week
+	 * @param	Form_Input_List	$input_list
+	 * @param	Recurrence_Rule	$rrule
+	 */
+	private static function render_recur_weekly_on_inputs( $input_list, $rrule) {
+		
+		$weekly_on_input_list = Form_Input_List::create();
+		$weekly_on_input_list->set_style_compact();
+
+		$curr_by_day_array = isset( $rrule ) ? $rrule->get_by_day() : array();
+		
+		$name = 'recur_weekly_by_day[]';
+		$hint = '';
+		$classes = 'recur-rule-input rrule-weekly-by-day-input';
+
+		$week_days_array = self::get_week_days_array(); // Gets them in the correct order
+		foreach( $week_days_array as $val => $label ) {
+			$is_checked = in_array( $val, $curr_by_day_array );
+			$weekly_on_input_list->add_checkbox_input( $label, $name, $val, $is_checked, $hint, $classes );
+		} // endfor
+
+		$label = __( 'Repeat on day(s) of week', 'reg-man-rc' );
+		$hint = __( 'Default is event date day of week', 'reg-man-rc' );
+		$classes = 'recur-rule-repeat-on-input-list WEEKLY';
+		$is_required = FALSE;
+		$input_list->add_fieldset( $label, $weekly_on_input_list, $hint, $classes, $is_required );
+		
+	} // function
+
+	/**
+	 * Render the inputs for recur monthly on certain days
+	 * @param	Form_Input_List	$input_list
+	 * @param	Recurrence_Rule	$rrule
+	 */
+	private static function render_recur_monthly_on_inputs( $input_list, $rrule) {
+		
+		$is_monthly_selected = isset( $rrule ) ? ( $rrule->get_frequency() == 'MONTHLY' ) : FALSE;
+		
+		$curr_by_day_array = ( $is_monthly_selected && isset( $rrule ) ) ? $rrule->get_by_day() : array();
+
+		$select_options_array = self::get_days_of_month_array();
+		
+		$label = __( 'Day(s) of month', 'reg-man-rc' );
+		$name = 'recur_monthly_by_day[]';
+		$selected = $curr_by_day_array;
+		$hint = '';
+		$addn_attrs = 'multiple="multiple" class="combobox"';
+		
+		$label = __( 'Repeat on day(s) of month', 'reg-man-rc' );
+		$hint = __( 'Default is event date day of month', 'reg-man-rc' );
+		$classes = 'recur-rule-input rrule-monthly-by-day-input recur-rule-repeat-on-input-list MONTHLY';
+		$is_required = FALSE;
+		$input_list->add_select_input( $label, $name, $select_options_array, $selected, $hint, $classes, $is_required, $addn_attrs );
+		
+	} // function
+
+	/**
+	 * Render the inputs for recur monthly on certain days
+	 * @param	Form_Input_List	$input_list
+	 * @param	Recurrence_Rule	$rrule
+	 */
+	private static function render_recur_yearly_on_inputs( $input_list, $rrule) {
+		
+		$yearly_on_input_list = Form_Input_List::create();
+		$yearly_on_input_list->set_style_compact();
+		
+		$is_yearly_selected = isset( $rrule ) ? ( $rrule->get_frequency() == 'YEARLY' ) : FALSE;
+
+		$curr_by_month_array = ( $is_yearly_selected && isset( $rrule ) ) ? $rrule->get_by_month() : array();
+		$curr_by_day_array = ( $is_yearly_selected && isset( $rrule ) ) ? $rrule->get_by_day() : array();
+
+		// Month of year
+		$select_options_array = array(
+				__( 'January', 'reg-man-rc' )	=> 1,
+				__( 'February', 'reg-man-rc' )	=> 2,
+				__( 'March', 'reg-man-rc' )		=> 3,
+				__( 'April', 'reg-man-rc' )		=> 4,
+				__( 'May', 'reg-man-rc' )		=> 5,
+				__( 'June', 'reg-man-rc' )		=> 6,
+				__( 'July', 'reg-man-rc' )		=> 7,
+				__( 'August', 'reg-man-rc' )	=> 8,
+				__( 'September', 'reg-man-rc' )	=> 9,
+				__( 'October', 'reg-man-rc' )	=> 10,
+				__( 'November', 'reg-man-rc' )	=> 11,
+				__( 'December', 'reg-man-rc' )	=> 12,
+		);
+		$label = __( 'Month(s) of year', 'reg-man-rc' );
+		$name = 'recur_yearly_by_month[]';
+		$selected = $curr_by_month_array;
+		$hint = '';
+		$classes = 'recur-rule-input rrule-yearly-by-month-input';
+		$is_required = FALSE;
+		$addn_attrs = 'multiple="multiple" class="combobox"';
+		$yearly_on_input_list->add_select_input( $label, $name, $select_options_array, $selected, $hint, $classes, $is_required, $addn_attrs );
+		
+		// Days of month
+		$select_options_array = self::get_days_of_month_array();		
+		$label = __( 'Day(s) of month', 'reg-man-rc' );
+		$name = 'recur_yearly_by_day[]';
+		$selected = $curr_by_day_array;
+		$hint = '';
+		$classes = 'recur-rule-input rrule-yearly-by-day-input';
+		$is_required = FALSE;
+		$addn_attrs = 'multiple="multiple" class="combobox"';
+		$yearly_on_input_list->add_select_input( $label, $name, $select_options_array, $selected, $hint, $classes, $is_required, $addn_attrs );
+		
+		$label = __( 'Repeat on day(s) of year', 'reg-man-rc' );
+		$hint = __( 'Default is month and day of event date', 'reg-man-rc' );
+		$classes = 'recur-rule-repeat-on-input-list YEARLY';
+		$is_required = FALSE;
+		$input_list->add_fieldset( $label, $yearly_on_input_list, $hint, $classes, $is_required );
+		
 	} // function
 
 	/**
@@ -285,7 +774,7 @@ class Internal_Event_Descriptor_Admin_View {
 		//  versus the case where no inputs were shown at all like in quick edit mode
 		echo '<input type="hidden" name="event_venue_input_flag" value="TRUE">';
 
-		$event = Internal_Event_Descriptor::get_internal_event_descriptor_by_event_id( $post->ID );
+		$event = Internal_Event_Descriptor::get_internal_event_descriptor_by_id( $post->ID );
 		if ( isset( $event ) && ( $event instanceof Internal_Event_Descriptor ) ) {
 			$curr_venue = $event->get_event_venue();
 		} else {
@@ -337,7 +826,8 @@ class Internal_Event_Descriptor_Admin_View {
 		$venues = Venue::get_all_venues();
 
 		// Disabled to start with until it is initialized on the client side
-		echo "<select class=\"combobox\" name=\"$input_name\" id=\"$input_id\" autocomplete=\"off\"  disabled=\"disabled\" >";
+		$style = 'style="width:100%;"'; // otherwise the input is based on currently selected text!
+		echo "<select class=\"combobox\" name=\"$input_name\" id=\"$input_id\" autocomplete=\"off\" disabled=\"disabled\" $style>";
 
 			$label = __( 'This event has no venue', 'reg-man-rc' );
 			$html_name= esc_html( $label );
@@ -362,29 +852,6 @@ class Internal_Event_Descriptor_Admin_View {
 		echo '</select>';
 	} // function
 
-	/**
-	 * Render the event items meta box
-	 * @param \WP_Post $post
-	 * @return	void
-	 * @since	v0.1.0
-	 */
-/* FIXME - this was intended to show the items for the event but not sure it's useful / needed
-	public static function render_event_items_metabox( $post ) {
-		$event_descriptor = Internal_Event_Descriptor::get_internal_event_descriptor_by_event_id( $post->ID );
-		if ( ! isset( $event_descriptor ) ) {
-			// This is likely an auto-draft (just being created) so there's no date, no event key etc.
-			// We should probably not even show the metabox in this case
-			echo __( 'There is no registration data associated with this event', 'reg-man-rc' );
-		} else {
-			$events_array = $event_descriptor->get_event_object_array();
-			foreach( $events_array as $event ) {
-				$event_key = $event->get_key();
-				$item_array = Item::get_items_registered_for_event( $event_key );
-				var_dump( $item_array );
-			} // endfor
-		} // endif
-	} // function
-*/
 	public static function rewrite_enter_title_here( $input ) {
 		// Change the placeholder text for "Enter Title Here" if the specified post is mine
 		if ( Internal_Event_Descriptor::POST_TYPE === get_post_type() ) {
@@ -423,9 +890,9 @@ class Internal_Event_Descriptor_Admin_View {
 		$category_heading = Settings::get_is_allow_event_multiple_categories() ? __( 'Categories', 'reg-man-rc' ) : __( 'Category', 'reg-man-rc' );
 		$result = array(
 			'cb'				=> $columns['cb'],
-			'title'				=> __( 'Summary', 'reg-man-rc' ),
+			'title'				=> __( 'Title', 'reg-man-rc' ),
 			'event_status'		=> __( 'Status', 'reg-man-rc' ),
-			'event_class'		=> __( 'Class', 'reg-man-rc' ),
+			'event_class'		=> __( 'Visibility', 'reg-man-rc' ),
 			'event_date'		=> __( 'Date & Time', 'reg-man-rc' ),
 			'is_recurring'		=> __( 'Repeats', 'reg-man-rc' ),
 			$venue_key			=> __( 'Venue', 'reg-man-rc' ),
@@ -436,7 +903,7 @@ class Internal_Event_Descriptor_Admin_View {
 			'non_fixer_count'	=> __( 'Non-fixers', 'reg-man-rc' ),
 			'comments'			=> $columns[ 'comments' ],
 			'date'				=> __( 'Last Update', 'reg-man-rc' ),
-			'author'			=> __( 'Author', 'reg-man-rc' ),
+			'author'			=> __( 'Owner', 'reg-man-rc' ),
 		);
 		if ( ! Settings::get_is_allow_recurring_events() ) {
 			unset( $result[ 'is_recurring' ] );
@@ -447,7 +914,7 @@ class Internal_Event_Descriptor_Admin_View {
 	public static function render_admin_UI_column_values( $column_name, $post_id ) {
 		$em_dash = __( '—', 'reg-man-rc' ); // an em-dash is used by Wordpress for empty fields
 		$result = $em_dash; // show em-dash by default
-		$event_desc = Internal_Event_Descriptor::get_internal_event_descriptor_by_event_id( $post_id );
+		$event_desc = Internal_Event_Descriptor::get_internal_event_descriptor_by_id( $post_id );
 
 		if ( $event_desc !== NULL ) {
 			switch ( $column_name ) {
@@ -483,7 +950,23 @@ class Internal_Event_Descriptor_Admin_View {
 
 				case 'event_class':
 					$class = $event_desc->get_event_class();
-					$result = isset( $class ) ? esc_html( $class->get_name() ) : $em_dash;
+					$id = isset( $class ) ? $class->get_id() : '';
+					switch( $id ) {
+
+						case Event_Class::PUBLIC:
+						case Event_Class::PRIVATE:
+							$result = esc_html( $class->get_name() );
+							break;
+							
+						case Event_Class::CONFIDENTIAL:
+							$result = esc_html__( 'Private', 'reg-man-rc' );
+							break;
+
+						default:
+							$result = $em_dash;
+							break;
+							
+					} // endswitch
 					break;
 
 				case 'fixer_stations':
@@ -496,10 +979,11 @@ class Internal_Event_Descriptor_Admin_View {
 					if ( $is_recurring ) {
 						$result = $em_dash;
 					} else {
-						$event_key_obj = Event_Key::create( $event_desc->get_event_descriptor_id() );
-						$event_keys_array = array( $event_key_obj->get_as_string() );
+						$event_date_time = $event_desc->get_event_start_date_time();
+						$event_key_obj = Event_Key::create( $event_date_time, $event_desc->get_event_descriptor_id() );
+						$events_collection = Events_Collection::create_for_single_event_key( $event_key_obj->get_as_string() );
 						$group_by = Item_Stats_Collection::GROUP_BY_TOTAL;
-						$stats_collection = Item_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
+						$stats_collection = Item_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
 						$totals_array = array_values( $stats_collection->get_all_stats_array() );
 						$total_stats = isset( $totals_array[ 0 ] ) ? $totals_array[ 0 ] : NULL;
 						$total = isset( $total_stats ) ? $total_stats->get_item_count() : NULL;
@@ -512,10 +996,11 @@ class Internal_Event_Descriptor_Admin_View {
 					if ( $is_recurring ) {
 						$result = $em_dash;
 					} else {
-						$event_key_obj = Event_Key::create( $event_desc->get_event_descriptor_id() );
-						$event_keys_array = array( $event_key_obj->get_as_string() );
+						$event_date_time = $event_desc->get_event_start_date_time();
+						$event_key_obj = Event_Key::create( $event_date_time, $event_desc->get_event_descriptor_id() );
+						$events_collection = Events_Collection::create_for_single_event_key( $event_key_obj->get_as_string() );
 						$group_by = Volunteer_Stats_Collection::GROUP_BY_TOTAL_FIXERS;
-						$stats_collection = Volunteer_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
+						$stats_collection = Volunteer_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
 						$totals_array = array_values( $stats_collection->get_all_stats_array() );
 						$total_stats = isset( $totals_array[ 0 ] ) ? $totals_array[ 0 ] : NULL;
 						$total = isset( $total_stats ) ? $total_stats->get_head_count() : NULL;
@@ -528,10 +1013,11 @@ class Internal_Event_Descriptor_Admin_View {
 					if ( $is_recurring ) {
 						$result = $em_dash;
 					} else {
-						$event_key_obj = Event_Key::create( $event_desc->get_event_descriptor_id() );
-						$event_keys_array = array( $event_key_obj->get_as_string() );
+						$event_date_time = $event_desc->get_event_start_date_time();
+						$event_key_obj = Event_Key::create( $event_date_time, $event_desc->get_event_descriptor_id() );
+						$events_collection = Events_Collection::create_for_single_event_key( $event_key_obj->get_as_string() );
 						$group_by = Volunteer_Stats_Collection::GROUP_BY_TOTAL_NON_FIXERS;
-						$stats_collection = Volunteer_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
+						$stats_collection = Volunteer_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
 						$totals_array = array_values( $stats_collection->get_all_stats_array() );
 						$total_stats = isset( $totals_array[ 0 ] ) ? $totals_array[ 0 ] : NULL;
 						$total = isset( $total_stats ) ? $total_stats->get_head_count() : NULL;
@@ -553,21 +1039,13 @@ class Internal_Event_Descriptor_Admin_View {
 		ob_start();
 			echo '<ul class="custom-post-type-admin-fixer-station-list">';
 				foreach( $stations_array as $station ) {
-					$icon_url = $station->get_icon_url();
 					$station_text = $station->get_name();
-					$name_attr = esc_attr( $station_text );
 					$id = $station->get_id();
-					if ( ! empty( $icon_url ) ) {
-						echo '<li class="fixer-station-item fixer-station-icon" data-id="' . $id . '">';
-							echo "<img src=\"$icon_url\" title=\"$name_attr\" alt=\"$name_attr\">";
-						echo '</li>';
-					} else {
-						echo '<li class="fixer-station-item fixer-station-text" data-id="' . $id . '">';
-							echo '<span class="reg-man-rc-custom-post-details-text">';
-								echo $station_text;
-							echo '</span>';
-						echo '</li>';
-					} // endif
+					echo '<li class="fixer-station-item fixer-station-text" data-id="' . $id . '">';
+						echo '<span class="reg-man-rc-custom-post-details-text">';
+							echo $station_text;
+						echo '</span>';
+					echo '</li>';
 				} // endfor
 			echo '</ul>';
 		$result = ob_get_clean();
@@ -660,4 +1138,121 @@ class Internal_Event_Descriptor_Admin_View {
 		} // endif
 	} // function
 
+	/**
+	 * Get the set of tabs to be shown in the help for this type
+	 * @return array
+	 */
+	public static function get_help_tabs() {
+		$result = array(
+			array(
+				'id'		=> 'reg-man-rc-about',
+				'title'		=> __( 'About', 'reg-man-rc' ),
+				'content'	=> self::get_about_content(),
+			),
+		);
+		return $result;
+	} // function
+	
+	/**
+	 * Get the html content shown to the administrator in the "About" help for this post type
+	 * @return string
+	 */
+	private static function get_about_content() {
+		ob_start();
+			$heading = __( 'About event descriptions', 'reg-man-rc' );
+			
+			echo "<h2>$heading</h2>";
+			echo '<p>';
+				$msg = __(
+					'An event description contains the details of a single event or a series of repeating events.' .
+					'  It includes the following:',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+
+				$item_format = '<dt>%1$s</dt><dd>%2$s</dd>';
+				echo '<dl>';
+
+					$title = esc_html__( 'Title', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The event title, e.g. "Repair Café at Toronto Reference Library".' .
+							'  This will be used to identify the event on a calendar.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Status', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The event status; one of Confirmed (the event will take place),' . 
+							' Tentative (the even has not yet been confirmed),' . 
+							' or Cancelled (the event will not take place).',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Visibility', 'reg-man-rc' );
+					$msg = esc_html__(
+							'Published events are Public and visible to everyone; this is the normal visibility.' .
+							'  Draft and privately published events are Private and are only visible on the administrative calendar.' .
+							'  Public events may be shown on public calendars including upcoming events and the volunteer area calendar.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Date & Time', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The date of the event and the time it starts and ends.',
+//							'  For repeating events, this field shows the first possible event date and the start and end times for all events.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Repeats', 'reg-man-rc' );
+					$msg = esc_html__(
+							'An event description can define a single event or a repeating event, e.g. "Repeat every month until the end of the year".',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Venue', 'reg-man-rc' );
+					$msg = esc_html__( 'The title of the venue for the event, e.g. "Toronto Reference Library".', 'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Category', 'reg-man-rc' );
+					$msg = esc_html__( 'The event category, e.g. "Repair Café".', 'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Fixer Stations', 'reg-man-rc' );
+					$msg = esc_html__( 'The list of fixer stations that will be set up at this event, e.g. "Appliances & Housewares, Computers, Bikes".', 'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+/*
+					$title = esc_html__( 'Items', 'reg-man-rc' );
+					$msg = esc_html__( 'A count of items registered for this event', 'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Fixers', 'reg-man-rc' );
+					$msg = esc_html__( 'A count of fixers registered to attend this event', 'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Non-Fixers', 'reg-man-rc' );
+					$msg = esc_html__( 'A count of non-fixer volunteers registered to attend this event', 'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Owner', 'reg-man-rc' );
+					$msg = esc_html__( 'The event owner (author) who has authority to modify this event', 'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+*/
+				echo '</dl>';
+			echo '</p>';
+/*
+			echo '<p>';
+				$msg = __(
+					'When you register an item and begin typing the description, the system' .
+					' will find and display matching item suggestions.' .
+					'  For example, if you type "light" the system may show item suggestions like "Lamp", "Bike light" and "Nightlight".',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+*/
+
+		$result = ob_get_clean();
+		return $result;
+	} // function
+	
 } // class

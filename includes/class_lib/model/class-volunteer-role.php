@@ -324,8 +324,11 @@ class Volunteer_Role {
 		);
 		$query = new \WP_Query( $args );
 		$result = $query->found_posts;
-		wp_reset_postdata(); // Required after using WP_Query()
+
+//		wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+		
 		return $result;
+
 	} // function
 
 	/**
@@ -513,49 +516,6 @@ class Volunteer_Role {
 			'description'	=> __( 'Take photos and post to website and social media', 'reg-man-rc' ),
 			'colour'		=> '#fb9d19',
 		);
-		return $result;
-	} // function
-
-	/**
-	 * Get the html content shown to the administrator in the "About" help for this taxonomy
-	 * @return string
-	 */
-	public static function get_about_content() {
-		ob_start();
-			$heading = __( 'About volunteer roles', 'reg-man-rc' );
-			echo "<h2>$heading</h2>";
-			echo '<p>';
-				$msg = __(
-					'A volunteer role is a task or set of tasks for a volunteer at an event;' .
-					' for example, Setup & Cleanup, Registration, or Photographer.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'When a volunteer registers for an event they will specify which roles (if any) they prefer to perform.' .
-					'  A volunteer may perform more than one role at an event; for example, Setup & Cleanup and Photographer.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'A fixer may register for a volunteer role like Setup & Cleanup (which is performed before and after the event)' .
-					' and also register to repair items at a fixer station during the event.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			echo '<p>';
-				$msg = __(
-					'Volunteer roles are colour coded for display in statistical charts.',
-					'reg-man-rc'
-				);
-				echo esc_html( $msg );
-			echo '</p>';
-			$result = ob_get_clean();
 		return $result;
 	} // function
 

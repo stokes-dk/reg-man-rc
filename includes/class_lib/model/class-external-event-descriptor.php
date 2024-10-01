@@ -16,6 +16,7 @@ use Reg_Man_RC\View\Event_Descriptor_View;
  *
  */
 class External_Event_Descriptor implements Event_Descriptor {
+	
 	private $uid;
 	private $provider_id;
 	private $event_descriptor_id;
@@ -45,87 +46,6 @@ class External_Event_Descriptor implements Event_Descriptor {
 	private $rdates;
 	private $inclusion_date_time_array; // an array of DateTime objects representing the dates to be added to a recurring event
 	private $map_marker_colour;
-
-	private static $EXTERNAL_PROVIDER_NAMES;
-
-	/**
-	 * Get an array of the names of all external event providers
-	 * @return	string[]	An array of names of the registered external event providers indexed by their ID.
-	 * 	E.g. array( 'ecwd' => 'Event Calendar WD' );
-	 */
-	public static function get_all_external_event_providers() {
-		if ( ! isset( self::$EXTERNAL_PROVIDER_NAMES ) ) {
-			/**
-			 * Get all external event providers
-			 *
-			 * Each external event provider will add its name to the resulting array indexed by ID.
-			 *   E.g. array( 'ecwd' => 'Event Calendar WD' );
-			 *
-			 * @since v0.1.0
-			 *
-			 * @api
-			 *
-			 * @param	array	$provider_names_arrays	An array of string names of external event providers.
-			 */
-			self::$EXTERNAL_PROVIDER_NAMES = apply_filters( 'reg_man_rc_poll_event_providers', array() );
-		} // endif
-		return self::$EXTERNAL_PROVIDER_NAMES;
-	} // function
-
-	/**
-	 * Get all events defined by external event providers, e.g. ECWD
-	 *
-	 * This method will return an array of instances of this class describing all events supplied by
-	 * active add-on plugins for external event providers like Event Calendar WD
-	 *
-	 * @return \Reg_Man_RC\Model\External_Event_Descriptor[]
-	 */
-	public static function get_all_external_event_descriptors() {
-		/**
-		 * Add all events defined under the external event providers
-		 *
-		 * Each external event provider will extract all its events and add them to the result
-		 *
-		 * @since v0.1.0
-		 *
-		 * @api
-		 *
-		 * @param	array	$desc_data_arrays	An array of string arrays where each string array provides the details of one external event.
-		 * 	The details of the array are documented in the instantiate_from_data_array() method of this class.
-		 */
-		$desc_data_arrays = apply_filters( 'reg_man_rc_add_all_events', array() );
-		$result = array();
-		foreach ( $desc_data_arrays as $data_array ) {
-			$event = self::instantiate_from_data_array( $data_array );
-			if ( $event !== NULL ) {
-				$result[] = $event;
-			} // endif
-		} // endfor
-		return $result;
-	} // function
-
-	/**
-	 * Get a single external event descriptor using its event key string, e.g. 2456.ecwd
-	 *
-	 * This method will return a single instance of this class describing the event specified by the key string.
-	 * If the event is not found, this method will return NULL
-	 *
-	 * @param	string|Event_Key	$event_key	The key for the event as a string or an instance of EventKey, returned by Event::get_event_key();
-	 * @param	string|Event_Key	The
-	 * @return	\Reg_Man_RC\Model\External_Event_Descriptor
-	 */
-	public static function get_external_event_descriptor_by_key( $event_key ) {
-		if ( is_string( $event_key ) ) {
-			$event_key = Event_Key::create_from_string( $event_key );
-		} // endif
-		$event_id = $event_key->get_event_descriptor_id();
-		$provider_id = $event_key->get_provider_id();
-
-		$descriptor = apply_filters( 'reg_man_rc_get_event-' . $provider_id, NULL, $event_id );
-		$result = ( ! empty( $descriptor ) ) ? self::instantiate_from_data_array( $descriptor ) : NULL;
-
-		return $result;
-	} // function
 
 	/**
 	 * Instantiate this class based on the array of strings specified.
@@ -159,7 +79,7 @@ class External_Event_Descriptor implements Event_Descriptor {
 	 * @return	\Reg_Man_RC\Model\External_Event_Descriptor	The event descriptor object constructed from the data provided.  If the data
 	 * 	are not valid, for example the uid, provider id or provider event id are missing, then the result is NULL.
 	 */
-	private static function instantiate_from_data_array( $data_array ) {
+	public static function instantiate_from_data_array( $data_array ) {
 		// uid, provider id, and provider event id are required.  If they are missing we will return NULL
 		if ( isset( $data_array['uid'] ) && isset( $data_array['provider-id'] ) && isset( $data_array['event-descriptor-id'] ) ) {
 			$result = new self();
@@ -250,11 +170,11 @@ class External_Event_Descriptor implements Event_Descriptor {
 				Error_Log::log_msg( $msg );
 			} // endif
 			if ( ! isset( $data_array['provider-id'] ) ) {
-				$msg = sprintf( __( 'Missing Provider ID in external event descriptor.', 'reg-man-rc' ) );
+				$msg = sprintf( __( 'Missing event provider ID in external event descriptor.', 'reg-man-rc' ) );
 				Error_Log::log_msg( $msg );
 			} // endif
 			if ( ! isset( $data_array['event-descriptor-id'] ) ) {
-				$msg = sprintf( __( 'Missing Event Descriptor ID in external event descriptor.', 'reg-man-rc' ) );
+				$msg = sprintf( __( 'Missing event descriptor ID in external event descriptor.', 'reg-man-rc' ) );
 				Error_Log::log_msg( $msg );
 			} // endif
 		} // endif
@@ -303,6 +223,16 @@ class External_Event_Descriptor implements Event_Descriptor {
 	} // function
 
 	/**
+	 * Get the WordPress user ID of the author of this event, if known
+	 * @return	int|string	The WordPress user ID of the author of this event if it is known, otherwise NULL or 0.
+	 * @since v0.6.0
+	 */
+	public function get_event_author_id() {
+		// TODO: It may be possible to implement this in some cases
+		return 0;
+	} // function
+	
+	/**
 	 * Get the event's status represented as an ID, one of CONFIRMED, TENTATIVE or CANCELLED.
 	 *
 	 * @return	string	The event's status ID.
@@ -313,15 +243,13 @@ class External_Event_Descriptor implements Event_Descriptor {
 	} // function
 
 	/**
-	 * Get the event's status represented as an instance of the Event_Status class.
-	 * The default should be CONFIRMED.
-	 *
-	 * @return	Event_Status	The event's status.
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Event_Descriptor::get_event_status()
 	 */
-	// FIXME - change this to get_event_status( $recur_id ) to allow for cancelling of specific event recurrence
-	public function get_event_status() {
-		if ( !isset( $this->status ) ) {
+	public function get_event_status( $event_date = NULL) {
+		// For now, external events do not support cancelling of individual recurring event instances,
+		//  so the $event_date argument is ignored
+		if ( ! isset( $this->status ) ) {
 			$this->status = Event_Status::get_event_status_by_id( $this->get_event_status_id() );
 			if ( $this->status === NULL ) {
 				$this->status = Event_Status::get_event_status_by_id( Event_Status::CONFIRMED );
@@ -356,7 +284,8 @@ class External_Event_Descriptor implements Event_Descriptor {
 	} // function
 
 	/**
-	 * Get the event's start date and time as a \DateTimeInterface object, e.g. \DateTime instance
+	 * Get the event's start date and time as a \DateTimeInterface object, e.g. \DateTime instance.
+	 * Note that the timezone MUST be set to local time, i.e. wp_timezone()
 	 * @return	\DateTimeInterface	Event start date and time.  May be NULL if no start time is assigned.
 	 * @since v0.1.0
 	 */
@@ -365,6 +294,7 @@ class External_Event_Descriptor implements Event_Descriptor {
 			if ( !empty( $this->dtstart ) ) {
 				try {
 					$this->start_date_time = self::parse_date_string( $this->dtstart );
+					$this->start_date_time->setTimezone( wp_timezone() ); // Make sure it's in local timezone
 				} catch ( \Exception $exc ) {
 					// We will not have a date and time here if the above fails so just log and continue
 					/* translators: %1$s is an invalid dtstart value supplied for an event description */
@@ -377,15 +307,17 @@ class External_Event_Descriptor implements Event_Descriptor {
 	} // function
 
 	/**
-	 * Get the event's end date and time as a \DateTimeInterface object, e.g. \DateTime instance
+	 * Get the event's end date and time as a \DateTimeInterface object, e.g. \DateTime instance.
+	 * Note that the timezone MUST be set to local time, i.e. wp_timezone()
 	 * @return	\DateTimeInterface	Event end date and time.  May be NULL if no end time is assigned.
 	 * @since v0.1.0
 	 */
 	public function get_event_end_date_time() {
-		if ( !isset( $this->end_date_time ) ) {
-			if ( !empty( $this->dtend ) ) {
+		if ( ! isset( $this->end_date_time ) ) {
+			if ( ! empty( $this->dtend ) ) {
 				try {
 					$this->end_date_time = self::parse_date_string( $this->dtend );
+					$this->end_date_time->setTimezone( wp_timezone() );
 				} catch ( \Exception $exc ) {
 					// We will not have a date and time here if the above fails so just log and continue
 					/* translators: %1$s is an invalid dtend value supplied for an event description */
@@ -401,8 +333,14 @@ class External_Event_Descriptor implements Event_Descriptor {
 	 * Returns a \DateTime object contructed from a string in the form: TZID=America/Toronto:20201115T120000
 	 * @param	string		$dt_str
 	 * @return	\DateTime	DateTime object with the correct date, time and timezone
+	 * @throws	\Exception	If the date string cannot be parsed
 	 */
-	private static function parse_date_string($dt_str) {
+	private static function parse_date_string( $dt_str ) {
+
+		// Note that it would be nicer to use DateTime::createFromFormat() using '\T\Z\I\D\=e:Ymd\THis'
+		// But when PHP version is below 8.2, it fails saying that the Timezone cannot be found
+		// Even though the same timezone can be found when constructing it as below!
+		
 		$parts = explode( ':', $dt_str );
 		if ( count( $parts ) !== 2 ) {
 			$result = NULL;
@@ -417,6 +355,7 @@ class External_Event_Descriptor implements Event_Descriptor {
 			} // endif
 		} // endif
 		return $result;
+
 	} // function
 
 	/**
@@ -525,25 +464,25 @@ class External_Event_Descriptor implements Event_Descriptor {
 	} // function
 
 	/**
-	 * Get the url for the event descriptor page or event recurrence page when $recur_id is specified.
-	 * @param	string|NULL	$recur_id	An event recurrence ID.
+	 * Get the url for the event descriptor page or event recurrence page when $recur_date is specified.
+	 * @param	string|NULL	$recur_date	An event recurrence date.
 	 *  When NULL or empty the result of this method is the url for the page showing the event descriptor, if such a page exists.
-	 *  If $recur_id is specified then the result is the url for the page showing the specified recurrence, if it exists.
-	 *  If no separate page exists for the event recurrence then the result is the same as when no $recur_id is specified.
+	 *  If $recur_date is specified then the result is the url for the page showing the specified recurrence, if it exists.
+	 *  If no separate page exists for the event recurrence then the result is the same as when no $recur_date is specified.
 	 * @return	string			The url for the page that shows this event descriptor or event recurrence if one exists,
 	 *  otherwise NULL or empty string.
 	 * @since v0.1.0
 	 */
-	public function get_event_page_url( $recur_id = NULL ) {
+	public function get_event_page_url( $recur_date = NULL ) {
 		$base_url = $this->get_event_descriptor_page_url();
-		if ( empty( $recur_id ) || ! $this->get_event_is_recurring() ) {
-			// No $recur_id was specified or this is not a recurring event
+		if ( empty( $recur_date ) || ! $this->get_event_is_recurring() ) {
+			// No $recur_date was specified or this is not a recurring event
 			$result = $base_url;
 
 		} else {
 			/**
 			 * Ask the external event providers to filter the event URL so that it correctly includes the
-			 * specified recurrence ID.
+			 * specified recurrence date.
 			 *
 			 * @since v0.1.0
 			 *
@@ -552,14 +491,14 @@ class External_Event_Descriptor implements Event_Descriptor {
 			 * @param	string	$base_url		The base URL for the event provided in the original event descriptor.
 			 * @param	string	$provider_id	The ID of the event provider for this event.
 			 *   Providers must verify that the event belongs to them before modifying the URL.
-			 * @param	string	$recur_id		The recurrence ID as an event date in ISO 8601 format, e.g. '20230206'
+			 * @param	string	$recur_date		The recurrence date as an event date in ISO 8601 format, e.g. '20230206'
 			 * @param	string	$desc_id		The event descriptor ID provided in the original event descriptor.
 			 * @param	string	$uid			The event UID provided in the original event descriptor.
 			 */
 			$provider_id = $this->get_provider_id();
 			$desc_id = $this->get_event_descriptor_id();
 			$uid = $this->get_event_uid();
-			$result = apply_filters( 'reg_man_rc_filter_recurring_event_url', $base_url, $provider_id, $recur_id, $desc_id, $uid );
+			$result = apply_filters( 'reg_man_rc_filter_recurring_event_url', $base_url, $provider_id, $recur_date, $desc_id, $uid );
 
 		} // endif
 
@@ -622,14 +561,14 @@ class External_Event_Descriptor implements Event_Descriptor {
 	 * @since v0.1.0
 	 */
 	 public function get_event_exclusion_dates() {
-	 	if ( !isset( $this->exclusion_date_time_array ) ) {
-			if ( !empty( $this->exdates ) ) {
+	 	if ( ! isset( $this->exclusion_date_time_array ) ) {
+			if ( ! empty( $this->exdates ) ) {
 				$this->exclusion_date_time_array = array();
 				try {
 					$dates = explode( ',', $this->exdates );
 					foreach ( $dates as $date ) {
 						$date_time = self::parse_date_string( $date );
-						if ( !empty( $date_time ) ) {
+						if ( ! empty( $date_time ) ) {
 							$this->exclusion_date_time_array[] = $date_time;
 						} // endif
 					} // endfor

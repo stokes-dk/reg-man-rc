@@ -1,6 +1,8 @@
 <?php
 namespace Reg_Man_RC\Model\Stats;
 
+use Reg_Man_RC\Model\Events_Collection;
+
 /**
  * An instance of this class represents stats about how many items of a particular group have been fixed, not fixed and so on.
  * Statistics may be grouped by item description, item type, event or total.
@@ -23,12 +25,12 @@ class Item_Stats {
 
 	/**
 	 * Get the Item_Stats object for the total of all events specified
-	 * @param string[] $event_keys_array
+	 * @param Events_Collection $events_collection
 	 * @return Item_Stats
 	 */
-	public static function get_total_item_stats_for_event_keys_array( $event_keys_array ) {
+	public static function get_total_item_stats_for_events_collection( $events_collection ) {
 		$group_by = Item_Stats_Collection::GROUP_BY_TOTAL;
-		$stats_collection = Item_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
+		$stats_collection = Item_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
 		$stats_array = array_values( $stats_collection->get_all_stats_array() );
 		$result = isset( $stats_array[ 0 ] ) ? $stats_array[ 0 ] : self::create( '', 0, 0, 0, 0 ); // Defensive
 		return $result;
@@ -122,6 +124,7 @@ class Item_Stats {
 		$this->repairable_count += $repairable_count;
 		$this->eol_count += $end_of_life_count;
 		unset( $this->repair_status_unknown_count );
+		unset( $this->ci_calculator );
 	} // function
 
 	private function get_ci_calculator() {
@@ -191,26 +194,50 @@ class Item_Stats {
 	public function get_estimated_diversion_range_lower_count() {
 		$ci = $this->get_ci_calculator();
 		$proportion = $ci->get_lower_bound();
-		$count = round( $this->get_item_count() * $proportion );
-		return $count;
+		$ci_lower_count = round( $this->get_item_count() * $proportion );
+		// We know the lower limit is at least the number of fixed and repairable
+		$diverted_floor = $this->fixed_count + $this->repairable_count;
+		// The CI estimate may be higher than the known ceiling, especially when the population is quite small
+		$result = max( $ci_lower_count, $diverted_floor );
+		return $result;
 	} // function
 
 	public function get_estimated_diversion_range_upper_count() {
 		$ci = $this->get_ci_calculator();
 		$proportion = $ci->get_upper_bound();
-		$count = round( $this->get_item_count() * $proportion );
-		return $count;
+		$ci_upper_count = round( $this->get_item_count() * $proportion );
+		// We know the upper limit is at most the total minus the EOL count
+		$diverted_ceiling = $this->item_count - $this->eol_count;
+		// The CI estimate may be larger than the known ceiling, especially when the population is quite small
+		$result = min( $ci_upper_count, $diverted_ceiling );
+		return $result;
 	} // function
 
 	public function get_estimated_diversion_count_range_as_string() {
+
 		$em_dash = __( '—', 'reg-man-rc' ); // an em-dash is used by Wordpress for empty fields
 		$ci = $this->get_ci_calculator();
 		$sample = $ci->get_sample_rate();
+		
 		if ( $sample == 0 ) {
+			
 			// We have no sample on which to estimate a diversion rate
 			$result = $em_dash;
+			
 		} else {
-			$result = $ci->get_confidence_interval_as_count_string();
+
+			$lower_count = $this->get_estimated_diversion_range_lower_count();
+			$upper_count = $this->get_estimated_diversion_range_upper_count();
+			$lower_text = number_format_i18n( $lower_count );
+			$upper_text = number_format_i18n( $upper_count );
+			if ( $lower_count == $upper_count ) {
+				$result = $upper_text;
+			} else {
+				/* Translators: %1$s is the lower bound for a range, %2$s is the upper bound */
+				$format = _x( '%1$s–%2$s', 'Show a range of values like 8–10', 'reg-man-rc' );
+				$result = sprintf( $format, $lower_text, $upper_text );
+			} // endif
+			
 		} // endif
 		return $result;
 	} // function

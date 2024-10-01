@@ -8,6 +8,7 @@ use Reg_Man_RC\Model\Volunteer_Registration;
 use Reg_Man_RC\Model\Event_Filter;
 use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Event;
+use Reg_Man_RC\Model\Events_Collection;
 
 /**
  * An instance of this class provides sets of Volunteer_Stats objects based on a set of event keys and a grouping.
@@ -30,7 +31,7 @@ class Volunteer_Stats_Collection {
 	const GROUP_BY_TOTAL_FIXERS			= 'total_fixers'; // get the total registrations for fixers
 	const GROUP_BY_TOTAL_NON_FIXERS		= 'total_non_fixers'; // get the total registrations for non-fixers
 
-	private $event_array_key;
+	private $event_keys_array;
 	private $group_by;
 	private $event_count;
 
@@ -43,48 +44,25 @@ class Volunteer_Stats_Collection {
 	private function __construct() { }
 
 	/**
-	 * Create the stats object for the specified events and grouped in the specified way
+	 * Create a Volunteer_Stats_Collection for the specified event collection and grouped in the specified way
 	 *
-	 * @param	string[]|NULL	$event_key_array	An array of event key strings specifying which event's volunteers are to be included
-	 *  or NULL to get all volunteer stats (from all events)
-	 * @param	string			$group_by			A string specifying how the results should be grouped.
+	 * @param	Events_Collection	$events_collection	A collection specifying which event's volunteers are to be included
+	 * @param	string				$group_by			A string specifying how the results should be grouped.
 	 * The value must be one of the GROUP_BY_* constants defined in this class.
 	 *
-	 * @return Volunteer_Stats_Collection
+	 * @return Volunteer_Stats_Collection	An instance of this class which provides the stats and their related data.
 	 */
-	public static function create_for_event_key_array( $event_key_array, $group_by ) {
+	public static function create_for_events_collection( $events_collection, $group_by ) {
 		$result = new self();
-		$result->event_array_key = $event_key_array;
-		if ( is_array( $event_key_array ) ) {
-			$result->event_count = count( $event_key_array );
-		} else {
-			$result->event_count = Event_Stats_Collection::get_all_known_events_count();
-		} // endif
+		$result->event_count = $events_collection->get_event_count();
+		// We will store NULL for the event keys array if this collection is for ALL events
+		$result->event_keys_array = $events_collection->get_is_all_events() ? NULL : $events_collection->get_event_keys_array();
 		$result->group_by = $group_by;
 		return $result;
 	} // endif
 
-	/**
-	 * Get the stats for the set of events derived from the specified filter.
-	 *
-	 * If the event filter is NULL then all items fixed stats will be returned.
-
-	 * @param	Event_Filter|NULL	$filter		An Event_Filter instance which limits the set of events whose
-	 *  stats are to be returned, or NULL if all stats are to be returned.
-	 * @param	string				$group_by	One of the GROUP_BY_* constants defined in this class which specifies
-	 *  how the stats are to be grouped.
-	 * @return Volunteer_Stats_Collection
-	 *
-	 */
-	public static function create_for_filter( $filter, $group_by ) {
-		// If the filter is NULL then I will pass an event key array of NULL to signify that we want everything
-		$keys_array = isset( $filter ) ? Event_Key::get_event_keys_for_filter( $filter ) : NULL;
-		$result = self::create_for_event_key_array( $keys_array, $group_by );
-		return $result;
-	} // function
-
-	private function get_event_key_array() {
-		return $this->event_array_key;
+	private function get_event_keys_array() {
+		return $this->event_keys_array;
 	} // function
 
 	private function get_group_by() {
@@ -111,16 +89,22 @@ class Volunteer_Stats_Collection {
 
 			$merged_stats = self::merge_stats_arrays( $reg_stats_array, $sup_stats_array );
 			$group_by = $this->get_group_by();
+			
 //	Error_Log::var_dump( $group_by );
 			switch ( $group_by ) {
+				
 				case self::GROUP_BY_VOLUNTEER_ROLE:
 					$this->all_stats_array = self::sort_items_by_volunteer_role( $merged_stats );
 					break;
+					
 				case self::GROUP_BY_FIXER_STATION:
 					$this->all_stats_array = self::sort_items_by_station( $merged_stats );
 					break;
+					
 				default:
 					$this->all_stats_array = $merged_stats; // Just don't fail if there's no group by
+					break;
+					
 			} // endswitch
 
 		} // endif
@@ -199,8 +183,9 @@ class Volunteer_Stats_Collection {
 				// Add the two matching rows together
 				$result[ $name ] = Volunteer_Stats::create(
 						$name,
-						$stats_1->get_head_count() + $stats_2->get_head_count()
-					);
+						$stats_1->get_head_count() + $stats_2->get_head_count(),
+						$stats_1->get_apprentice_count() + $stats_2->get_apprentice_count(),
+				);
 			} // endif
 		} // endfor
 		return $result;
@@ -212,9 +197,9 @@ class Volunteer_Stats_Collection {
 	 */
 	public function get_supplemental_stats_array() {
 		if ( ! isset( $this->supplemental_stats_array ) ) {
-			$event_key_array = $this->get_event_key_array();
+			$event_keys_array = $this->get_event_keys_array();
 			$group_by = $this->get_group_by();
-			$this->supplemental_stats_array = Supplemental_Volunteer_Registration::get_supplemental_group_stats_array( $event_key_array, $group_by );
+			$this->supplemental_stats_array = Supplemental_Volunteer_Registration::get_supplemental_group_stats_array( $event_keys_array, $group_by );
 		} // endif
 		return $this->supplemental_stats_array;
 	} // function
@@ -227,12 +212,17 @@ class Volunteer_Stats_Collection {
 	public function get_internal_registered_stats_array() {
 		if ( ! isset( $this->internal_stats_array ) ) {
 
-			$event_key_array = $this->get_event_key_array();
+			$event_keys_array = $this->get_event_keys_array();
 			$group_by = $this->get_group_by();
 
-			if ( is_array( $event_key_array) && ( count( $event_key_array ) == 0 ) ) {
+			if ( is_array( $event_keys_array ) && ( count( $event_keys_array ) == 0 ) ) {
+				
 				$this->internal_stats_array = array(); // The request is for an empty set of events so return an empty set
+
 			} else {
+
+				// Otherwise, the request is for ALL events (event keys array is NULL) or some subset
+
 				global $wpdb;
 
 				$posts_table = $wpdb->posts;
@@ -276,7 +266,7 @@ class Volunteer_Stats_Collection {
 				$where = " WHERE p.post_type = '$reg_post_type' AND p.post_status = 'publish' ";
 //				$group_clause = ' GROUP BY name ';
 
-				if ( ( $group_by == self::GROUP_BY_EVENT ) || ( ! empty( $event_key_array ) ) ) {
+				if ( ( $group_by == self::GROUP_BY_EVENT ) || ( ! empty( $event_keys_array ) ) ) {
 					// When grouping by event or when getting specific events we need to join the post meta table
 					// We need to join the meta table for the event key to group by event or get data for certain events
 					$from .= " LEFT JOIN $meta_table AS event_meta ON p.ID = event_meta.post_id AND event_meta.meta_key = '$event_meta_key' ";
@@ -343,19 +333,19 @@ class Volunteer_Stats_Collection {
 					$from .= " LEFT JOIN $meta_table AS appr_meta ON p.ID = appr_meta.post_id AND appr_meta.meta_key = '$apprentice_meta_key' ";
 				} // endif
 
-				if ( empty( $event_key_array ) ) {
+				if ( empty( $event_keys_array ) ) {
 					$query = "$select $from $where GROUP BY name";
 					$data_array = $wpdb->get_results( $query, ARRAY_A );
 				} else {
-					$placeholder_array = array_fill( 0, count( $event_key_array ), '%s' );
+					$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
 					$placeholders = implode( ',', $placeholder_array );
 					$where .= " AND event_meta.meta_value IN ( $placeholders )";
 					$query = "$select $from $where GROUP BY name";
-					$stmt = $wpdb->prepare( $query, $event_key_array );
+					$stmt = $wpdb->prepare( $query, $event_keys_array );
 					$data_array = $wpdb->get_results( $stmt, ARRAY_A );
 				} // endif
 
-//	Error_Log::var_dump( $group_by, $query, $event_key_array );
+//	Error_Log::var_dump( $group_by, $query, $event_keys_array );
 //	Error_Log::var_dump( $data_array );
 
 				$this->internal_stats_array = array();
@@ -382,15 +372,15 @@ class Volunteer_Stats_Collection {
 		if ( ! isset( $this->external_stats_array ) ) {
 			$this->external_stats_array = array();
 
-			$event_key_array = $this->get_event_key_array();
+			$event_keys_array = $this->get_event_keys_array();
 			$group_by = $this->group_by;
 
-			if ( $event_key_array === NULL ) {
+			if ( $event_keys_array === NULL ) {
 				$key_data_array = NULL;
 			} else {
 				// Convert the Event_Key objects into associative arrays that can be understood by external sources
 				$key_data_array = array();
-				foreach( $event_key_array as $event_key ) {
+				foreach( $event_keys_array as $event_key ) {
 					$key_obj = Event_Key::create_from_string( $event_key );
 					$key_data_array[] = $key_obj->get_as_associative_array();
 				} // endfor
@@ -402,36 +392,59 @@ class Volunteer_Stats_Collection {
 			$has_unspecified = FALSE;
 			$unspecified_head_count = 0; // We need a special count for roles we don't know
 			$unspecified_appr_count = 0;
-			if ( $group_by == self::GROUP_BY_VOLUNTEER_ROLE ) {
-				$no_name = Volunteer_Role::UNSPECIFIED_VOLUNTEER_ROLE_ID;
-			} elseif ( $group_by == self::GROUP_BY_FIXER_STATION ) {
-				$no_name = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
-			} else {
-				$name = '';
-			} // endif
+			
+			switch( $group_by ) {
+				
+				case self::GROUP_BY_VOLUNTEER_ROLE:
+					$no_name = Volunteer_Role::UNSPECIFIED_VOLUNTEER_ROLE_ID;
+					break;
+					
+				case self::GROUP_BY_FIXER_STATION:
+					$no_name = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
+					break;
+					
+				default:
+					$name = '';
+					break;
+					
+			} // endswitch
 
 			foreach( $ext_data as $ext_data_row ) {
 				$is_unspecified = FALSE; // assume this is a valid role
 				$name		= isset( $ext_data_row[ 'name' ] )	? $ext_data_row[ 'name' ]	: $no_name;
+				
 				// If registrations are grouped by role or station then external systems may use other names
 				// We need to use the internal names so try to find the right one
-				if ( $group_by == self::GROUP_BY_VOLUNTEER_ROLE ) {
-					$role = Volunteer_Role::get_volunteer_role_by_name( $name );
-					if ( isset( $role ) ) {
-						$name = $role->get_id(); // use the standard internal ID rather than the external name
-					} else {
-						// Otherwise it's an unknown role, often something like "Anywhere!" just group together
-						$is_unspecified = TRUE;
-					} // endif
-				} elseif ( $group_by == self::GROUP_BY_FIXER_STATION ) {
-					$station = Fixer_Station::get_fixer_station_by_name( $name );
-					if ( isset( $station ) ) {
-						$name = $station->get_id(); // use the standard internal ID rather than the external name
-					} else {
-						// Otherwise it's an unknown fixer station
-						$is_unspecified = TRUE;
-					} // endif
+				switch( $group_by ) {
+				
+					case self::GROUP_BY_VOLUNTEER_ROLE:
+						$role = Volunteer_Role::get_volunteer_role_by_name( $name );
+						if ( isset( $role ) ) {
+							$name = $role->get_id(); // use the standard internal ID rather than the external name
+						} else {
+							// Otherwise it's an unknown role, often something like "Anywhere!" just group together
+							$is_unspecified = TRUE;
+						} // endif
+						break;
+						
+					case self::GROUP_BY_FIXER_STATION:
+						$station = Fixer_Station::get_fixer_station_by_name( $name );
+						if ( isset( $station ) ) {
+							$name = $station->get_id(); // use the standard internal ID rather than the external name
+						} else {
+							// Otherwise it's an unknown fixer station
+							$is_unspecified = TRUE;
+						} // endif
+						break;
+						
+					case self::GROUP_BY_EVENT:
+						$key_obj = Event_Key::create_from_string( $name );
+						$name = ! empty( $key_obj ) ? $key_obj->get_as_string() : $name;
+//						Error_Log::var_dump( $name );
+						break;
+					
 				} // endif
+				
 				$head_count	= isset( $ext_data_row[ 'head_count' ] )		? intval( $ext_data_row[ 'head_count' ] ) 		: 0;
 				$appr_count	= isset( $ext_data_row[ 'apprentice_count' ] )	? intval( $ext_data_row[ 'apprentice_count' ] )	: 0;
 				if ( $is_unspecified ) {
@@ -456,6 +469,9 @@ class Volunteer_Stats_Collection {
 				$instance = Volunteer_Stats::create( $name, $unspecified_head_count, $unspecified_appr_count );
 				$this->external_stats_array[ $name ] = $instance;
 			} // endif
+
+//			Error_Log::var_dump( $this->external_stats_array );
+
 		} // endif
 
 		return $this->external_stats_array;

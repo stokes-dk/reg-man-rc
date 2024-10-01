@@ -10,6 +10,8 @@ use Reg_Man_RC\Model\Volunteer;
 use Reg_Man_RC\View\Event_View;
 use Reg_Man_RC\Model\Calendar;
 use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Model\Event;
+use Reg_Man_RC\Control\User_Role_Controller;
 
 /**
  * The administrative view for Volunteer Registration
@@ -75,17 +77,6 @@ class Volunteer_Registration_Admin_View {
 
 		if ( $post_type == Volunteer_Registration::POST_TYPE ) {
 
-			$new_id = Volunteer_Registration::POST_TYPE . '-volunteer-metabox';
-			$render_fn = array( __CLASS__, 'render_volunteer_meta_box' );
-			add_meta_box(
-					$new_id,							// Unique ID for the element
-					__( 'Volunteer', 'reg-man-rc' ),	// Box title
-					$render_fn,							// Content callback, must be of type callable
-					Volunteer_Registration::POST_TYPE, 	// Post type for this meta box
-					'normal',								// Meta box position
-					'high'								// Meta box priority
-			);
-
 			$new_id = Volunteer_Registration::POST_TYPE . '-event-metabox';
 			$render_fn = array( __CLASS__, 'render_event_meta_box' );
 			add_meta_box(
@@ -93,8 +84,19 @@ class Volunteer_Registration_Admin_View {
 					__( 'Event', 'reg-man-rc' ),		// Box title
 					$render_fn,							// Content callback, must be of type callable
 					Volunteer_Registration::POST_TYPE, 	// Post type for this meta box
-					'normal',								// Meta box position
+					'normal',							// Meta box position
 					'high'								// Meta box priority
+			);
+
+			$new_id = Volunteer_Registration::POST_TYPE . '-volunteer-metabox';
+			$render_fn = array( __CLASS__, 'render_volunteer_meta_box' );
+			add_meta_box(
+					$new_id,									// Unique ID for the element
+					__( 'Fixer / Volunteer', 'reg-man-rc' ),	// Box title
+					$render_fn,									// Content callback, must be of type callable
+					Volunteer_Registration::POST_TYPE, 			// Post type for this meta box
+					'normal',									// Meta box position
+					'high'										// Meta box priority
 			);
 
 			// Comments
@@ -135,33 +137,6 @@ class Volunteer_Registration_Admin_View {
 		} // endif
 	} // function
 
-	/**
-	 * Render the alternate descriptions metabox for the specified post
-	 * @param	\WP_Post	$post
-	 */
-	public static function render_comments_metabox( $post ) {
-		if ( $post->post_type === Volunteer_Registration::POST_TYPE ) {
-
-			// We need a flag to distinguish the case where no user input is provided
-			//  versus the case where no inputs were shown at all like in quick edit mode
-			echo '<input type="hidden" name="alt_desc_input_flag" value="TRUE">';
-			$vol_reg = Volunteer_Registration::get_registration_by_id( $post->ID );
-			$input_list = Form_Input_List::create();
-			$label = __( 'Volunteer Note', 'reg-man-rc' );
-			// Note that we use the name 'post_content' so that this will automatically be saved there
-			$name = 'post_content';
-			$val = isset( $vol_reg ) ? $vol_reg->get_volunteer_registration_comments() : '';
-			$hint = '';
-			$classes = 'full-width'; // We want a wide text input here
-			$is_required = FALSE;
-			$addn_attrs = 'readonly="readonly"';
-			$rows = 2;
-			$input_list->add_text_area_input( $label, $name, $rows, $val, $hint, $classes, $is_required, $addn_attrs );
-
-			$input_list->render();
-		} // function
-	} // function
-
 	
 	/**
 	 * Render the meta box for the event
@@ -175,19 +150,27 @@ class Volunteer_Registration_Admin_View {
 		//  versus the case where no checkboxes were presented at all like in quick edit mode
 		echo '<input type="hidden" name="volunteer_reg_event_input_flag" value="TRUE">';
 
-		echo '<div class="reg-man-rc-volunteer-reg event-metabox reg-man-rc-metabox">';
+		$vol_reg = Volunteer_Registration::get_registration_by_id( $post->ID );
+		$volunteer = isset( $vol_reg ) ? $vol_reg->get_volunteer() : NULL;
+		$volunteer_id = isset( $volunteer ) ? $volunteer->get_id() : NULL;
+		$event_key = isset( $vol_reg ) ? $vol_reg->get_event_key_string() : '';
+		
+		$data = "data-original-event=\"$event_key\" data-original-vol-id=\"$volunteer_id\"";
+		
+		echo "<div class=\"reg-man-rc-volunteer-reg event-metabox reg-man-rc-metabox\" $data>";
 			$reg = Volunteer_Registration::get_registration_by_id( $post->ID );
 			$event = isset( $reg ) ? $reg->get_event() : NULL;
-			$selected_key = isset( $event ) ? $event->get_key() : NULL;
-			$input_name = 'volunteer_event';
+			$selected_key = isset( $event ) ? $event->get_key_string() : NULL;
+			$input_name = 'volunteer_registration_event';
 
 			$classes = '';
 			$calendar = Calendar::get_admin_calendar();
 			$name = esc_html( __( '-- Please select --', 'reg-man-rc' ) );
-			$selected = ( empty( $selected_key ) ) ? 'selected="selected"' : '';
+			$selected = empty( $selected_key ) ? 'selected="selected"' : '';
 			$first_option = "<option value=\"\" disabled=\"disabled\" $selected>$name</option>";
 			$is_required = TRUE;
-			Event_View::render_event_select( $input_name, $classes, $calendar, $selected_key, $first_option, $is_required );
+			$events_array = Event::get_events_array_current_user_can_register_volunteers();
+			Event_View::render_event_select( $input_name, $classes, $calendar, $selected_key, $events_array, $first_option, $is_required, $reg );
 		echo '</div>';
 
 	} // function
@@ -201,50 +184,104 @@ class Volunteer_Registration_Admin_View {
 	 */
 	public static function render_volunteer_meta_box( $post ) {
 
-		// We need a flag to distinguish the case where no event statuses were chosen by the user
-		//  versus the case where no checkboxes were presented at all like in quick edit mode
+		// We need a flag to distinguish the case where no volunteer was chosen by the user
+		//  versus the case where no options were presented at all like in quick edit mode
 		echo '<input type="hidden" name="volunteer_reg_volunteer_input_flag" value="TRUE">';
 
+		// If this WP user is not allowed to edit volunteer registrations OR this WP User is attempting
+		// to edit a registration for a different volunteer then we should never get here -- the system
+		// should prevent that
+		
+		// If this registration is for the current WP user then the user can modify the volunteer details or comments
+		$vol_reg = Volunteer_Registration::get_registration_by_id( $post->ID );
+		$volunteer = isset( $vol_reg ) ? $vol_reg->get_volunteer() : NULL;
+		$volunteer_id = isset( $volunteer ) ? $volunteer->get_id() : NULL;
+		
 		echo '<div class="reg-man-rc-volunteer-reg volunteer-metabox reg-man-rc-metabox">';
-			$reg = Volunteer_Registration::get_registration_by_id( $post->ID );
-			$volunteer = isset( $reg ) ? $reg->get_volunteer() : NULL;
-			$selected_id = isset( $volunteer ) ? $volunteer->get_id() : NULL;
-			$input_name = 'volunteer_registration_volunteer';
-			$input_id = 'vol-reg-volunteer-input';
 
-			self::render_volunteer_select( $input_name, $input_id, $selected_id );
+			$volunter_id_input_name = 'volunteer_registration_volunteer';
+			$volunteer_id_input_id = 'vol-reg-volunteer-input';
+
+			// Users who are allowed to edit volunteers can see a full list of volunteers and select one
+			if ( current_user_can( 'edit_' . User_Role_Controller::VOLUNTEER_CAPABILITY_TYPE_PLURAL ) ) {
+
+				self::render_volunteer_select( $volunter_id_input_name, $volunteer_id_input_id, $volunteer_id );
+				
+			} else {
+
+				// Otherwise the metabox should contain only the volunteer represented by the current WP User
+				// If there is no volunteer assigned to this record then it may be a newly created one
+				// So let's make sure we use the current user
+				if ( empty( $volunteer ) ) {
+
+					$volunteer = Volunteer::get_volunteer_for_current_wp_user();
+					$volunteer_id = isset( $volunteer ) ? $volunteer->get_id() : NULL;
+					
+				} // endif
+
+				if ( ! empty( $volunteer ) ) {
+					
+					// Pass the volunteer ID as a hidden input
+					echo "<input type=\"hidden\" name=\"$volunter_id_input_name\" value=\"$volunteer_id\">";
+	
+					// Include a flag to indicate that the details should be updated
+					echo '<input type="hidden" name="volunteer_reg_volunteer_details_update_flag" value="TRUE">';
+	
+					self::render_volunteer_details_inputs( '', $volunteer );
+				
+				} // endif
+
+			} // endif
+
+		echo '</div>';
+
+	} // function
+	
+	/**
+	 * Render the inputs for the volunteer details like full name and email
+	 * @param string	$classes
+	 * @param Volunteer	$volunteer
+	 */
+	private static function render_volunteer_details_inputs( $list_classes, $volunteer = NULL ) {
 
 			$input_list = Form_Input_List::create();
-			$input_list->set_required_inputs_flagged( TRUE );
-			$input_list-> add_list_classes( 'add-volunteer-input-list' );
+			$input_list->add_list_classes( $list_classes );
 
 			$label = __( 'Public name', 'reg-man-rc' );
 			$name = 'volunteer_public_name';
-			$val = '';
+			$val = isset( $volunteer ) ? $volunteer->get_public_name() : '';
 			$hint = __( 'The name used in public, e.g. first name and last intial', 'reg-man-rc' );
 			$classes = '';
-			$is_required = FALSE; // It can't be a required input when it is normally hidden from view
+			$is_required = isset( $volunteer ); // It can't be a required input when it is normally hidden from view
 			$input_list->add_text_input( $label, $name, $val, $hint, $classes, $is_required );
 
 			$label = __( 'Full name', 'reg-man-rc' );
 			$name = 'volunteer_full_name';
-			$input_list->add_text_input( $label, $name );
+			$val = isset( $volunteer ) ? $volunteer->get_full_name() : '';
+			$hint = __( 'This is never visible on the website', 'reg-man-rc' );
+			$classes = '';
+			$is_required = isset( $volunteer ); // It can't be a required input when it is normally hidden from view;
+			$input_list->add_text_input( $label, $name, $val, $hint, $classes, $is_required );
 
 			$label = __( 'Email', 'reg-man-rc' );
 			$name = 'volunteer_email';
-			$input_list->add_text_input( $label, $name );
+			$val = isset( $volunteer ) ? $volunteer->get_email() : '';
+			$hint = __( 'This is never visible on the website', 'reg-man-rc' );
+			$classes = '';
+			$is_required = isset( $volunteer ); // It can't be a required input when it is normally hidden from view;
+			$addn_attrs = isset( $volunteer ) ? 'readonly="readonly"' : '';
+			$input_list->add_text_input( $label, $name, $val, $hint, $classes, $is_required, $addn_attrs );
 
+			$input_list->set_required_inputs_flagged( FALSE );
 			$input_list->render();
-
-		echo '</div>';
-
+		
 	} // function
 
 	private static function render_volunteer_select( $input_name, $input_id, $selected_id = NULL ) {
 
 		$volunteer_list = Volunteer::get_all_volunteers();
 
-		$format = '<option value="%2$s" %3$s data-station="%4$s" data-roles="%5$s">%1$s</option>';
+		$format = '<option value="%2$s" %3$s data-station="%4$s" data-roles="%5$s" data-is-apprentice="%6$s">%1$s</option>';
 		// Disabled to start with until it is initialized on the client side
 		echo "<select required=\"required\" class=\"combobox\" name=\"$input_name\" id=\"$input_id\" autocomplete=\"off\" disabled=\"disabled\">";
 
@@ -254,7 +291,7 @@ class Volunteer_Registration_Admin_View {
 				$val = '';
 				$attrs = ( empty( $selected_id ) ) ? 'selected="selected"' : '';
 				$attrs .= '  disabled="disabled"';
-				printf( $format, $label, $val, $attrs, '0', '' );
+				printf( $format, $label, $val, $attrs, '0', '', 'false' );
 			} // endif
 
 			if ( ! empty( $volunteer_list ) ) {
@@ -264,13 +301,14 @@ class Volunteer_Registration_Admin_View {
 					$selected = selected( $id, $selected_id, $echo = FALSE );
 					$station = $volunteer->get_preferred_fixer_station();
 					$station_id = isset( $station ) ? $station->get_id() : '0';
+					$is_apprentice = $volunteer->get_is_fixer_apprentice() ? 'true' : 'false';
 					$roles = $volunteer->get_preferred_roles();
 					$role_ids = array();
 					foreach ( $roles as $role ) {
 						$role_ids[] = $role->get_id();
 					} // endfor
 					$role_ids = implode( ',', $role_ids );
-					printf( $format, $label, $id, $selected, $station_id, $role_ids );
+					printf( $format, $label, $id, $selected, $station_id, $role_ids, $is_apprentice );
 				} // endfor
 			} // endif
 
@@ -280,6 +318,46 @@ class Volunteer_Registration_Admin_View {
 			echo "<option value=\"-1\" class=\"select_option_add\" $selected>$html_name</option>";
 
 		echo '</select>';
+		
+		// The select includes an option to add a new volunteer
+		// The following renders those inputs
+		self::render_volunteer_details_inputs( 'add-volunteer-input-list' );
+
+	} // function
+
+	/**
+	 * Render the comments metabox for the specified post
+	 * @param	\WP_Post	$post
+	 */
+	public static function render_comments_metabox( $post ) {
+		if ( $post->post_type === Volunteer_Registration::POST_TYPE ) {
+
+			// We need a flag to distinguish the case where no user input is provided
+			//  versus the case where no inputs were shown at all like in quick edit mode
+			echo '<input type="hidden" name="alt_desc_input_flag" value="TRUE">';
+			
+			// If this registration is for the current WP user then the user can modify the comments
+			$vol_reg = Volunteer_Registration::get_registration_by_id( $post->ID );
+			$volunteer = isset( $vol_reg ) ? $vol_reg->get_volunteer() : NULL;
+			$is_current_wp_user = isset( $volunteer ) ? $volunteer->get_is_instance_for_current_wp_user() : FALSE;
+			
+			$input_list = Form_Input_List::create();
+			$label = __( 'Private note from volunteer', 'reg-man-rc' );
+
+			// Note that we use the name 'post_content' so that the comment will automatically be saved there
+			$name = 'post_content';
+			$val = isset( $vol_reg ) ? $vol_reg->get_volunteer_registration_comments() : '';
+			$hint = '';
+			$classes = 'full-width'; // We want a wide text input here
+			$is_required = FALSE;
+			
+			// If this registration is for the current WP user then the user can modify the comments
+			$addn_attrs = $is_current_wp_user ? '' : 'readonly="readonly"';
+			$rows = 2;
+			$input_list->add_text_area_input( $label, $name, $rows, $val, $hint, $classes, $is_required, $addn_attrs );
+
+			$input_list->render();
+		} // function
 	} // function
 
 
@@ -335,20 +413,35 @@ class Volunteer_Registration_Admin_View {
 	 * @since	v0.1.0
 	 */
 	public static function filter_admin_UI_columns( $columns ) {
+
 		$fixer_station_tax_col = 'taxonomy-' . Fixer_Station::TAXONOMY_NAME;
 		$volunteer_role_tax_col = 'taxonomy-' . Volunteer_Role::TAXONOMY_NAME;
+
 		$result = array(
 			'cb'						=> $columns['cb'],
-			'name'						=> __( 'Name', 'reg-man-rc' ),
+			'title'						=> __( 'ID', 'reg-man-rc' ),
 			'event'						=> __( 'Event', 'reg-man-rc' ),
+			'volunteer'					=> __( 'Volunteer', 'reg-man-rc' ),
 			$fixer_station_tax_col		=> __( 'Fixer Station', 'reg-man-rc' ),
 			'is-apprentice'				=> __( 'Apprentice', 'reg-man-rc' ),
 			$volunteer_role_tax_col		=> __( 'Volunteer Roles', 'reg-man-rc' ),
 			'email'						=> __( 'Email', 'reg-man-rc' ),
-			'vol-reg-comments'			=> __( 'Volunteer Note', 'reg-man-rc' ),
 			'date'						=> __( 'Last Update', 'reg-man-rc' ),
+			'vol-reg-comments'			=> __( 'Volunteer Note', 'reg-man-rc' ),
 			'author'					=> __( 'Author', 'reg-man-rc' ),
 		);
+		
+		$can_read_private = current_user_can( 'read_private_' . User_Role_Controller::VOLUNTEER_REG_CAPABILITY_TYPE_PLURAL );
+		if ( $can_read_private ) {
+			
+			// Only show the private note to users who can read private
+//			$result[ 'vol-reg-comments' ]	= __( 'Volunteer Note', 'reg-man-rc' );
+			
+			// Don't show the author unless this user can read private, otherwise it may give away the user's name
+			$result[ 'author' ]				= __( 'Author', 'reg-man-rc' );
+			
+		} // endif
+		
 		return $result;
 	} // function
 
@@ -366,14 +459,11 @@ class Volunteer_Registration_Admin_View {
 		if ( $registration !== NULL ) {
 			switch ( $column_name ) {
 
-				case 'name':
-					$volunteer = $registration->get_volunteer();
-					if ( $volunteer !== NULL ) {
-						$filter_array = array( Volunteer_Registration::VOLUNTEER_META_KEY	=> $volunteer->get_id() );
-						$href = self::get_admin_view_href( $filter_array );
-						$label = esc_html( $volunteer->get_full_name() );
-						$link_format = '<div class="cpt-filter-link"><a href="%1$s">%2$s</a></div>';
-						$result = sprintf( $link_format, $href, $label );
+				case 'volunteer':
+					$volunteer_name = $registration->get_volunteer_display_name();
+					if ( ! empty( $volunteer_name ) ) {
+						$label = esc_html( $volunteer_name );
+						$result = $label;
 					} else {
 						$result = $em_dash;
 					} // endif
@@ -381,14 +471,22 @@ class Volunteer_Registration_Admin_View {
 
 				case 'event':
 					$event = $registration->get_event();
+					$key_string = $registration->get_event_key_string();
+					// If there is no event then maybe this registration's event has been removed
+					// Try creating a placeholder
+					if ( empty( $event ) && ! empty( $key_string ) )  {
+						$event = Event::create_placeholder_event( $key_string );
+					} // endif
 					if ( $event !== NULL ) {
-						$filter_array = array( Volunteer_Registration::EVENT_META_KEY		=> $event->get_key() );
-						$href = self::get_admin_view_href( $filter_array );
 						$label = esc_html( $event->get_label() );
-						$link_format = '<div class="cpt-filter-link"><a href="%1$s">%2$s</a></div>';
-						$result = sprintf( $link_format, $href, $label );
-					} else {
-						$result = $em_dash;
+						if ( $event->get_is_current_user_able_to_register_volunteers() ) {
+							$filter_array = array( Volunteer_Registration::EVENT_META_KEY		=> $event->get_key_string() );
+							$href = self::get_admin_view_href( $filter_array );
+							$link_format = '<div class="cpt-filter-link"><a href="%1$s">%2$s</a></div>';
+							$result = sprintf( $link_format, $href, $label );
+						} else {
+							$result = $label;
+						} // endif
 					} // endif
 					break;
 
@@ -398,13 +496,21 @@ class Volunteer_Registration_Admin_View {
 					break;
 
 				case 'email':
-					$volunteer = $registration->get_volunteer();
+					// Note that Volunteer will handle checking the user's access to the email
+					$volunteer = $registration->get_volunteer(); 
 					$email = isset( $volunteer ) ? $volunteer->get_email() : NULL;
 					$result = ! empty( $email ) ? $email : $em_dash;
 					break;
 
 				case 'vol-reg-comments':
-					$comments = $registration->get_volunteer_registration_comments();
+					$volunteer = $registration->get_volunteer();
+					$is_current_user = isset( $volunteer ) ? $volunteer->get_is_instance_for_current_wp_user() : FALSE;
+					$can_read_private = current_user_can( 'read_private_' . User_Role_Controller::VOLUNTEER_REG_CAPABILITY_TYPE_PLURAL );
+					if ( $is_current_user || $can_read_private ) {
+						$comments = $registration->get_volunteer_registration_comments();
+					} else {
+						$comments = NULL;
+					} // endif
 					$result = ! empty( $comments ) ? $comments : $em_dash;
 					break;
 					
@@ -444,64 +550,87 @@ class Volunteer_Registration_Admin_View {
 
 		if ( is_admin() && ( $post_type == Volunteer_Registration::POST_TYPE ) ) {
 
-			// Add a filter for the events
-			echo '<span class="combobox-container">';
-				$filter_name = Volunteer_Registration::EVENT_META_KEY;
-				$curr_event = isset( $_REQUEST[ $filter_name ] ) ? wp_unslash( $_REQUEST[ $filter_name ] ) : 0;
-				$classes = 'reg-man-rc-filter postform';
-				$calendar = Calendar::get_admin_calendar();
-				$name = esc_html( __( 'All Events', 'reg-man-rc' ) );
-				$selected = selected( $curr_event, 0, FALSE );
-				$first_option = "<option value=\"0\" $selected>$name</option>";
-				$is_required = TRUE;
-				Event_View::render_event_select( $filter_name, $classes, $calendar, $curr_event, $first_option, $is_required );
-			echo '</span>';
+			// Add a filter for events
+			self::render_events_filter();
 
-			// Add a filter for the volunteers
-			$all_volunteers = Volunteer::get_all_volunteers();
-
-			$filter_name = Volunteer_Registration::VOLUNTEER_META_KEY;
-			$curr_event = isset( $_REQUEST[ $filter_name ] ) ? wp_unslash( $_REQUEST[ $filter_name ] ) : 0;
-			echo '<span class="combobox-container">';
-				// Disabled to start with until it is initialized on the client side
-				echo "<select class=\"combobox reg-man-rc-filter postform\" name=\"$filter_name\" disabled=\"disabled\">";
-
-					$name = esc_html( __( 'All Volunteers', 'reg-man-rc' ) );
-					$selected = selected( $curr_event, 0, FALSE );
-					echo "<option value=\"0\" $selected>$name</option>";
-
-					foreach ( $all_volunteers as $volunteer ) {
-						$name = esc_html( $volunteer->get_full_name() );
-						$id = $volunteer->get_id();
-						$id_attr = esc_attr( $id );
-						$selected = selected( $curr_event, $id, FALSE );
-						echo "<option value=\"$id_attr\" $selected>$name</option>";
-					} // endif
-
-				echo '</select>';
-			echo '</span>';
+			// Add a filter for volunteers
+			self::render_volunteers_filter();
 
 			// Add a filter for each of these taxonomies
 			$tax_name_array = array( Fixer_Station::TAXONOMY_NAME, Volunteer_Role::TAXONOMY_NAME );
 			foreach ( $tax_name_array as $tax_name ) {
-				$taxonomy = get_taxonomy( $tax_name );
-				$curr_id = isset( $_REQUEST[ $tax_name ] ) ? $_REQUEST[ $tax_name ] : '';
-				wp_dropdown_categories( array(
-					'show_option_all'	=> $taxonomy->labels->all_items,
-					'class'				=> 'reg-man-rc-filter postform',
-					'taxonomy'			=> $tax_name,
-					'name'				=> $tax_name,
-					'orderby'			=> 'count',
-					'order'				=> 'DESC',
-					'value_field'		=> 'slug',
-					'selected'			=> $curr_id,
-					'hierarchical'		=> $taxonomy->hierarchical,
-					'show_count'		=> FALSE,
-					'hide_if_empty'		=> TRUE,
-				) );
+				self::render_taxonomy_filter( $tax_name );
 			} // endfor
 
 		} // endif
+	} // function
+	
+	private static function render_events_filter() {
+		echo '<span class="combobox-container">';
+			$filter_name = Volunteer_Registration::EVENT_META_KEY;
+			$curr_event = isset( $_REQUEST[ $filter_name ] ) ? wp_unslash( $_REQUEST[ $filter_name ] ) : 0;
+			$classes = 'reg-man-rc-filter postform';
+			$calendar = Calendar::get_admin_calendar();
+			$name = esc_html( __( 'All Events', 'reg-man-rc' ) );
+			$selected = selected( $curr_event, 0, FALSE );
+			$first_option = "<option value=\"0\" $selected>$name</option>";
+			$is_required = TRUE;
+			$events_array = Event::get_events_array_current_user_can_register_volunteers();
+			Event_View::render_event_select( $filter_name, $classes, $calendar, $curr_event, $events_array, $first_option, $is_required );
+		echo '</span>';
+	} // function
+	
+	private static function render_volunteers_filter() {
+		
+		$all_volunteers = Volunteer::get_all_volunteers();
+		$span_class = 'combobox-container';
+		$select_class = 'combobox';
+		$select_disabled = 'disabled="disabled"'; // Disabled to start with until it is initialized on the client side
+
+		$filter_name = Volunteer_Registration::VOLUNTEER_META_KEY;
+		$curr_event = isset( $_REQUEST[ $filter_name ] ) ? wp_unslash( $_REQUEST[ $filter_name ] ) : 0;
+		echo "<span class=\"$span_class\">";
+		
+			echo "<select class=\"$select_class reg-man-rc-filter postform\" name=\"$filter_name\" $select_disabled>";
+
+				$name = esc_html( __( 'All Volunteers', 'reg-man-rc' ) );
+				$selected = selected( $curr_event, 0, FALSE );
+				echo "<option value=\"0\" $selected>$name</option>";
+
+				foreach ( $all_volunteers as $volunteer ) {
+					$name = $volunteer->get_label();
+					$name = esc_html( $name );
+					$id = $volunteer->get_id();
+					$id_attr = esc_attr( $id );
+					$selected = selected( $curr_event, $id, FALSE );
+					echo "<option value=\"$id_attr\" $selected>$name</option>";
+				} // endif
+
+			echo '</select>';
+		echo '</span>';
+		
+	} // function
+	
+	/**
+	 * Render a filter for the named taxonomy
+	 * @param string $tax_name
+	 */
+	private static function render_taxonomy_filter( $tax_name ) {
+		$taxonomy = get_taxonomy( $tax_name );
+		$curr_id = isset( $_REQUEST[ $tax_name ] ) ? $_REQUEST[ $tax_name ] : '';
+		wp_dropdown_categories( array(
+			'show_option_all'	=> $taxonomy->labels->all_items,
+			'class'				=> 'reg-man-rc-filter postform',
+			'taxonomy'			=> $tax_name,
+			'name'				=> $tax_name,
+			'orderby'			=> 'count',
+			'order'				=> 'DESC',
+			'value_field'		=> 'slug',
+			'selected'			=> $curr_id,
+			'hierarchical'		=> $taxonomy->hierarchical,
+			'show_count'		=> FALSE,
+			'hide_if_empty'		=> TRUE, // Hide the filter completely if there are no posts using the taxonomy
+		) );
 	} // function
 
 	/**
@@ -521,5 +650,91 @@ class Volunteer_Registration_Admin_View {
 		return $result;
 	} // function
 
+	/**
+	 * Get the set of tabs to be shown in the help for this type
+	 * @return array
+	 */
+	public static function get_help_tabs() {
+		$result = array(
+			array(
+				'id'		=> 'reg-man-rc-about',
+				'title'		=> __( 'About', 'reg-man-rc' ),
+				'content'	=> self::get_about_content(),
+			),
+		);
+		return $result;
+	} // function
+	
+	/**
+	 * Get the html content shown to the administrator in the "About" help for this post type
+	 * @return string
+	 */
+	private static function get_about_content() {
+		ob_start();
+			$heading = __( 'About Fixer / Volunteer Event Registrations', 'reg-man-rc' );
+			
+			echo "<h2>$heading</h2>";
+			echo '<p>';
+				$msg = __(
+					'A fixer / volunteer event registration represents a volunteer who registered to attend an event.' .
+					'  It includes the following:',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
 
+				$item_format = '<dt>%1$s</dt><dd>%2$s</dd>';
+				echo '<dl>';
+
+					$title = esc_html__( 'ID', 'reg-man-rc' );
+					$msg = esc_html__(
+							'A unique ID for the registration record.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Event', 'reg-man-rc' );
+					$msg = esc_html__( 'The event the volunteer registered to attend.', 'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Volunteer', 'reg-man-rc' );
+					$msg = esc_html__( 'The volunteer who registered to attend the event.', 'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Fixer Station', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The fixer station for this volunteer, e.g. "Appliances & Housewares".' .
+							'  If the volunteer is a non-fixer then this field is empty.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Apprentice', 'reg-man-rc' );
+					$msg = esc_html__(
+							'A volunteer who will work as a fixer apprentice.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Volunteer Roles', 'reg-man-rc' );
+					$msg = esc_html__(
+							'A list of non-fixer roles this volunteer will play at the event, e.g. "Setup & Cleanup, Refreshments".',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Email', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The volunteer\'s email address, if one is supplied and the current user has authority to view it.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Volunteer Note', 'reg-man-rc' );
+					$msg = esc_html__(
+							'A note entered by the volunteer and visible only to system administrators and event organizers.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+				echo '</dl>';
+			echo '</p>';
+
+		$result = ob_get_clean();
+		return $result;
+	} // function
+	
 } // class

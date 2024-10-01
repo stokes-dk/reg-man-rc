@@ -197,6 +197,7 @@ class Venue_Admin_View {
 			'cb'						=> $columns['cb'],
 			'title'						=> __( 'Name', 'reg-man-rc' ),
 			'location'					=> __( 'Location', 'reg-man-rc' ),
+			'event_count'				=> __( 'Events', 'reg-man-rc' ),
 			'date'						=> __( 'Last Update', 'reg-man-rc' ),
 			'author'					=> __( 'Author', 'reg-man-rc' ),
 		);
@@ -208,17 +209,88 @@ class Venue_Admin_View {
 		$em_dash = __( '—', 'reg-man-rc' ); // an em-dash is used by Wordpress for empty fields
 		$result = $em_dash; // show em-dash by default
 		if ( $venue !== NULL ) {
+
 			switch ( $column_name ) {
+
 				case 'location':
 					$loc = $venue->get_location();
 					$result = ! empty( $loc ) ? esc_html( $loc ) : $em_dash;
 					break;
+
+				case 'event_count':
+					$venue_id = $venue->get_id();
+					$count = Internal_Event_Descriptor::get_count_internal_event_descriptors_for_venue( $venue_id );
+					$result = ! empty( $count ) ? esc_html( $count ) : $em_dash;
+					break;
+
 				default:
 					$result = $em_dash;
 					break;
+
 			} // endswitch
+
 		} // endif
+
 		echo $result;
+	} // function
+
+	/**
+	 * Get the set of tabs to be shown in the help for this type
+	 * @return array
+	 */
+	public static function get_help_tabs() {
+		$result = array(
+			array(
+				'id'		=> 'reg-man-rc-about',
+				'title'		=> __( 'About', 'reg-man-rc' ),
+				'content'	=> self::get_about_content(),
+			),
+		);
+		return $result;
+	} // function
+	
+	/**
+	 * Get the html content shown to the administrator in the "About" help for this post type
+	 * @return string
+	 */
+	private static function get_about_content() {
+		ob_start();
+			$heading = __( 'About Venues', 'reg-man-rc' );
+			
+			echo "<h2>$heading</h2>";
+			echo '<p>';
+				$msg = __(
+					'A venue contains the details of a physical location used to host events.' .
+					'  It includes the following:',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+
+				$item_format = '<dt>%1$s</dt><dd>%2$s</dd>';
+				echo '<dl>';
+
+					$title = esc_html__( 'Name', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The name or title of the venue, "Toronto Reference Library".',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Location', 'reg-man-rc' );
+					$msg = esc_html__( 'The address or physical location of the venue, e.g. "789 Yonge St, Toronto, ON M4W 2G8".', 'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Content', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The text content to be shown for the venue.' .
+							'  This may include parking or public transit instructions and other information that may be useful to visitors and volunteers.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+										
+				echo '</dl>';
+			echo '</p>';
+
+		$result = ob_get_clean();
+		return $result;
 	} // function
 
 } // class

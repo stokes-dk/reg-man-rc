@@ -5,12 +5,11 @@ use Reg_Man_RC\Model\Calendar;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Control\Calendar_Controller;
 use Reg_Man_RC\Model\Calendar_View_Format;
-use Reg_Man_RC\Model\Cookie;
 use Reg_Man_RC\Model\Event_Category;
 use Reg_Man_RC\Model\Event_Status;
-use Reg_Man_RC\Model\Event_Filter;
-use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\View\Object_View\Details_Disclosure_Object_View_Template;
+use Reg_Man_RC\Control\User_Role_Controller;
+use Reg_Man_RC\Model\Event_Class;
 
 /**
  * An instance of this class provides a user interfrace for a calendar that appears on the public-facing (frontend) side of the website.
@@ -120,8 +119,8 @@ class Calendar_View {
 		return $result;
 	} // function
 
-	private function get_feed_url() {
-		$result = esc_attr( Calendar_Controller::get_json_events_feed_url() );;
+	private function get_fullcalendar_json_feed_url() {
+		$result = esc_attr( Calendar_Controller::get_fullcalendar_json_events_feed_url() );;
 		return $result;
 	} // function
 
@@ -141,7 +140,7 @@ class Calendar_View {
 		$calendar_id = $calendar->get_id();
 		$start_of_week = esc_attr( $this->get_week_start() );
 		$lang = esc_attr( $this->get_language() );
-		$feed_url = esc_attr( $this->get_feed_url() );
+		$feed_url = esc_attr( $this->get_fullcalendar_json_feed_url() );
 
 		$view_ids = $this->get_view_format_ids_array();
 		$view_data = esc_attr( implode( ',' , $view_ids ) );
@@ -154,8 +153,14 @@ class Calendar_View {
 		$is_show_past_events = $calendar->get_is_show_past_events();
 		$is_show_past_events_data = $is_show_past_events ? 'true' : 'false';
 
+		$calendar_type = $calendar->get_calendar_type();
+//		Error_Log::var_dump( $calendar_type, $calendar_id );
+
+		$multi_month_min_width = $calendar->get_multi_month_min_width();
+		
 		// Data
 		$data_array = array();
+		$data_array[] = "data-calendar-type=\"$calendar_type\"";
 		$data_array[] = "data-calendar-id=\"$calendar_id\"";
 		$data_array[] = "data-views=\"$view_data\"";
 		$data_array[] = "data-durations=\"$duration_data\"";
@@ -163,14 +168,28 @@ class Calendar_View {
 		$data_array[] = "data-lang=\"$lang\"";
 		$data_array[] = "data-feed-url=\"$feed_url\"";
 		$data_array[] = "data-is-show-past-events=\"$is_show_past_events_data\"";
+		$data_array[] = "data-multi-month-min-width=\"$multi_month_min_width\"";
 		
-		// When the calendar is the admin calendar then we MUST include a nonce so that the user can be checked
-		// When the calendar is the volunteer calendar then we should include a nonce if a user is logged in
-		// When the calendar is anything else then including a nonce may require the user to refresh the page
-		//  after a day which is not helpful to them and not really necessary for any security reason
-		$calendar_type = $calendar->get_calendar_type();
-		if ( ( $calendar_type == Calendar::CALENDAR_TYPE_ADMIN_EVENTS ) ||
-			 ( ( $calendar_type == Calendar::CALENDAR_TYPE_VOLUNTEER_REG ) && ( is_user_logged_in() ) ) ) {
+		// Conditionally add buttons for authors ( All | Mine )
+		if ( current_user_can( 'edit_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) && (
+				$calendar_type == Calendar::CALENDAR_TYPE_ADMIN ||
+				$calendar_type == Calendar::CALENDAR_TYPE_VOLUNTEER_REG ||
+				$calendar_type == Calendar::CALENDAR_TYPE_VISITOR_REG
+				) ) {
+
+			$data_array[] = 'data-authors="author_all,author_mine"';
+			if ( ! current_user_can( 'edit_others_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+				$data_array[] = 'data-default-author="author_mine"';
+			} // endif
+			
+		} // endif
+		
+		// Note that including a nonce allows the REST API to determine the user
+		// If no nonce is present in the request then WordPress will always execute the request with no user
+		// If the calendar requires a nonce then we must supply it here, it will be verified in the request handler
+		// If this user can read private events then we'll include a nonce so that those events will show up
+		$can_read_private = current_user_can( 'read_private_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL );
+		if ( $calendar->get_is_nonce_required_for_fullcalendar_feed() || $can_read_private ) {
 			$data_array[] = 'data-wp-nonce="' . wp_create_nonce( 'wp_rest' ) . '"';
 		} // endif
 
@@ -196,8 +215,16 @@ class Calendar_View {
 					$map_view->render();
 				echo '</div>';
 			} // endif
-			$this->render_legend();
+			
+			echo "<div class=\"reg-man-rc-calendar-footer\">";
+				$this->render_legend();
+				if ( $calendar->get_icalendar_is_show_subscribe_button() ) {
+					$this->render_subscribe();
+				} // endif
+			echo '</div>';
+				
 		echo '</div>';
+		
 	} // function
 
 	private function render_legend() {
@@ -239,6 +266,9 @@ class Calendar_View {
 					printf( $item_format, $name, $desc, $colour, $classes );
 				} // endfor
 
+				/* Translators: %1$s is a status marker text like "TENTATIVE", %2$s is an event summary */
+				$label_with_marker_format = _x( '%1$s %2$s', 'A calendar entry title for an event with its status, e.g. TENTATIVE Reference Library Repair Cafe', 'reg-man-rc' );
+				
 				if ( $calendar->get_is_show_past_events() ) {
 					// Past events
 					$name = esc_html__( 'Past event', 'reg-man-rc' );
@@ -248,17 +278,91 @@ class Calendar_View {
 					printf( $item_format, $name, $desc, $colour, $classes );
 				} // endif
 
-				if ( in_array( Event_Status::CANCELLED, $calendar->get_default_status_array() ) ) {
+				if ( in_array( Event_Status::TENTATIVE, $calendar->get_event_status_array() ) ) {
+					// Tentative events
+					$name = esc_html__( 'Tentative event', 'reg-man-rc' );
+/* Reduce clutter and don't show the marker text
+					$tentative_status = Event_Status::get_event_status_by_id( Event_Status::TENTATIVE );
+					$marker_text = $tentative_status->get_event_marker_text();
+					if ( ! empty( $marker_text ) ) {
+						$name = sprintf( $label_with_marker_format, $marker_text, $name );
+					} // endif
+*/
+					$desc = esc_attr__( 'A tentatively scheduled event', 'reg-man-rc' );
+					$colour = $default_colour;
+					$classes = 'tentative';
+					printf( $item_format, $name, $desc, $colour, $classes );
+				} // endif
+
+				if ( in_array( Event_Class::PRIVATE, $calendar->get_event_class_array() ) ) {
+					// Private events
+					if ( current_user_can( 'create_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ||
+						 current_user_can( 'read_private' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+						// There will only be private events if there's a user who can read them
+						$name = esc_html__( 'Draft or privately published event', 'reg-man-rc' );
+/* Reduce clutter and don't show the marker text
+						$private_class = Event_Class::get_event_class_by_id( Event_Class::PRIVATE );
+						$marker_text = $private_class->get_event_marker_text();
+						if ( ! empty( $marker_text ) ) {
+							$name = sprintf( $label_with_marker_format, $marker_text, $name );
+						} // endif
+*/
+						$desc = esc_attr__( 'A draft or privately published event not visible to the public', 'reg-man-rc' );
+						$colour = $default_colour;
+						$classes = 'private-class';
+						printf( $item_format, $name, $desc, $colour, $classes );
+					} // endif
+				} // endif
+				
+				if ( in_array( Event_Status::CANCELLED, $calendar->get_event_status_array() ) ) {
 					// Cancelled events
 					$name = esc_html__( 'Cancelled event', 'reg-man-rc' );
+/* Reduce clutter and don't show the marker text
+					$cancelled_status = Event_Status::get_event_status_by_id( Event_Status::CANCELLED );
+					$marker_text = $cancelled_status->get_event_marker_text();
+					if ( ! empty( $marker_text ) ) {
+						$name = sprintf( $label_with_marker_format, $marker_text, $name );
+					} // endif
+*/
+					$time_text = _x( 'Time', 'A placehold for an event time used in the calendar legend', 'reg-man-rc' );
+					$name = "<span class=\"event-time\">$time_text</span>$name";
 					$desc = esc_attr__( 'An event that has been cancelled', 'reg-man-rc' );
 					$colour = $default_colour;
 					$classes = 'cancelled';
 					printf( $item_format, $name, $desc, $colour, $classes );
 				} // endif
-
+				
+				// More additional items for special calendars
+				if ( $calendar_type === Calendar::CALENDAR_TYPE_ADMIN ) {
+					$name = esc_html__( 'Placeholder for orphaned registrations', 'reg-man-rc' );
+					$desc = esc_attr__( 'Items or volunteers are registered for an event that cannot be found', 'reg-man-rc' );
+					$colour = $default_colour;
+					$classes = 'event-placeholder';
+					printf( $item_format, $name, $desc, $colour, $classes );
+				} // endif
+				
+				if ( $calendar_type === Calendar::CALENDAR_TYPE_EVENT_DESCRIPTOR ) {
+					$name = esc_html__( 'Registered items and/or volunteers', 'reg-man-rc' );
+					$desc = esc_attr__( 'Items and/or volunteers are registered for this event', 'reg-man-rc' );
+					$colour = $default_colour;
+					$classes = 'event-with-registrations';
+					printf( $item_format, $name, $desc, $colour, $classes );
+				} // endif
+				
 			echo '</ul>';
+			
 		echo '</div>';
+	} // function
+
+	private function render_subscribe() {
+		$calendar = $this->get_calendar();
+		$feed_name = $calendar->get_icalendar_feed_name();
+		if ( ! empty( $feed_name ) ) {
+			echo '<div class="reg-man-rc-calendar-subscribe-container">';
+				$button = Calendar_Subscribe_Button::create_for_calendar( $calendar );
+				$button->render();
+			echo '</div>';
+		} // function
 	} // function
 
 	/**
@@ -298,7 +402,7 @@ class Calendar_View {
 		if ( is_single() && in_the_loop() && is_main_query() ) {
 			global $post;
 			if ( $post->post_type == Calendar::POST_TYPE ) {
-				$calendar = Calendar::get_calendar_by_id( $post->ID );
+				$calendar = Calendar::get_calendar_by_post_id( $post->ID );
 				if ( $calendar !== NULL ) {
 					// Register the scripts and styles I need
 					\Reg_Man_RC\Control\Scripts_And_Styles::enqueue_fullcalendar();
@@ -326,6 +430,9 @@ class Calendar_View {
 	 */
 	public static function get_calendar_shortcode_content( $attributes ) {
 
+		// If the shortcode is used in a widget then my scripts and styles may not be enqueued, so make sure here
+		Scripts_And_Styles::enqueue_fullcalendar();
+		
 		$attribute_values = shortcode_atts( array(
 			'calendar'	=> NULL,
 		), $attributes );
@@ -335,7 +442,7 @@ class Calendar_View {
 			$error_array[] = __( 'Please specify a calendar ID or slug in the shortcode.', 'reg-man-rc' );
 		} else {
 			$calendar_id = $attribute_values[ 'calendar' ];
-			$calendar = Calendar::get_calendar_by_id( $calendar_id );
+			$calendar = Calendar::get_calendar_by_post_id( $calendar_id );
 			if ( ! isset( $calendar ) ) {
 				// Try finding the calendar by its slug
 				$calendar = Calendar::get_calendar_by_slug( $calendar_id );
@@ -380,6 +487,9 @@ class Calendar_View {
 	 */
 	public static function get_next_event_shortcode_content( $attributes ) {
 
+		// If the shortcode is used in a widget then my scripts and styles may not be enqueued, so make sure here
+		Scripts_And_Styles::enqueue_public_base_scripts_and_styles();
+		
 		$attribute_values = shortcode_atts( array(
 			'calendar'			=> NULL,
 			'title'				=> __( 'Next event', 'reg-man-rc' ),
@@ -391,7 +501,7 @@ class Calendar_View {
 			$error_array[] = __( 'Please specify a calendar ID in the shortcode.', 'reg-man-rc' );
 		} else {
 			$calendar_id = $attribute_values[ 'calendar' ];
-			$calendar = Calendar::get_calendar_by_id( $calendar_id );
+			$calendar = Calendar::get_calendar_by_post_id( $calendar_id );
 			if ( ! isset( $calendar ) ) {
 				// Try finding the calendar by its slug
 				$calendar = Calendar::get_calendar_by_slug( $calendar_id );
@@ -453,6 +563,9 @@ class Calendar_View {
 	 */
 	public static function get_upcoming_events_shortcode_content( $attributes ) {
 
+		// If the shortcode is used in a widget then my scripts and styles may not be enqueued, so make sure here
+		Scripts_And_Styles::enqueue_public_base_scripts_and_styles();
+		
 		$default_upcoming_events_count = 3; // Used when the count is not specified or not valid
 		
 		$attribute_values = shortcode_atts( array(
@@ -465,7 +578,7 @@ class Calendar_View {
 			$error_array[] = __( 'Please specify a calendar ID in the shortcode.', 'reg-man-rc' );
 		} else {
 			$calendar_id = $attribute_values[ 'calendar' ];
-			$calendar = Calendar::get_calendar_by_id( $calendar_id );
+			$calendar = Calendar::get_calendar_by_post_id( $calendar_id );
 			if ( ! isset( $calendar ) ) {
 				// Try finding the calendar by its slug
 				$calendar = Calendar::get_calendar_by_slug( $calendar_id );
@@ -504,7 +617,7 @@ class Calendar_View {
 				// We may have two events on the same day so we need to group events by their date
 				$event_dates_array = array(); // create an array of dates
 				foreach( $events_array as $event ) {
-					$date_time = $event->get_start_date_time_local_timezone_object();
+					$date_time = $event->get_start_date_time_object();
 					$date = $date_time->format( 'Ymd' );
 					if ( ! isset( $event_dates_array[ $date ] ) ) {
 						$event_dates_array[ $date ] = array( $event );

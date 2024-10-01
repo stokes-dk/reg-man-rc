@@ -61,17 +61,29 @@ body .dialog-container { display: none; }
 .form-input-list.registration-helper-urls { margin-top: 4em; border-top: 1px solid #ccc; }
 .form-input-buttons .form-button { margin-right: 1em; }
 .form-input-list {
-	list-style: none;
-	padding: 0;
-	margin: 0 1em;
+	list-style: none !important;
+	padding: 0 !important;
+	margin: 0 1em !important;
 }
-.form-input-list .input-item { padding: 0.5em 0; box-sizing: border-box; }
+.form-input-list .input-item {
+	padding: 0 0 1em 0;
+	box-sizing: border-box;
+}
 .form-input-list .input-item.hidden-input { display: none !important; } 
-.form-input-list .label-container { margin-bottom: 0.1em; position: relative; }
-.form-input-list .input-container fieldset legend { padding: 0 0.25em; margin: 0 0.25em; }
+.form-input-list .label-container { position: relative; line-height: normal; }
+.form-input-list .input-container fieldset legend {
+	padding: 0 0.25em;
+	margin: 0 0.25em 0.5em 0.25em;
+	display: block;
+	width: auto;
+	font-size: inherit;
+	border: none;
+	color: inherit;
+	font-weight: initial;
+	line-height: normal;
+}
 .form-input-list .input-container fieldset, .form-input-list .input-container details { border: 1px solid #ccc; padding: 0; }
 .form-input-list .input-container fieldset .form-input-list { padding: 0; }
-.form-input-list .input-container fieldset .form-input-list.item-list-input-group { margin: 0; }
 .form-input-list .input-container details .form-input-list { padding: 0 1em; }
 .form-input-list .input-container details summary { padding: 0.25em 0.5em; background: #eee; }
 .form-input-list .error-container:EMPTY { display: none; }
@@ -114,7 +126,8 @@ body .dialog-container { display: none; }
 .form-input-list.horizontal .input-item .error-container { display: table-cell; padding: 0.25em 0.5em; }
 .form-input-list.horizontal .input-item .error-container:EMPTY { display: none; }
 
-.form-input-list.compact .input-item { display: inline-block; vertical-align: top; margin: 0 0.25em; }
+.form-input-list.compact { display: flex; flex-wrap: wrap; column-gap: 1em; }
+xxx.form-input-list.compact .input-item { margin: 0 0.5em; }
 .form-input-list.compact .input-container { width: initial; }
 .form-input-list.compact .input-container select { margin: 0; }
 
@@ -142,6 +155,13 @@ body .dialog-container { display: none; }
 .form-input-list input[type=checkbox] + span, .form-input-list input[type=radio] + span { vertical-align: middle; }
 .form-input-list input[type=checkbox]:DISABLED + span { opacity: 0.67; }
 
+.form-input-list-button-container {
+  margin: 0 1em 1em 1em;
+  display: flex;
+  justify-content: flex-end;
+  gap: 1em;
+}
+
 .minimal-template .form-button {
 	font-size: inherit; font-family: inherit;
 	border-radius: 0.25em; border: 1px solid #aaa; 
@@ -152,12 +172,6 @@ body .dialog-container { display: none; }
 }
 .minimal-template .form-button:NOT(:DISABLED):ACTIVE { background: linear-gradient(#ddd, #fff); }
 .minimal-template .form-button:DISABLED, .ui-dialog .ui-dialog-buttonpane button:DISABLED { opacity: 0.65; cursor: not-allowed; }
-
-.minimal-template .form-event-display {
-	margin: 0.5em 0; font-weight: 100; font-size: 1.25em; color: #446;
-}
-
-.minimal-template .form-event-display .change-event-link { font-size: 80%; }
 
 form label.error { background: #ffc; }
 div.form_error_list h2, div.form_message_list h2 { color: inherit; margin: 0.5em; }
@@ -188,7 +202,8 @@ div.message-container ul > li { padding: 0; margin: 1em 0 1em 2em;; }
 
 .form-button-div { text-align: right; }
 
-.select2-container .select_option_none .dashicons { xcolor: red; margin: 0 0.1em; line-height: inherit; }
+.select2-container { z-index: 10000; }
+.select2-container .select_option_none .dashicons { margin: 0 0.1em; line-height: inherit; }
 .select2-container .select_option_add .dashicons { color: green; margin: 0 0.1em; line-height: inherit; }
 
 .reg-man-rc-object-view-main-content > .reg-man-rc-object-view-section {
@@ -219,11 +234,11 @@ div.message-container ul > li { padding: 0; margin: 1em 0 1em 2em;; }
 .reg-man-rc-object-view-item {
 	line-height: normal;
 	display: flex;
+	column-gap: 0.1em;
 	margin-bottom: 1em;
 }
 .reg-man-rc-object-view-item .reg-man-rc-object-view-item-icon {
 	width: 20px;
-	margin: 0 0.1em;
 }
 .reg-man-rc-object-view-item .reg-man-rc-object-view-item-additional-content {
 	margin: 0.5em 0 0 0;
@@ -237,15 +252,15 @@ div.message-container ul > li { padding: 0; margin: 1em 0 1em 2em;; }
 	font-weight: bold;
 	margin: 0.1em 0;
 	padding: 0;
+	line-height: normal;
 }
 .reg-man-rc-info-window-container .reg-man-rc-object-view-item {
 	margin: 0.25em 0;
 }
 
-.reg-man-rc-info-window-container .reg-man-rc-object-view-item .reg-man-rc-object-view-item-content {
-	margin-top: 3px; /* to align 14px font with 20px icon */
+.reg-man-rc-object-view-item.event-status.status-cancelled {
+  text-transform: uppercase;
 }
-
 .reg-man-rc-object-view-details-list details summary {
 	cursor: pointer;
 }
@@ -259,32 +274,35 @@ div.message-container ul > li { padding: 0; margin: 1em 0 1em 2em;; }
 	margin: 0.25em 0;
 	padding: 0.25em;
 }
-.reg-man-rc-object-view-main-content .object-view-details-fixer-station-list {
+.object-view-details-fixer-station-list {
 	margin: 0;
 	padding: 0;
 	list-style: none;
 	display: flex;
 	flex-wrap: wrap;
 	justify-content: flex-start;
+	gap: 0.5em;
 }
-.reg-man-rc-object-view-details-list .object-view-details-fixer-station-list li {
+.object-view-details-fixer-station-list li {
 	flex-shrink: 0;
 	flex-grow: 0;
 	flex-basis: 0%;
+	margin: 0;
+	text-align: center;
 }
 .reg-man-rc-object-view-details-list .object-view-details-fixer-station-list li.reg-man-rc-object-view-fixer-station-text {
 	display: block;
-}
-.reg-man-rc-object-view-details-list .object-view-details-fixer-station-list li figure {
 	text-align: center;
+	margin-top: 0.25em;
+}
+.object-view-details-fixer-station-list li figure {
 	margin: 0;
-	padding: 0.25em;
 }
 .object-view-details-fixer-station-list li img {
 	max-width: 4em;
 	height: auto;
 }
-.reg-man-rc-object-view-details-list .object-view-details-fixer-station-list li figure figcaption {
+.object-view-details-fixer-station-list li figure figcaption {
 	font-size: xx-small;
 	line-height: normal;
 }
@@ -316,11 +334,10 @@ div.message-container ul > li { padding: 0; margin: 1em 0 1em 2em;; }
 	display: inline-block;
 	vertical-align: top;
 }
-
 .reg-man-rc-info-window-container {
 	color: #333;
-	font: 400 14px Roboto, Arial, sans-serif;
 }
+
 .reg-man-rc-info-window-container p {
 	margin: 0.25em 0;
 } 
@@ -362,29 +379,89 @@ div.message-container ul > li { padding: 0; margin: 1em 0 1em 2em;; }
 	padding: 0.25em 0;
 }
 
+select.reg-man-rc-in-place-editor {
+	font-family: inherit;
+	font-size: inherit;
+	appearance: none;
+	background-color: #fff;
+	padding: 0.25em;
+	border: 1px solid #ccc;
+	border-radius: 0;
+}
 
-/* Popup Editors */
-.reg-man-rc-popup-editable {
-  cursor: pointer;
-  border: 1px solid #ccc;
-  background: #fff;
-  padding: 0.25em;
-  line-height: 1.4em;
-  min-height: 2.1em; /* to keep it from collapsing when empty */
-}
-.reg-man-rc-popup-editor {
-	display: none; /* hidden until shown by the popup */
-}
-.reg-man-rc-popup-editable.editable-busy {
+.reg-man-rc-in-place-editor-form.in-place-editor-busy {
 	opacity: 0.5;
 }
 
-.reg-man-rc-popup-editor-form {
-	margin: 0;
-	padding: 0;
+.reg-man-rc-item-provider-table {
+	border-collapse: collapse;
+	table-layout: fixed;
+	font-size: 100%;
+	display: inline-block;
+	margin: 0.25em 0.25em;
+	vertical-align: top;
+}
+.reg-man-rc-item-provider-table th {
+	background-color: #eee;
+	text-align: center;
+}
+.reg-man-rc-item-provider-table th, .reg-man-rc-item-provider-table td {
+	border: 1px solid #ccc;
+	padding: 0.25em;
+}
+.reg-man-rc-item-provider-table td.number-cell {
+	text-align: right;
 }
 
-.reg-man-rc-popup-editor-form .reg-man-rc-radio-group-list .reg-man-rc-radio-group-item {
-	padding: 0.4em 0;
+.object-view-event-list-date-time-item.completed,
+.reg-man-rc-calendar-view .fc-event.completed,
+.reg-man-rc-calendar-map-container .reg-man-rc-map-marker-label.completed,
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item.completed {
+	text-decoration-line: line-through;
+	text-decoration-style: solid;
+	text-decoration-color: grey;
+	opacity: 0.6;
+}
+.object-view-event-list-date-time-item.cancelled,
+.reg-man-rc-calendar-view .fc-event.cancelled-status .fc-event-time,
+.reg-man-rc-calendar-view .fc-event.cancelled-status .fc-list-event-time,
+/*.reg-man-rc-calendar-map-container .reg-man-rc-map-marker-label.cancelled-status, */
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item.cancelled .event-time {
+	text-decoration-line: line-through;
+	text-decoration-style: double;
+	text-decoration-color: #c00; 
+}
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item.cancelled .event-time {
+	margin-right: 0.25em;
+}
+.object-view-event-list-date-time-item.tentative,
+.reg-man-rc-calendar-view .fc-event.tentative-status,
+.reg-man-rc-calendar-map-container .reg-man-rc-map-marker-label.tentative-status,
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item.tentative {
+	font-style: italic;
+	opacity: 0.6;
+}
+.object-view-event-list-date-time-item.private-class,
+.object-view-event-list-date-time-item.confidential-class,
+.reg-man-rc-calendar-view .fc-event.private-class,
+.reg-man-rc-calendar-view .fc-event.confidential-class,
+.reg-man-rc-calendar-map-container .reg-man-rc-map-marker-label.private-class,
+.reg-man-rc-calendar-map-container .reg-man-rc-map-marker-label.confidential-class,
+.reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item.private-class {
+	opacity: 0.6;
 }
 
+.object-view-event-list-date-time-item.completed a, .object-view-event-list-date-time-item.completed span,
+.object-view-event-list-date-time-item.tentative a, .object-view-event-list-date-time-item.tentative span,
+.object-view-event-list-date-time-item.cancelled a, .object-view-event-list-date-time-item.cancelled span,
+.reg-man-rc-calendar-legend-item .legend-item-container, .reg-man-rc-calendar-legend-item .legend-item-part {
+	text-decoration-line: inherit;
+	text-decoration-style: inherit;
+	text-decoration-color: inherit;
+}
+.form-input-list .input-item.disabled {
+	opacity: 0.67;
+}
+.form-input-list .input-item.disabled .reg-man-rc-calendar-container {
+	pointer-events: none;
+}

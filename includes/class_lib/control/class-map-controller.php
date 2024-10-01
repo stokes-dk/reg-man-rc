@@ -9,6 +9,7 @@ use Reg_Man_RC\View\Map_View;
 use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Calendar;
 use Reg_Man_RC\Model\Event_Group_Map_Marker;
+use Reg_Man_RC\Model\Ajax_Form_Response;
 
 /**
  * The chart view controller
@@ -25,10 +26,13 @@ class Map_Controller {
 
 	const MIN_DATE_INPUT_FIELD_NAME				= 'min_date';
 	const MAX_DATE_INPUT_FIELD_NAME				= 'max_date';
-	const CALENDAR_ID_INPUT_FIELD_NAME			= 'calendar_id';
 	const IS_SHOW_PAST_EVENTS_INPUT_FIELD_NAME	= 'is_show_past_events';
+	const EVENT_AUTHOR_FIELD_NAME				= 'event_author';
 	const MAP_TYPE_INPUT_FIELD_NAME				= 'map_type';
 
+	/**
+	 * Register this controller
+	 */
 	public static function register() {
 
 		// Register the handler for an AJAX request to get marker data for stats for any user, logged-in or not (any user can do this)
@@ -41,31 +45,35 @@ class Map_Controller {
 
 	} // function
 
+	/**
+	 * Handle an AJAX request to get event marker data for statistics
+	 */
 	public static function handle_ajax_get_event_marker_data_for_stats() {
 
 		$serialized_form_data = isset( $_REQUEST[ 'formData' ] ) ? $_REQUEST[ 'formData' ] : NULL;
 		$form_data = array();
 		parse_str( $serialized_form_data, $form_data );
-		if ( isset( $form_data[ 'event_filter_year' ] ) && ( $form_data[ 'event_filter_year' ] > 0 ) ) {
-			$year = $form_data[ 'event_filter_year' ];
-			$local_tz = wp_timezone(); // Make sure we use local timezone for dates
-			$start_date_time = new \DateTime( "$year-01-01", $local_tz );
-			$end_date_time = new \DateTime( "$year-12-31 23:59:59", $local_tz );
-		} else {
-			$start_date_time = NULL;
-			$end_date_time = NULL;
-		} // endif
-		$map_type	= isset( $form_data[ self::MAP_TYPE_INPUT_FIELD_NAME ] )	? $form_data[ self::MAP_TYPE_INPUT_FIELD_NAME ]	: NULL;
 
+		$map_type	= isset( $form_data[ self::MAP_TYPE_INPUT_FIELD_NAME ] ) ? $form_data[ self::MAP_TYPE_INPUT_FIELD_NAME ] : NULL;
+		$nonce		= isset( $form_data[ '_wpnonce' ] ) ? $form_data[ '_wpnonce' ] : NULL;
+		
+		$is_valid_nonce = wp_verify_nonce( $nonce, self::AJAX_GET_STATS_MARKER_DATA );
+//		Error_Log::var_dump( $nonce, $is_valid_nonce );
+		if ( ! $is_valid_nonce ) {
+
+			$error_msg = __( 'Your security token has expired.  Please reload the page.', 'reg-man-rc' );
+			$form_response = Ajax_Form_Response::create();
+			$form_response->add_error( '_wpnonce', $nonce, $error_msg );
+
+			echo json_encode( $form_response->jsonSerialize() ); 
+			wp_die(); // THIS IS REQUIRED! <== EXIT POINT!!!
+
+		} // endif		
+		
 		$filter = Event_Filter_Input_Form::get_filter_object_from_request( $form_data ); // May return NULL if no filters set
-		if ( ! isset( $filter ) ) {
-			$filter = Event_Filter::create();
-		} // endif
 
-		$all_events = Event::get_all_events();
-
-		$filter->set_sort_order( Event_Filter::SORT_BY_DATE_ASCENDING );
-		$filtered_events = $filter->apply_filter( $all_events );
+		$is_include_placeholder_events = TRUE; // The stats map should contain placeholder events
+		$filtered_events = Event::get_all_events_by_filter( $filter, $is_include_placeholder_events );
 
 		// What I have is an array of events but what I really want is an array of Event_Group_Map_Markers
 		$event_groups = Event_Group_Map_Marker::create_array_for_events_array( $filtered_events );
@@ -85,17 +93,31 @@ class Map_Controller {
 
 		$range_start_date_string	= isset( $form_data[ self::MIN_DATE_INPUT_FIELD_NAME ] )	? $form_data[ self::MIN_DATE_INPUT_FIELD_NAME ]		: NULL;
 		$range_end_date_string		= isset( $form_data[ self::MAX_DATE_INPUT_FIELD_NAME ] )	? $form_data[ self::MAX_DATE_INPUT_FIELD_NAME ]		: NULL;
-		$calendar_id				= isset( $form_data[ self::CALENDAR_ID_INPUT_FIELD_NAME ] )	? $form_data[ self::CALENDAR_ID_INPUT_FIELD_NAME ]	: NULL;
+//		$calendar_type				= isset( $form_data[ Calendar_Controller::CALENDAR_TYPE_INPUT_FIELD_NAME ] )	? $form_data[ Calendar_Controller::CALENDAR_TYPE_INPUT_FIELD_NAME ]	: NULL;
+//		$calendar_id				= isset( $form_data[ Calendar_Controller::CALENDAR_ID_INPUT_FIELD_NAME ] )	? $form_data[ Calendar_Controller::CALENDAR_ID_INPUT_FIELD_NAME ]	: NULL;
 		$show_past_events_string	= isset( $form_data[ self::IS_SHOW_PAST_EVENTS_INPUT_FIELD_NAME ] )	? $form_data[ self::IS_SHOW_PAST_EVENTS_INPUT_FIELD_NAME ]	: NULL;
-		$map_type					= isset( $form_data[ self::MAP_TYPE_INPUT_FIELD_NAME ] )	? $form_data[ self::MAP_TYPE_INPUT_FIELD_NAME ]	: NULL;
+		$author_string				= isset( $form_data[ self::EVENT_AUTHOR_FIELD_NAME ] )		? $form_data[ self::EVENT_AUTHOR_FIELD_NAME ]		: NULL;
+		$map_type					= isset( $form_data[ self::MAP_TYPE_INPUT_FIELD_NAME ] )	? $form_data[ self::MAP_TYPE_INPUT_FIELD_NAME ]		: NULL;
+		$nonce						= isset( $form_data[ '_wpnonce' ] ) ? $form_data[ '_wpnonce' ] : NULL;
+		
+		$is_valid_nonce = wp_verify_nonce( $nonce, self::AJAX_GET_CALENDAR_MARKER_DATA );
+		if ( ! $is_valid_nonce ) {
 
-		$calendar = isset( $calendar_id ) ? Calendar::get_calendar_by_id( $calendar_id ) : NULL;
-//		$cal_type = isset( $calendar ) ? $calendar->get_calendar_type() : NULL;
-//		Error_Log::var_dump( $cal_type, $map_type );
+			$error_msg = __( 'Your security token has expired.  Please reload the page.', 'reg-man-rc' );
+			$form_response = Ajax_Form_Response::create();
+			$form_response->add_error( '_wpnonce', $nonce, $error_msg );
 
+			echo json_encode( $form_response->jsonSerialize() ); 
+			wp_die(); // THIS IS REQUIRED! <== EXIT POINT!!!
+
+		} // endif
+		
+		$calendar = Calendar_Controller::get_calendar_for_request( $form_data );
+		
 		$is_show_past_events = ( strtolower( $show_past_events_string ) !== 'false' );
-//Error_Log::var_dump( $show_past_events_string, $is_show_past_events );
 
+		$event_author_id = ( $author_string == 'author_mine' ) ? get_current_user_id() : 0;
+		
 		$local_tz = wp_timezone(); // Make sure we use local timezone for dates
 		try {
 			$start_date_time = new \DateTime( $range_start_date_string );
@@ -133,13 +155,17 @@ class Map_Controller {
 				} // endif
 			} // endif
 
-			$marker_array = $calendar->get_map_markers_in_date_range( $start_date_time, $end_date_time );
+			$marker_array = $calendar->get_map_markers_in_date_range( $start_date_time, $end_date_time, $event_author_id );
 
 		} else {
 
 			if ( ! isset( $calendar ) ) {
-				/* translators: %1$s is an invalid calendar ID */
-				$msg = sprintf( __( 'Missing or invalid calendar ID was supplied to map: %1$s.', 'reg-man-rc' ), $calendar_id );
+				
+				$calendar_type	= isset( $form_data[ Calendar_Controller::CALENDAR_TYPE_INPUT_FIELD_NAME ] )	? $form_data[ Calendar_Controller::CALENDAR_TYPE_INPUT_FIELD_NAME ]	: NULL;
+				$calendar_id 	= isset( $form_data[ Calendar_Controller::CALENDAR_ID_INPUT_FIELD_NAME ] )		? $form_data[ Calendar_Controller::CALENDAR_ID_INPUT_FIELD_NAME ]	: NULL;
+				
+				/* Translators: %1$s is a calendar type, %2$s is a calendar ID */
+				$msg = sprintf( __( 'Missing or invalid calendar ID was supplied in events feed request: %1$s %2$s.', 'reg-man-rc' ), $calendar_type, $calendar_id );
 				Error_Log::log_msg( $msg );
 			} // endif
 

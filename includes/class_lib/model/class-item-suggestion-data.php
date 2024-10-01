@@ -1935,13 +1935,6 @@ array(
 	'group_name'	=> _x( 'Jewellery', 'Group Name', 'reg-man-rc' ),
 ),
 array(
-	'item_desc'		=> _x( 'Jewellery box', 'Item description', 'reg-man-rc' ),
-	'alt_desc'		=> '',
-	'fixer_station'	=> _x( 'Jewellery', 'Fixer station', 'reg-man-rc' ),
-	'item_type'		=> _x( 'Non-Electrical', 'Item type', 'reg-man-rc' ),
-	'group_name'	=> _x( 'Jewellery', 'Group Name', 'reg-man-rc' ),
-),
-array(
 	'item_desc'		=> _x( 'Necklace', 'Item description', 'reg-man-rc' ),
 	'alt_desc'		=> '',
 	'fixer_station'	=> _x( 'Jewellery', 'Fixer station', 'reg-man-rc' ),

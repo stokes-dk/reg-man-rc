@@ -26,7 +26,6 @@ use Reg_Man_RC\Model\Settings;
 class Volunteer_Registration_View extends Abstract_Object_View {
 
 	private $event;
-	private $volunteer_registration;
 	private $item_provider;
 
 	/**
@@ -92,16 +91,6 @@ class Volunteer_Registration_View extends Abstract_Object_View {
 	 */
 	private function set_event( $event ) {
 		$this->event = $event;
-		$this->volunteer_registration = $event->get_volunteer_registration();
-	} // function
-
-	/**
-	 * Get the volunteer registration object for this view.
-	 * @return	Volunteer_Registration		The volunteer registration object shown in this view.
-	 * @since	v0.1.0
-	 */
-	public function get_volunteer_registration() {
-		return $this->volunteer_registration;
 	} // function
 
 	/**
@@ -138,7 +127,7 @@ class Volunteer_Registration_View extends Abstract_Object_View {
 
 		if ( $this->get_is_object_page() ) {
 
-			$volunteer = Volunteer::get_current_volunteer();
+			$volunteer = Volunteer::get_volunteer_for_current_request();
 			$form = $this->get_full_registration_form( $volunteer );
 			$form_section = Ajax_Form_Section::create( $form );
 
@@ -229,14 +218,13 @@ class Volunteer_Registration_View extends Abstract_Object_View {
 		} // endif
 		return $result;
 	} // function
-
+	
+/* FIXME - not used
 	private function render_full_registration_form() {
 		if ( $this->get_is_render_full_registration_form() ) {
 			$event = $this->get_event();
 
-			$vol_reg = $this->get_volunteer_registration();
 			$is_event_complete = $event->get_is_event_complete();
-			$is_registered = isset( $vol_reg );
 
 			// Registration status (and compact form if necessary)
 			if ( ! $is_event_complete ) {
@@ -264,7 +252,7 @@ class Volunteer_Registration_View extends Abstract_Object_View {
 		} // endif
 
 	} // function
-
+*/
 	/**
 	 * Get the full registration form
 	 * @param	Volunteer	$volunteer	The volunteer whose registration form is being shown
@@ -286,8 +274,8 @@ class Volunteer_Registration_View extends Abstract_Object_View {
 	 * @return string
 	 */
 	private static function create_compact_registration_form( $event ) {
-		$vol_reg = $event->get_volunteer_registration();
-		$is_registered = isset( $vol_reg );
+		$vol_reg = $event->get_volunteer_registration_for_current_request();
+		$is_registered = ! empty( $vol_reg );
 
 		if ( $is_registered ) {
 
@@ -303,10 +291,10 @@ class Volunteer_Registration_View extends Abstract_Object_View {
 			if ( Settings::get_is_allow_volunteer_registration_quick_signup() ) {
 				// Allow volunteer to register in one click
 				// This is actually just a button, the form is rendered by the main page and submitted on the client side
-				$event_key = $event->get_key();
+				$event_key = $event->get_key_string();
 				$label_text = esc_html__( 'Register Now', 'reg-man-rc' );
 				$label = "<span class=\"dashicons dashicons-welcome-write-blog icon\"></span><span class=\"text\">$label_text</span>";
-				$classes = 'reg-man-rc-volunteer-area-quick-signup-button reg-man-rc-icon-text-container';
+				$classes = 'reg-man-rc-button reg-man-rc-volunteer-area-quick-signup-button reg-man-rc-icon-text-container';
 				$data = "data-event-key=\"$event_key\"";
 				$result = "<button type=\"button\" class=\"$classes\" $data>$label</button>";
 
@@ -437,11 +425,10 @@ class Volunteer_Registration_View extends Abstract_Object_View {
 	 */
 	public static function create_registration_status_item( $event, $object_view ) {
 
-		$vol_reg = $event->get_volunteer_registration();
+		$vol_reg = $event->get_volunteer_registration_for_current_request();
 
 		$is_event_complete = $event->get_is_event_complete();
-		$is_event_cancelled = $event->get_is_event_cancelled();
-		$is_registered = isset( $vol_reg );
+		$is_registered = ! empty( $vol_reg );
 
 		$icon_title = __( 'Volunteer registration status' );
 		$classes = 'reg-man-rc-volunteer-reg-event-status';
@@ -459,13 +446,16 @@ class Volunteer_Registration_View extends Abstract_Object_View {
 				// If the volunteer did not register for a past then show nothing
 				$result = NULL;
 			} // endif
+			
 		} else {
+			
 			// This is an upcoming event
 			$text = self::create_registration_status_label( $event, $is_registered );
 			$icon = ( $is_registered ) ? 'yes' : 'no';
 
+			$is_allow_reg = $event->get_is_allow_volunteer_registration();
 			// Add compact form if necessary
-			if ( ! $object_view->get_is_object_page() && ! $is_event_cancelled ) {
+			if ( ! $object_view->get_is_object_page() && $is_allow_reg ) {
 				$addn_content = self::create_compact_registration_form( $event );
 			} else {
 				$addn_content = NULL;

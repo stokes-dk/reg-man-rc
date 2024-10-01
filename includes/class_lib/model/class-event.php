@@ -4,6 +4,14 @@ namespace Reg_Man_RC\Model;
 use Reg_Man_RC\View\Event_View;
 use Reg_Man_RC\View\Volunteer_Registration_View;
 use Reg_Man_RC\View\Map_View;
+use Reg_Man_RC\Model\Stats\Item_Descriptor_Factory;
+use Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor_Factory;
+use Reg_Man_RC\Model\Stats\Supplemental_Visitor_Registration;
+use Reg_Man_RC\Control\User_Role_Controller;
+use Reg_Man_RC\Model\Stats\Item_Stats_Collection;
+use Reg_Man_RC\Model\Stats\Visitor_Stats_Collection;
+use Reg_Man_RC\Model\Stats\Volunteer_Stats_Collection;
+use Reg_Man_RC\View\Event_Descriptor_View;
 
 /**
  * Describes an instance of an event.
@@ -12,7 +20,8 @@ use Reg_Man_RC\View\Map_View;
  * Note that this differs from an Event_Descriptor which may describe a series of recurring events.
  *
  * A recurring event will have a single Event_Descriptor and multiple associated Event objects.
- * For recurring events, the Event object will include the specific date and time for one event instance, and its recurrence ID.
+ * For recurring events, the Event object will include the specific start ande end date and time
+ * for one event instance, and its recurrence date.
  *
  * This class also provides human-readable forms of the event details such as formatted string representations of
  * the start and end date/times (in addition to the DateTime objects), and placeholder strings for missing information,
@@ -33,22 +42,29 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	private static $DATE_NOW; // The current date and time, used to determine if this event is completed
 
 	/**
-	 * A string used to format a \DateTime object and return a string suitable for use as a recurrence id.
-	 * Use this constant if the recurrence ID when the event time is not required to differentiate events,
+	 * A string used to format a \DateTime object and return a string suitable for use as a recurrence date.
+	 * Use this constant to generate the recurrence date when the event time is not required to differentiate events,
 	 * that is there is only one occurrence of the recurring event on any given date.
 	 * @since v0.1.0
 	 */
-	private static $RECUR_ID_FORMAT_DATE = 'Ymd';
+	private static $RECUR_DATE_FORMAT_DATE = 'Ymd';
 
 	/**
-	 * A string used to format a \DateTime object and return a string suitable for use as a recurrence id.
-	 * Use this constant only if the recurrence ID must contain a time, that is there are two occurrences of the
+	 * A string used to format a \DateTime object and return a string suitable for use as a recurrence date.
+	 * Use this constant only if the recurrence date must contain a time, that is there are two occurrences of the
 	 * recurring event on the same day.
 	 * @since v0.1.0
 	 */
-	private static $RECUR_ID_FORMAT_DATE_TIME = 'Ymd\THis';
+	// This is the ICalendar date-time format (can have Z at the end for UTC time which I think this always is) 
+	private static $RECUR_DATE_FORMAT_DATE_TIME = 'Ymd\THis';
 
 	private static $DEFAULT_CATEGORIES_ARRAY; // Store the array of default categories so we can reuse it
+	
+	/**
+	 * A flag used to indicate that the event key does not match any known event
+	 * @var boolean
+	 */
+	private $is_placeholder_event = FALSE;
 
 	/**
 	 * The Event_Descriptor which contains the raw data for this event
@@ -65,12 +81,12 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	private $key_object;
 
 	/**
-	 * A string containing the recurrence id for a repeating event.
+	 * A string containing the recurrence date for a repeating event.
 	 * If an event is not repeating, this will be NULL or an empty string.
 	 * @var	string
 	 * @since v0.1.0
 	 */
-	private $recurrence_id;
+	private $recurrence_date;
 
 	/**
 	 * The event's summary, e.g. "Repair Café at Toronto Reference Library"
@@ -78,20 +94,6 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * @since v0.1.0
 	 */
 	private $summary;
-
-	/**
-	 * The event's status represented as a translated string, e.g. Confirmed, Tentative, or Cancelled
-	 * @var	string
-	 * @since v0.1.0
-	 */
-	private $status;
-
-	/**
-	 * The event's class represented as a translated string, e.g. Public, Private, or Confidential
-	 * @var	string
-	 * @since v0.1.0
-	 */
-	private $class;
 
 	/**
 	 * The \DateTimeInterface object representing the start date and time of the event.
@@ -116,52 +118,18 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	private $end_date_time_object;
 
 	/**
-	 * The \DateTimeInterface object representing the start date and time of the event using the timezone
-	 * assigned in the settings for this Wordpress site.
-	 *
-	 * Note that event provider implementations may use any timezone to store events.
-	 * When event dates and times are displayed to end users they are always converted to the local timezone
-	 * assigned in the Wordpress settings.
-	 * @var	\DateTimeInterface
-	 * @since v0.1.0
-	 */
-	private $start_date_time_local_timezone_object;
-
-	/**
-	 * The \DateTimeInterface object representing the end date and time of the event using the timezone
-	 * assigned in the settings for this Wordpress site.
-	 * @var	\DateTimeInterface
-	 * @since v0.1.0
-	 */
-	private $end_date_time_local_timezone_object;
-
-	/**
 	 * A string containing the start date formatted according to the website's date format and timezone
 	 * @var	string
 	 * @since v0.1.0
 	 */
-	private $start_date;
+	private $start_date_string_in_display_format;
 
 	/**
-	 * A string containing the start time formatted according to the website's time format and timezone
+	 * A string containing the start date formatted so that it can be used as data in an event key
 	 * @var	string
-	 * @since v0.1.0
+	 * @since v0.6.0
 	 */
-	private $start_time;
-
-	/**
-	 * A string containing the end date formatted according to the website's date format and timezone
-	 * @var	string
-	 * @since v0.1.0
-	 */
-	private $end_date;
-
-	/**
-	 * A string containing the end time formatted according to the website's time format and timezone
-	 * @var	string
-	 * @since v0.1.0
-	 */
-	private $end_time;
+	private $start_date_string_in_data_format;
 
 	/**
 	 * A string containing a labelling showing the event's start and end date and time
@@ -171,11 +139,11 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	private $event_dates_and_times_label;
 
 	/**
-	 * A string containing the event's location, e.g. "Toronto Reference Library"
-	 * @var	string
+	 * The event's status
+	 * @var	Event_Status
 	 * @since v0.1.0
 	 */
-	private $location;
+	private $event_status;
 
 	/**
 	 * A string containing the url for the event's internal page.
@@ -187,14 +155,13 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	private $event_page_url;
 
 	/**
-	 * A string containing a human-readable label for the event including it's date and location.
+	 * A string containing a human-readable label for the event including it's date and summary.
 	 * @var	string
 	 * @since v0.1.0
 	 */
 	private $label;
-
-	/** An array of Item objects representing the items registered for this event */
-	private $items;
+	
+	private $event_marker_text;
 
 	/** A set of HTML class names associated with the calendar entry for this event */
 	private $calendar_entry_class_names;
@@ -203,25 +170,48 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	private $map_marker_colour;
 
 	/** The volunteer registration record for the current volunteer (if one exists) for this event */
-	private $volunteer_registration = FALSE; // initialize to FALSE to indicate we have not tried to find it yet
-
-	private static $PROVIDER_NAME_ARRAY;
-
+	private $current_volunteer_registration;
+	
+	private $events_collection; // used to determine stats
+	private $total_item_stats_collection;
+	private $total_visitor_stats_collection;
+	private $total_volunteer_stats_collection;
+	private $total_items_count;
+	private $total_visitors_count;
+	private $total_volunteers_count;
+	
 	/**
-	 * Get all events currently defined to the system
+	 * Get all events currently defined in the system
+	 * @param	boolean			$is_include_placeholder_events	Flag to indicate whether the result should include
+	 * placeholder events derived from item and volunteer registrations but not found in the set of declared events
 	 * @return	\Reg_Man_RC\Model\Event[]	An array of all events
 	 * @since v0.1.0
 	 */
-	public final static function get_all_events() {
+	public final static function get_all_events( $is_include_placeholder_events = FALSE ) {
+		
 		$result = array();
 		$descriptor_array = Event_Descriptor_Factory::get_all_event_descriptors();
-		$result = self::get_events_for_descriptors( $descriptor_array );
+		$result = self::get_events_array_for_event_descriptors_array( $descriptor_array );
+		
+		if ( $is_include_placeholder_events ) {
+			$start_date_time = NULL;
+			$end_date_time = NULL;
+			$placeholder_events = self::get_placeholder_events( $start_date_time, $end_date_time, $result );
+			$result = array_merge( $result, $placeholder_events );
+		} // endif
+		
 		return $result;
+
 	} // function
 
+	/**
+	 * Get the array of events described by the specified event descriptor
+	 * @param	Event_Descriptor	$event_descriptor
+	 * @return	Event[]
+	 */
 	public static function get_events_array_for_event_descriptor( $event_descriptor ) {
 		if ( $event_descriptor instanceof Event_Descriptor ) {
-			$result = self::get_events_for_descriptors( array( $event_descriptor ) );
+			$result = self::get_events_array_for_event_descriptors_array( array( $event_descriptor ) );
 		} else {
 			$result = array();
 		} // endif
@@ -233,7 +223,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * @param	Event_Descriptor[]	$descriptor_array
 	 * @return	Event[]
 	 */
-	private static function get_events_for_descriptors( $descriptor_array ) {
+	private static function get_events_array_for_event_descriptors_array( $descriptor_array ) {
 		// Create an event (or set of recurring events) for each descriptor and add it to the result
 		$result = array();
 		foreach ( $descriptor_array as $event_descriptor ) {
@@ -251,99 +241,126 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	/**
 	 * Get all events currently defined to the system which are accepted by the specified filter.
 	 * @param	Event_Filter	$event_filter A filter object specifying which events should be included in the results.
+	 * @param	boolean			$is_include_placeholder_events	Flag to indicate whether the result should include
+	 * placeholder events derived from item and volunteer registrations but not found in the set of known events
 	 * @return	Event[]	An array of events accepted by the specified filter
 	 * @since v0.1.0
 	 */
-	public final static function get_all_events_by_filter( $event_filter ) {
-		// Get the event providers currently being used and request all their events
+	public final static function get_all_events_by_filter( $event_filter, $is_include_placeholder_events = FALSE ) {
+		
 		$result = array();
+
 		// TODO: I could have Event_Desc_Factory::get_event_descriptors_in( class_arr, status_arr, cat_arr )
 		//  to make the list smaller, or get_event_desc_in_range( min_date, max_date ) or _in_filter( event_filter )
 		//  which would start with non-repeating events selected and then add repeaters
 		// It would be a performance improvement if there are problems
+		
 		$descriptor_array = Event_Descriptor_Factory::get_all_event_descriptors();
-//Error_Log::var_dump( $descriptor_array );
-		$result = self::get_events_for_descriptors( $descriptor_array );
+// Error_Log::var_dump( $descriptor_array );
+		$result = self::get_events_array_for_event_descriptors_array( $descriptor_array );
 
+		if ( $is_include_placeholder_events ) {
+			$start_date_time = isset( $event_filter ) ? $event_filter->get_accept_minimum_date_time() : NULL;
+			$end_date_time = isset( $event_filter ) ? $event_filter->get_accept_maximum_date_time() : NULL;
+			$placeholder_events = self::get_placeholder_events( $start_date_time, $end_date_time, $result );
+			$result = array_merge( $result, $placeholder_events );
+		} // endif
+		
 		// Filter the final result if necessary
 		if ( isset( $event_filter ) ) {
 			$result = $event_filter->apply_filter( $result );
 		} // endif
 
+//	Error_Log::var_dump( count( $result ) );
 		return $result;
 	} // function
 
-
 	/**
-	 * Get the events in the specified event category
-	 * @param	int|string	$event_category_id	The ID of the event category whose events are to be returned.
-	 * @return	\Reg_Man_RC\Model\Event[]	An array of events with the specified category
-	 * @since v0.1.0
+	 * Get the array of events that the current user is able to register items for
+	 * @return Event[]
 	 */
-	public final static function get_events_in_category( $event_category_id ) {
-		// Get the event providers currently being used and request all their events
-		$result = array();
-		$category = Event_Category::get_event_category_by_id( $event_category_id );
+	public static function get_events_array_current_user_can_register_items() {
 
-		if ( isset( $category ) ) {
-			$descriptor_array = Event_Descriptor_Factory::get_event_descriptors_in_category( $event_category_id );
-			$result = self::get_events_for_descriptors( $descriptor_array );
+		$current_user_id = get_current_user_id();
+
+		if ( empty( $current_user_id ) || ! current_user_can( 'edit_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL ) ) {
+			
+			// There is no user logged in, or the current user cannot create/edit Items
+			
+			$result = array();
+
+		} else {
+			
+			// This current user can register items, so figure out which events are valid
+
+			if ( current_user_can( 'edit_others_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+
+				// Users who can edit_others_events can register items to any event
+				$result = self::get_all_events();
+				
+			} elseif ( current_user_can( 'edit_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+			
+				// Users who can edit_events but not edit_others_events can only register items to their own events
+				$all_events = self::get_all_events();
+				$filter = Event_Filter::create();
+				$filter->set_accept_event_author_id( $current_user_id );
+				$result = $filter->apply_filter( $all_events );
+				
+			} elseif ( current_user_can( 'edit_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL ) ) {
+				
+				// Users who cannot edit events but can edit items can register items to all events
+				$result = self::get_all_events();
+				
+			} else {
+				
+				// Other users cannot register items to any events
+				$result = array();
+				
+			} // endif
+
 		} // endif
-
+		
 		return $result;
+
 	} // function
 
 	/**
-	 * Get the events whose venue is the one specified
-	 * @param	Venue	$venue			The Venue object whose events are to be returned
-	 * @param	boolean	$upcoming_only	A flag set to TRUE to request only upcoming events, FALSE for all (past and future)
-	 * @return	Event[]	An array of events
-	 * @since v0.1.0
+	 * Get the array of events that the current user is able to register volunteers for
+	 * @return Event[]
 	 */
-	public final static function get_events_for_venue( $venue, $upcoming_only ) {
-		$result = array();
+	public static function get_events_array_current_user_can_register_volunteers() {
 
-		// TODO: It's probably better to get upcoming events first because that is a MUCH smaller collection
-		$descriptor_array = Event_Descriptor_Factory::get_event_descriptors_for_venue( $venue );
-		$result = self::get_events_for_descriptors( $descriptor_array );
+		$current_user_id = get_current_user_id();
 
-		if ( $upcoming_only ) {
-			$filter = Event_Filter::create();
-			$filter->set_accept_dates_on_or_after_today();
-			$result = $filter->apply_filter( $result );
+		if ( empty( $current_user_id ) || ! current_user_can( 'edit_' . User_Role_Controller::VOLUNTEER_REG_CAPABILITY_TYPE_PLURAL ) ) {
+			
+			// There is no user logged in, or the current user cannot create/edit Volunteer registrations
+			
+			$result = array();
+
+		} else {
+			
+			// This current user can register volunteers, so figure out which events are valid
+
+			if ( current_user_can( 'edit_others_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+
+				// Users who can edit_others_events can register volunteers to any event
+				$result = self::get_all_events();
+				
+			} elseif ( current_user_can( 'edit_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+			
+				// Users who can edit_events but not edit_others_events can only register volunteers to their own events
+				$all_events = self::get_all_events();
+				$filter = Event_Filter::create();
+				$filter->set_accept_event_author_id( $current_user_id );
+				$result = $filter->apply_filter( $all_events );
+				
+			} // endif
+
 		} // endif
-
+		
 		return $result;
-	} // function
 
-
-	/**
-	 * Get the next event on or after the current date and time.
-	 *
-	 * This is used to determine the most likely event candidate for registering new items.
-	 * @return	NULL|\Reg_Man_RC\Model\Event	The next event on or after the current date and time
-	 * 	or NULL if there are no upcoming events
-	 * @since	v0.1.0
-	 */
-	public final static function get_next_upcoming_event() {
-		$result = self::get_upcoming_events( $count = 1 );
-		return $result;
-	} // function
-
-	/**
-	 * Get the specified number of upcoming events (on or after the current date and time).
-	 *
-	 * @return	NULL|\Reg_Man_RC\Model\Event	The next $count events on or after the current date and time
-	 * 	or NULL if there are no upcoming events
-	 * @since	v0.1.0
-	 */
-	public final static function get_upcoming_events( $count ) {
-		$event_filter = Event_Filter::create();
-		$event_filter->set_accept_dates_on_or_after_today();
-		$event_filter->set_sort_order( Event_Filter::SORT_BY_DATE_ASCENDING );
-		$events = self::get_all_events_by_filter( $event_filter );
-		$result = array_slice( $events, 0, $count );
-		return $result;
 	} // function
 
 	/**
@@ -362,9 +379,12 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 			if ( $event_descriptor->get_event_is_recurring() ) {
 				$recurrence_rule = $event_descriptor->get_event_recurrence_rule();
 				$recur_dates = $recurrence_rule->get_recurring_event_dates();
+//				$event_desc_id = $event_descriptor->get_event_descriptor_id();
+//				$provider_id = $event_descriptor->get_provider_id();
 				foreach ( $recur_dates as $date_pair ) {
+//					Error_Log::var_dump( $date_pair['start'] );
 					$event = self::create_for_event_descriptor( $event_descriptor, $date_pair['start'], $date_pair['end'] );
-					$key = $event->get_key();
+					$key = $event->get_key_string();
 					$result[ $key ] = $event;
 				} // endfor
 			} // endif
@@ -374,56 +394,110 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 
 	/**
 	 * Get a single event using its event key
-	 * @param	string|Event_Key	$event_key	The key for the event as a string or an instance of EventKey, returned by Event::get_event_key();
-	 * @return	Event|NULL			The event specified by the arguments or NULL if the event is not found or the key is invalid
+	 * @param	string|Event_Key	$event_key	The key for the event as a string or an instance of EventKey, returned by Event::get_event_key_string();
+	 * @return	Event|NULL			The event specified by the key or NULL if the event is not found or the key is invalid
+	 * Note that if the event key includes a recurrence date then it must refer to a recurring event descriptor or NULL is returned.
+	 * Similarly, if the event key specifies no recurrence date, it must refer to a non-recurring event descriptor or NULL is returned.
 	 * @since v0.1.0
 	 */
 	public static final function get_event_by_key( $event_key ) {
+		
 		if ( ! ( $event_key instanceof Event_Key ) ) {
 			$event_key = Event_Key::create_from_string( strval( $event_key ) );
 		} // endif
+		
 		if ( $event_key instanceof Event_Key ) {
-			$event_id = $event_key->get_event_descriptor_id();
+			
+			// Event cache??? Cache events by key string?
+
+			$event_key_date_string = $event_key->get_event_date_string();
+			$event_desc_id = $event_key->get_event_descriptor_id();
 			$provider_id = $event_key->get_provider_id();
-			if ( $provider_id === Internal_Event_Descriptor::EVENT_PROVIDER_ID ) {
-				$event_descriptor = Internal_Event_Descriptor::get_internal_event_descriptor_by_event_id( $event_id );
-			} else {
-				$event_descriptor = External_Event_Descriptor::get_external_event_descriptor_by_key( $event_key );
-			} // endif
+			
+			$event_descriptor = Event_Descriptor_Factory::get_event_descriptor_by_id( $event_desc_id, $provider_id,  );
 
 			if ( $event_descriptor == NULL ) {
-				$result = NULL;
-			} else {
-				$recurrence_id = $event_key->get_recurrence_id();
 
-				if ( ( $recurrence_id == NULL ) || ( $recurrence_id == FALSE ) || ( $recurrence_id == '' ) ) {
-					// What if the event is recurring but no recurrence ID is specified?
-					// This may happen if an event is created and then later changed to recurring
-					// In this case the key does not refer to any specific event so we need to return NULL
-					// The user interface should attempt to stop users from making this mistake
-					//  by not allowing an event to be changed to repeating or non-repeating when registrations exist
-					if ( $event_descriptor->get_event_is_recurring() ) {
-						$result = NULL;
-					} else {
-						$result = self::create_for_event_descriptor( $event_descriptor );
-					} // endif
+				$result = NULL;
+				
+			} else {
+				
+				if ( ! $event_descriptor->get_event_is_recurring() ) {
+					
+					// We have a non-recurring event so the event object can be contructed using the descriptor
+					$event = self::create_for_event_descriptor( $event_descriptor );
+					// Make sure the dates match, otherwise the event doesn't really exist
+					$event_date_string = isset( $event ) ? $event->get_start_date_string_in_data_format() : NULL;
+//					Error_Log::var_dump( $event, $event_date_string );
+					$result = isset( $event_date_string ) && ( $event_date_string == $event_key_date_string ) ? $event : NULL;
+					
 				} else {
+					
+					// This is a recurring event, we need to find the right date
 					$recurring_events = self::get_recurring_events( $event_descriptor );
-					$result = NULL; // I'm giong to search through my recurring event instances and look for the id
+					$result = NULL; // I'm giong to search through my recurring event instances and look for the date
 					foreach( $recurring_events as $event ) {
-						if ( $event->get_recurrence_id() == $recurrence_id ) {
+						if ( $event->get_start_date_string_in_data_format() == $event_key_date_string ) {
 							$result = $event;
 							break;
 						} // endif
 					} // endfor
+					
 				} // endif
+				
 			} // endif
+
+			if ( isset( $result ) ) {
+				$result->key_object = $event_key; // We might as well save the key while we have it
+			} // endif
+			
 		} else {
+
 			$result = NULL; // The key was not an instance of Event_Key
+			
 		} // endif
+				
 		return $result;
 	} // function
 
+	/**
+	 * Get an event object based on its descriptor ID, provider ID and optional recurrence date string
+	 * @param string $descriptor_id
+	 * @param string $provider_id
+	 * @param string $recurrence_date_string
+	 * @return Event
+	 */
+	public static function get_event_by_descriptor_id( $descriptor_id, $provider_id = NULL, $recurrence_date_string = NULL ) {
+		
+		$event_descriptor = Event_Descriptor_Factory::get_event_descriptor_by_id( $descriptor_id, $provider_id );
+		
+		if ( ! isset( $event_descriptor ) ) {
+			
+			$result = NULL;
+			
+		} elseif ( ! $event_descriptor->get_event_is_recurring() ) {
+			
+			// We have a non-recurring event so the event object can be contructed using the descriptor
+			$result = self::create_for_event_descriptor( $event_descriptor );
+			
+		} else {
+			
+			// This is a recurring event, we need to find the right date
+			$recurring_events = self::get_recurring_events( $event_descriptor );
+			$result = NULL; // I'm giong to search through my recurring event instances and look for the date
+			foreach( $recurring_events as $event ) {
+				if ( $event->get_recurrence_date() == $recurrence_date_string ) {
+					$result = $event;
+					break;
+				} // endif
+			} // endfor
+			
+		} // endif
+		
+		return $result;
+		
+	} // function
+	
 	/**
 	 * Create an instance of this class using an Event_Descriptor.
 	 *
@@ -444,13 +518,130 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 		return $result;
 	} // function
 
-	private static function get_provider_name_by_id( $provider_id ) {
-		if ( ! isset( self::$PROVIDER_NAME_ARRAY ) ) {
-			self::$PROVIDER_NAME_ARRAY = External_Event_Descriptor::get_all_external_event_providers();
-			self::$PROVIDER_NAME_ARRAY[ Internal_Event_Descriptor::EVENT_PROVIDER_ID ] = __( 'Registration Manager', 'reg-man-rc' );
+	/**
+	 * Get the placeholder events for all known item and volunteer registrations in the specified date range,
+	 *  and not appearing in the specified array of known events
+	 * @param \DateTime	$start_date_time
+	 * @param \DateTime $end_date_time
+	 * @param Event[]	$known_events_array
+	 * @return Event[]
+	 */
+	private static function get_placeholder_events( $start_date_time, $end_date_time, $known_events_array ) {
+		
+		$result = array();
+
+		$min_key_date_string = isset( $start_date_time ) ? $start_date_time->format( Event_Key::EVENT_DATE_FORMAT ) : NULL;
+		$max_key_date_string = isset( $end_date_time ) ? $end_date_time->format( Event_Key::EVENT_DATE_FORMAT ) : NULL;
+		
+		// Get event keys for any events that have Items or Volunteers registered
+		
+		$item_reg_key_strings_array = Item_Descriptor_Factory::get_event_key_strings_for_items_in_date_range( $min_key_date_string, $max_key_date_string );
+//	Error_Log::var_dump( $item_reg_key_strings_array );
+	
+		$vol_reg_key_strings_array = Volunteer_Registration_Descriptor_Factory::get_event_key_strings_for_volunteer_registrations_in_date_range( $min_key_date_string, $max_key_date_string );
+//	Error_Log::var_dump( $vol_reg_key_strings_array );
+
+		// Note that visitor registrations are covered in the set of item registrations above
+		//  with the exception of supplemental visitor info added for specific events.  We need to add those.
+		$vis_reg_key_strings_array = Supplemental_Visitor_Registration::get_event_key_strings_for_visitor_registrations_in_date_range( $min_key_date_string, $max_key_date_string );
+//	Error_Log::var_dump( $vis_reg_key_strings_array );
+
+		$reg_key_strings_array = array_merge( $item_reg_key_strings_array, $vol_reg_key_strings_array, $vis_reg_key_strings_array );
+//	Error_Log::var_dump( $item_reg_key_strings_array, $vol_reg_key_strings_array, $vis_reg_key_strings_array, $reg_key_strings_array );
+		$reg_key_strings_array = array_unique( $reg_key_strings_array );
+//	Error_Log::var_dump( $reg_key_strings_array );
+		
+		if ( ! empty( $reg_key_strings_array ) ) {
+
+			// There are registrations in this timeframe
+			// If any of their events are not already known then we need to add them
+			$keyed_events_array = array();
+			foreach( $known_events_array as $event ) {
+				$key_string = $event->get_key_string();
+				$keyed_events_array[ $key_string ] = $event;
+			} // endfor
+			
+			foreach( $reg_key_strings_array as $reg_key_string ) {
+				if ( ! in_array( $reg_key_string, $keyed_events_array ) ) {
+//					Error_Log::var_dump( $reg_key_string );
+					$placeholder = Event::create_placeholder_event( $reg_key_string ); // create placeholder
+					$keyed_events_array[ $reg_key_string ] = $placeholder; // Mark the events we already know
+					$result[] = $placeholder; // Add new placeholder to the result
+				} // endif
+			} // endfor
+			
 		} // endif
-		$result = isset( self::$PROVIDER_NAME_ARRAY[ $provider_id ] ) ? self::$PROVIDER_NAME_ARRAY[ $provider_id ] : $provider_id;
+		
+//	Error_Log::var_dump( count( $result ) );
 		return $result;
+		
+	} // function
+
+	
+	/**
+	 * Create a placeholder event for an event key that does not match any known event
+	 *
+	 * @param	Event_Key	$event_key_string	The key string for the event
+	 * @return	Event	The newly created Event object
+	 * @since v0.6.0
+	 */
+	public static function create_placeholder_event( $event_key_string ) {
+		if ( empty( $event_key_string ) ) {
+			$result = NULL;
+		} else {
+			$event_key = Event_Key::create_from_string( $event_key_string );
+			$date_string = $event_key->get_event_date_string();
+			$provider_id = $event_key->get_provider_id();
+			$descriptor_id = $event_key->get_event_descriptor_id();
+			$start_date_time = \DateTime::createFromFormat( Event_Key::EVENT_DATE_FORMAT, $date_string, wp_timezone() );
+	//		Error_Log::var_dump( $start_date_time );
+			if ( empty( $start_date_time ) ) {
+	
+				$start_date_time = NULL;
+				$end_date_time = NULL;
+	
+			} else {
+	
+				$end_date_time = clone $start_date_time;
+	
+				// Set the start time
+				$start_time = Settings::get_default_event_start_time();
+				$time_parts = explode( ':', $start_time );
+				$hours = isset( $time_parts[ 0 ] ) ? $time_parts[ 0 ] : 0;
+				$minutes = isset( $time_parts[ 1 ] ) ? $time_parts[ 1 ] : 0;
+				$start_date_time->setTime( $hours, $minutes );
+				
+				// Set the end time
+				$end_time = Settings::get_default_event_end_time();
+				$time_parts = explode( ':', $end_time );
+				$hours = isset( $time_parts[ 0 ] ) ? $time_parts[ 0 ] : 0;
+				$minutes = isset( $time_parts[ 1 ] ) ? $time_parts[ 1 ] : 0;
+				$end_date_time->setTime( $hours, $minutes );
+				
+			} // endif
+			
+			$event_descriptor = Event_Descriptor_Factory::get_event_descriptor_by_id( $descriptor_id, $provider_id );
+			if ( empty( $event_descriptor ) ) {
+				// Get a placeholder descriptor if the real one is not found
+				$event_descriptor = Placeholder_Event_Descriptor::create( $provider_id, $descriptor_id );
+			} // endif
+			
+			$result = self::create_for_event_descriptor( $event_descriptor, $start_date_time, $end_date_time );
+			$result->is_placeholder_event = TRUE;
+			$result->event_descriptor = $event_descriptor;
+		
+		} // endif
+		
+		return $result;
+	} // function
+
+	/**
+	 * Get the flag indicating whether this event is a placeholder for one whose key could not be found
+	 * @return	boolean	TRUE if this event is a placeholder, FALSE otherwise
+	 * @since v0.1.0
+	 */
+	public function get_is_placeholder_event() {
+		return $this->is_placeholder_event;
 	} // function
 
 	/**
@@ -463,26 +654,25 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	} // function
 
 	/**
-	 * Get the system-unique key for this event
+	 * Get the system-unique key for this event as a string
 	 * @return	string	A key that can be used to uniquely identify the event on the system
 	 * @since v0.1.0
 	 */
-	public function get_key() {
+	public function get_key_string() {
 		return $this->get_key_object()->get_as_string();
 	} // function
 
 	/**
 	 * Get the object containing the system-unique key for this event
-	 * @return	Event_Key	A system-unique key object containing the event id, provider id, and recurrence id
+	 * @return	Event_Key	A system-unique key object containing the event id, provider id, and recurrence date
 	 * @since v0.1.0
 	 */
 	public function get_key_object() {
 		if ( ! isset( $this->key_object ) ) {
-			$event_descriptor = $this->get_event_descriptor();
 			$this->key_object = Event_Key::create(
-				$event_descriptor->get_event_descriptor_id(),
-				$event_descriptor->get_provider_id(),
-				$this->get_recurrence_id()
+				$this->get_start_date_time_object(),
+				$this->get_event_descriptor_id(),
+				$this->get_provider_id(),
 			);
 		} // endif
 		return $this->key_object;
@@ -506,7 +696,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * @since v0.1.0
 	 */
 	public function get_provider_name() {
-		return self::get_provider_name_by_id( $this->get_provider_id() );
+		return Event_Provider_Factory::get_provider_name_by_id( $this->get_provider_id() );
 	} // function
 
 	/**
@@ -520,21 +710,21 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	} // function
 
 	/**
-	 * Get the recurrence id for the event if this is a recurring event, otherwise NULL.
+	 * Get the recurrence date for the event if this is a recurring event, otherwise NULL.
 	 *
-	 * This method returns the recurrence ID for this instance of the event.
+	 * This method returns the recurrence date for this instance of the recurring event descriptor.
 	 * The result is a string that specifies either a date or a date and time.
 	 * For events that repeat multiple times on the same day, a date and time is used, otherwise just a date.
 	 * A date (with no time) must be like this: 20201023.  A date with time must be like this: 20201023T120000.
-	 * The recurrence id is used when events are shared across systems,
+	 * The recurrence date is used when events are shared across systems,
 	 * for example imported and exported, or used in an iCalendar feed.
-	 * Recurring events may have the same uid but then must have different recurrence IDs
+	 * Recurring events may have the same uid but then must have different recurrence dates
 	 *
-	 * @return	string		The recurrence ID.
+	 * @return	string		The recurrence date.
 	 * @since v0.1.0
 	 */
-	public function get_recurrence_id() {
-		if ( ! isset( $this->recurrence_id ) ) {
+	public function get_recurrence_date() {
+		if ( ! isset( $this->recurrence_date ) ) {
 			$rule = $this->get_event_descriptor()->get_event_recurrence_rule();
 			if ( $rule !== NULL ) {
 				$freq = $rule->get_frequency();
@@ -542,21 +732,21 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 					case Recurrence_Rule::SECONDLY:
 					case Recurrence_Rule::MINUTELY:
 					case Recurrence_Rule::HOURLY:
-						$format = self::$RECUR_ID_FORMAT_DATE_TIME;
+						$format = self::$RECUR_DATE_FORMAT_DATE_TIME;
 						break;
 					default:
-						$format = self::$RECUR_ID_FORMAT_DATE;
+						$format = self::$RECUR_DATE_FORMAT_DATE;
 						break;
 				} // endswitch
-				$start_date_time = $this->get_start_date_time_object();
-				$this->recurrence_id = $start_date_time->format( $format );
+				// FIXME - this date/time is in local timezone!
+				$start_date_time = $this->get_start_date_time_object(); 
+				$this->recurrence_date = $start_date_time->format( $format );
 			} else {
-				$this->recurrence_id = NULL;
+				$this->recurrence_date = NULL;
 			} // endif
 		} // endif
-		return $this->recurrence_id;
+		return $this->recurrence_date;
 	} // function
-
 
 	/**
 	 * Get the event's summary, e.g. "Repair Café at Toronto Reference Library".
@@ -572,12 +762,149 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	} // function
 
 	/**
+	 * Get the WordPress user ID of the author of this event, if known
+	 * @return	int|string	The WordPress user ID of the author of this event if it is known, otherwise NULL or 0.
+	 * @since v0.6.0
+	 */
+	public function get_author_id() {
+		return $this->get_event_descriptor()->get_event_author_id();
+	} // function
+
+	/**
+	 * Get a boolean indicating whether the current user has authority to register items for this event
+	 * @return boolean
+	 * @since v0.6.0
+	 */
+	public function get_is_current_user_able_to_register_items() {
+		
+		$result = FALSE; // Assume this user cannot register items
+
+		if ( current_user_can( 'edit_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL ) ) {
+
+			if ( current_user_can( 'edit_others_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+
+				// Users who can edit_others_events can register items to any event
+				$result = TRUE; // this user can edit anybody's events so they can register items
+				
+			} elseif ( current_user_can( 'edit_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+			
+				// Users who can edit_events but not edit_others_events can only register items to their own events
+				$result = $this->get_is_current_user_event_author();
+				
+			} else {
+			
+				// Users who cannot edit_events (but can edit_items) can register items to any event
+				$result = TRUE;
+				
+			} // endif
+
+		} // endif
+		
+		return $result;
+		
+	} // function
+
+	/**
+	 * Get a boolean indicating whether the current user has authority to register volunteers for this event
+	 * @return boolean
+	 * @since v0.6.0
+	 */
+	public function get_is_current_user_able_to_register_volunteers() {
+		
+		$result = FALSE; // Assume this user cannot register volunteers
+
+		if ( current_user_can( 'edit_' . User_Role_Controller::VOLUNTEER_REG_CAPABILITY_TYPE_PLURAL ) ) {
+
+			if ( current_user_can( 'edit_others_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+
+				// Users who can edit_others_events can register volunteers to any event
+				$result = TRUE; // this user can edit anybody's events so they can register volunteers
+				
+			} elseif ( current_user_can( 'edit_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+			
+				// Users who can edit_events but not edit_others_events can only register volunteers to their own events
+				$result = $this->get_is_current_user_event_author();
+				
+			} else {
+			
+				// Users who cannot edit_events (but can edit_volunteer_reg) can register volunteers to any event
+				$result = TRUE;
+				
+			} // endif
+
+		} // endif
+		
+		return $result;
+		
+	} // function
+	
+	/**
+	 * Get a boolean indicating whether the current user has authority to view the email addresses
+	 *  of the registered volunteers for this event
+	 * @return boolean
+	 * @since v0.8.6
+	 */
+	public function get_is_current_user_able_to_view_registered_volunteer_emails() {
+		
+		$result = FALSE; // Assume this user cannot
+
+		if ( is_admin() ) {
+
+			if ( current_user_can( 'edit_others_' . User_Role_Controller::VOLUNTEER_CAPABILITY_TYPE_PLURAL ) ) {
+
+				// Users who can edit_others_volunteers can see the email address of any volunteer
+				$result = TRUE;
+
+			} elseif ( current_user_can( 'edit_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+			
+				// TODO: We may need a setting whether to allow event authors (like community event organizers)
+				//  to see the emails of the volunteers who have registered for their event
+				// Right now,they always can but some organizations may wish to restrict this
+				
+				// Users who can edit_events but not edit_others_events can only register volunteers to their own events
+				$result = $this->get_is_current_user_event_author();
+				
+			} // endif
+
+		} // endif
+		
+		return $result;
+		
+	} // function
+	
+	/**
+	 * Get the email addresses of volunteers registered to attend this event, if the user has the authority to view them
+	 * @return string[]
+	 */
+	public function get_registered_volunteer_emails() {
+		$result = array();
+		if ( $this->get_is_current_user_able_to_view_registered_volunteer_emails() ) {
+			$reg_array = Volunteer_Registration::get_all_registrations_for_event( $this->get_key_string() );
+			foreach( $reg_array as $vol_reg ) {
+				$email = $vol_reg->get_volunteer_email();
+				if ( ! empty( $email ) ) {
+					$result[] = $email;
+				} // endif
+			} // endfor
+		} // endif
+		return $result;
+	} // endif
+	
+	private function get_is_current_user_event_author() {
+		$result = ( get_current_user_id() == $this->get_author_id() );
+		return $result;
+	} // function
+	
+	/**
 	 * Get the event's status represented as an instance of the Event_Status class.
 	 * @return	Event_Status	The event's status.
 	 * @since v0.1.0
 	 */
 	public function get_status() {
-		return $this->get_event_descriptor()->get_event_status();
+		if ( ! isset( $this->event_status ) ) {
+			$this->event_status = $this->get_event_descriptor()->get_event_status( $this->get_start_date_time_object() );
+		} // endif
+		return $this->event_status;
 	} // function
 
 	/**
@@ -595,57 +922,41 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * @return string	The event's start date formatted using the site's date format, e.g. "July 1, 2019"
 	 * @since v0.1.0
 	 */
-	public function get_start_date() {
-		if ( ! isset( $this->start_date ) ) {
-			$date_time = $this->get_start_date_time_local_timezone_object();
+	public function get_start_date_string_in_display_format() {
+		if ( ! isset( $this->start_date_string_in_display_format ) ) {
+			$date_time = $this->get_start_date_time_object();
 			if ( $date_time instanceof \DateTimeInterface ) {
 				$date_format = get_option( 'date_format' );
-				$this->start_date = $date_time->format( $date_format );
+				$this->start_date_string_in_display_format = $date_time->format( $date_format );
 			} else {
-				$this->start_date = __( '[No Event Date]', 'reg-man-rc' );
+				$this->start_date_string_in_display_format = __( '[No event date]', 'reg-man-rc' );
 			} // endif
 		} // endif
-		return $this->start_date;
+		return $this->start_date_string_in_display_format;
 	} // function
 
 	/**
-	 * Get the event's start time formatted as a string suitable for showing on the website (note this does not include the time)
-	 * If no start time is set for the event then this method returns a special string indicating such.
-	 * @return string	The event's start time formatted using the site's time format, e.g. "12:00 PM"
+	 * Get the event's start date formatted as a string suitable for use as data.
+	 * If no start date is set for the event then this method returns .
+	 * @return string	The event's start date formatted for use as data, e.g. "20190701"
 	 * @since v0.1.0
 	 */
-	public function get_start_time() {
-		$time_format = get_option( 'time_format ');
-		$date_time = $this->get_start_date_time_object();
-		return ( $date_time !== NULL ) ? $date_time->format( $time_format ) : __( '[No Event Time]', 'reg-man-rc' );
+	public function get_start_date_string_in_data_format() {
+		if ( ! isset( $this->start_date_string_in_data_format ) ) {
+			$date_time = $this->get_start_date_time_object();
+			if ( $date_time instanceof \DateTimeInterface ) {
+				$date_format = Event_Key::EVENT_DATE_FORMAT;
+				$this->start_date_string_in_data_format = $date_time->format( $date_format );
+			} else {
+				$this->start_date_string_in_data_format = __( '00000000', 'reg-man-rc' );
+			} // endif
+		} // endif
+		return $this->start_date_string_in_data_format;
 	} // function
 
 	/**
-	 * Get the event's end date formatted as a string suitable for showing on the website (note this does not include the time)
-	 * If no end date is set for the event then this method returns a special string indicating such.
-	 * @return string	The event's end date formatted using the site's date format, e.g. "July 1, 2019"
-	 * @since v0.1.0
-	 */
-	public function get_end_date() {
-		$date_format = get_option('date_format');
-		$date_time = $this->get_end_date_time_object();
-		return ( $date_time !== NULL ) ? $date_time->format( $date_format ) : __('[No Event Date]', 'reg-man-rc');
-	} // function
-
-	/**
-	 * Get the event's end time formatted as a string suitable for showing on the website (note this does not include the time)
-	 * If no end time is set for the event then this method returns a special string indicating such.
-	 * @return string		The event's end time formatted using the site's time format, e.g. "4:00 PM"
-	 * @since v0.1.0
-	 */
-	public function get_end_time() {
-		$time_format = get_option('time_format');
-		$date_time = $this->get_end_date_time_object();
-		return ( $date_time !== NULL ) ? $date_time->format( $time_format ) : __('[No Event Time]', 'reg-man-rc');
-	} // function
-
-	/**
-	 * Get the event's start date and time as a DateTimeInterface object
+	 * Get the event's start date and time as a DateTimeInterface object.
+	 * Note that the timezone for the date from the event descriptor is ALWAYS set to local time, i.e. wp_timezone()
 	 * @return	\DateTimeInterface	Event start date and time.  May be NULL if no start time is assigned.
 	 * @since v0.1.0
 	 */
@@ -658,6 +969,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 
 	/**
 	 * Get the event's end date and time as a DateTimeInterface object
+	 * Note that the timezone for the date from the event descriptor is ALWAYS set to local time, i.e. wp_timezone()
 	 * @return	\DateTimeInterface	Event end date and time.  May be NULL if no end time is assigned.
 	 * @since v0.1.0
 	 */
@@ -720,60 +1032,44 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 		return $result;
 	} // function
 
-
-
 	/**
-	 * Get the event's start date and time as a DateTimeInterface object with the Wordpress defined local timezone
-	 * @return	\DateTimeInterface	Event start date and time object with timezone set to the Wordpress local timezone.
-	 * May be NULL if no start time is assigned.
-	 * @since v0.1.0
+	 * Get a boolean indicating whether volunteers are allowed to register for this event.
+	 * TRUE when the event is not complete, is confirmed or is tentative and volunteers are allowed to register
+	 *  for tentative events.
+	 * Note that this does not test whether the event appears on the volunteer registration calendar.
+	 * @return boolean
 	 */
-	public function get_start_date_time_local_timezone_object() {
-		if ( ! isset( $this->start_date_time_local_timezone_object ) ) {
-			$date_time = $this->get_start_date_time_object();
-			if ( $date_time instanceof \DateTimeInterface ) {
-				// Make a copy of the date time object then change the copy's timezone
-				$this->start_date_time_local_timezone_object = new \DateTime( $date_time->format( \DateTime::ATOM ) );
-				$tz_string = get_option( 'timezone_string' );
-				try {
-					$tz = new \DateTimeZone( $tz_string );
-					$this->start_date_time_local_timezone_object->setTimezone( $tz );
-				} catch ( \Exception $exc ) {
-					/* translators: %1$s is the setting value for the Wordpress timezone. */
-					$msg = sprintf( __( 'ERROR: Unknown or invalid timezone setting: %1$s.', 'reg-man-rc' ), $tz_string );
-					Error_Log::log_exception( $msg, $exc );
-				} // endtry
-			} // endif
-		} // endif
-		return $this->start_date_time_local_timezone_object;
-	} // function
+	public function get_is_allow_volunteer_registration() {
 
-	/**
-	 * Get the event's end date and time as a DateTimeInterface object with the Wordpress defined local timezone
-	 * @return	\DateTimeInterface	Event end date and time object with timezone set to the Wordpress local timezone.
-	 * May be NULL if no start time is assigned.
-	 * @since v0.1.0
-	 */
-	public function get_end_date_time_local_timezone_object() {
-		if ( !isset( $this->end_date_time_local_timezone_object ) ) {
-			$date_time = $this->get_end_date_time_object();
-			if ( $date_time instanceof \DateTimeInterface ) {
-				// Make a copy of the date time object then change the copy's timezone
-				$this->end_date_time_local_timezone_object = new \DateTime( $date_time->format( \DateTime::ATOM ) );
-				$tz_string = get_option( 'timezone_string' );
-				try {
-					$tz = new \DateTimeZone( $tz_string );
-					$this->end_date_time_local_timezone_object->setTimezone( $tz );
-				} catch ( \Exception $exc ) {
-					/* translators: %1$s is the setting value for the Wordpress timezone. */
-					$msg = sprintf( __( 'ERROR: Unknown or invalid timezone setting: %1$s.', 'reg-man-rc' ), $tz_string );
-					Error_Log::log_exception( $msg, $exc );
-				} // endtry
-			} // endif
-		} // endif
-		return $this->end_date_time_local_timezone_object;
-	} // function
+		if ( $this->get_is_event_complete() ) {
+			
+			$result = FALSE;
+			
+		} else {
+			
+			$status = $this->get_status();
+			$status_ID = $status->get_id();
+			switch( $status_ID ) {
+				
+				case Event_Status::CONFIRMED:
+					$result = TRUE;
+					break;
 
+				case Event_Status::TENTATIVE:
+					$result = Settings::get_is_allow_volunteer_registration_for_tentative_events();
+					break;
+
+				default:
+				case Event_Status::CANCELLED:
+					$result = FALSE;
+					break;
+				
+			} // endswitch
+		} // endif
+		
+		return $result;
+		
+	} // function
 
 	/**
 	 * Get a label containing this event's start and end date and time, e.g. "Sat August 28 2021, 12:00 pm - 4:00 pm".
@@ -784,8 +1080,8 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 */
 	public function get_event_dates_and_times_label() {
 		if ( ! isset( $this->event_dates_and_times_label ) ) {
-			$start_date = $this->get_start_date_time_local_timezone_object();
-			$end_date = $this->get_end_date_time_local_timezone_object();
+			$start_date = $this->get_start_date_time_object();
+			$end_date = $this->get_end_date_time_object();
 			$this->event_dates_and_times_label = self::create_label_for_event_dates_and_times( $start_date, $end_date );
 		} // endif
 		return $this->event_dates_and_times_label;
@@ -876,8 +1172,12 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	public function get_event_page_url() {
 		if ( ! isset( $this->event_page_url ) ) {
 			$desc = $this->get_event_descriptor();
-			$recur_id = ( $desc->get_event_is_recurring() ) ? $this->get_recurrence_id() : NULL;
-			$this->event_page_url = $desc->get_event_page_url( $recur_id );
+			if ( $desc->get_event_is_recurring() ) {
+				$recur_date = $this->get_start_date_string_in_data_format();
+			} else {
+				$recur_date = NULL;
+			} // endif
+			$this->event_page_url = $desc->get_event_page_url( $recur_date );
 		} // endif
 		return $this->event_page_url;
 	} // function
@@ -940,86 +1240,161 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	} // function
 
 	/**
-	 * Get a descriptive label for the event including its date and name, e.g. "July 1, 2019 : Repair Cafe at Toronto Reference Library"
+	 * Get the marker text for this event, e.g. "TENTATIVE".
+	 * @return	string	The event's marker text.
+	 * @since v0.9.5
+	 */
+	private function get_event_marker_text() {
+		if ( ! isset( $this->event_marker_text ) ) {
+			$event_descriptor = $this->get_event_descriptor();
+			$event_date = $this->get_start_date_time_object();
+			$this->event_marker_text = Event_Descriptor_View::get_event_marker_text( $event_descriptor, $event_date );
+		} // endif
+		return $this->event_marker_text;
+	} // function
+
+	
+	
+	/**
+	 * Get a descriptive label for the event including its date and summary, e.g. "July 1, 2019 : Repair Cafe at Toronto Reference Library"
 	 * @return string	An event label that quickly identifies an event to a human user, suitable for use as a select option or tree node
 	 * @since v0.1.0
 	 */
 	public function get_label() {
-		$date_text = $this->get_start_date();
+
+		/* Translators: %1$s is the date of an event, %2$s is the name of an event. */
+		$label_format = _x( '%1$s : %2$s', 'A label for an event using its date and name', 'reg-man-rc' );
+
+		$date_text = $this->get_start_date_string_in_display_format();
+
+		$is_placeholder = $this->get_is_placeholder_event();
+		if ( $is_placeholder ) {
+			// This is an event whose key does not match any known event
+			$event_descriptor = $this->get_event_descriptor();
+			if ( ! $event_descriptor instanceof Placeholder_Event_Descriptor ) {
+				// This is an event whose descriptor was found but the date was invalid
+				/* Translators: %1$s is an invalid date used to register items or volunteers that does not match the correct event date */
+				$invalid_date_format = __( '[Invalid date] %1$s', 'reg-man-rc' );
+				$date_text = sprintf( $invalid_date_format, $date_text );
+			} // endif
+		} // endif
+		
 		$summary = $this->get_summary();
-		$status = $this->get_status();
-		if ( $status === NULL ) {
-			// Defensive, the status should always be a valid object
-			$status = Event_Status::get_event_status_by_id( Event_Status::CONFIRMED );
+		
+		$marker_text = $this->get_event_marker_text();
+		
+		if ( ! empty( $marker_text ) ) {
+			/* Translators: %1$s is marker text for an event like "TENTATIVE", %2$s is the name of an event. */
+			$name_format = _x( '%1$s %2$s', 'A name for an event including its status marker text like "Tentative"', 'reg-man-rc' );
+			$summary = sprintf( $name_format, $marker_text, $summary );
 		} // endif
-		$status_id = $status->get_id();
-
-		$class = $this->get_class();
-		if ( $class === NULL ) {
-			// Defensive, the status should always be a valid object
-			$class = Event_Class::get_event_class_by_id( Event_Class::PUBLIC );
-		} // endif
-		$class_id = $class->get_id();
-
-		/* translators: %1$s is the date of an event, %2$s is the name of an event. */
-		$label_format = _x('%1$s : %2$s', 'A label for an event using its date and name', 'reg-man-rc' );
-
-		/* translators: %1$s is the date of an event, %2$s is the name of an event, %3$s is the class of an event e.g. Private. */
-		$label_with_class_indicator_format = _x('%1$s : [%3$s] %2$s',
-				'A label for an event using its date, name and event class', 'reg-man-rc' );
-
-		/* translators: %1$s is the date of an event, %2$s is the name of an event, %3$s is the status of an event e.g. Tentative. */
-		$label_with_status_indicator_format = _x('%1$s : %2$s (%3$s)',
-				'A label for and event using its date, name and event status', 'reg-man-rc' );
-
-		/* translators: %1$s is the date of an event,
-		 * %2$s is the name of an event,
-		 * %3$s is the class of an event e.g. Private.
-		 * %4$s is the status of an event e.g. Tentative.
-		 */
-		$label_with_class_and_status_indicator_format = _x('%1$s : [%3$s] %2$s (%4$s)',
-				'A label for an event using its date, name, event class, and status', 'reg-man-rc' );
-
-		if ( ( $status_id == Event_Status::CONFIRMED ) && ( $class_id == Event_Class::PUBLIC )  ) {
-			// Confirmed, public events just have a date and summary
-			$result = sprintf( $label_format, $date_text, $summary );
-		} elseif ( $status_id == Event_Status::CONFIRMED ) {
-			// In this case the event is confirmed but not public so show its class
-			$class_text = $class->get_name();
-			$result = sprintf( $label_with_class_indicator_format, $date_text, $summary, $class_text );
-		} elseif ( $class_id == Event_Class::PUBLIC ) {
-			// In this case we know it's public but not confirmed so show its status
-			$status_text = $status->get_name();
-			$result = sprintf( $label_with_status_indicator_format, $date_text, $summary, $status_text );
-		} else {
-			// It's not public or confirmed so show its class and status
-			$class_text = $class->get_name();
-			$status_text = $status->get_name();
-			$result = sprintf( $label_with_class_and_status_indicator_format, $date_text, $summary, $class_text, $status_text );
-		} // endif
+		
+		$result = sprintf( $label_format, $date_text, $summary );
 		return $result;
+		
 	} // function
 
 	/**
-	 * Get the volunteer registration record assigned to this event using set_volunteer_registration().
-	 * If no volunteer registration has been assigned then this method returns NULL.
-	 * @return Volunteer_Registration|NULL
+	 * Get the volunteer registration record assigned to this event for the volunteer in the current request.
+	 * If no volunteer registration has been assigned then this method returns FALSE.
+	 * @return Volunteer_Registration|boolean
 	 */
-	public function get_volunteer_registration() {
-		if ( $this->volunteer_registration === FALSE ) {
-			$volunteer = Volunteer::get_current_volunteer();
-			$event_key = $this->get_key();
-			$this->volunteer_registration = Volunteer_Registration::get_registration_for_volunteer_and_event( $volunteer, $event_key );
+	public function get_volunteer_registration_for_current_request() {
+		if ( ! isset( $this->current_volunteer_registration ) ) {
+			$volunteer = Volunteer::get_volunteer_for_current_request();
+			$event_key = $this->get_key_string();
+			$vol_reg = Volunteer_Registration::get_registration_for_volunteer_and_event( $volunteer, $event_key );
+			$this->current_volunteer_registration = isset( $vol_reg ) ? $vol_reg : FALSE; // Use FALSE to indicate none
 		} // endif
-		return $this->volunteer_registration;
+		return $this->current_volunteer_registration;
+	} // function
+	
+	private function get_events_collection() {
+		if ( ! isset( $this->events_collection ) ) {
+			$this->events_collection = Events_Collection::create_for_events_array( array( $this ) );
+		} // endif
+		return $this->events_collection;
+	} // function
+	
+	/**
+	 * Get the Item_Stats_Collection object for this event grouped by total
+	 * @return Item_Stats_Collection
+	 */
+	public function get_total_item_stats_collection() {
+		if ( ! isset( $this->total_item_stats_collection ) ) {
+			$events_collection = $this->get_events_collection();
+			$group_by = Item_Stats_Collection::GROUP_BY_TOTAL;
+			$this->total_item_stats_collection = Item_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
+		} // endif
+		return $this->total_item_stats_collection;
+	} // function
+	
+	/**
+	 * Get the Visitor_Stats_Collection object for this event grouped by total
+	 * @return Visitor_Stats_Collection
+	 */
+	public function get_total_visitor_stats_collection() {
+		if ( ! isset( $this->total_visitor_stats_collection ) ) {
+			$events_collection = $this->get_events_collection();
+			$group_by = Visitor_Stats_Collection::GROUP_BY_TOTAL;
+			$this->total_visitor_stats_collection = Visitor_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
+		} // endif
+		return $this->total_visitor_stats_collection;
+	} // function
+	
+	/**
+	 * Get the Volunteer_Stats_Collection object for this event grouped by total
+	 * @return Volunteer_Stats_Collection
+	 */
+	public function get_total_volunteer_stats_collection() {
+		if ( ! isset( $this->total_volunteer_stats_collection ) ) {
+			$events_collection = $this->get_events_collection();
+			$group_by = Volunteer_Stats_Collection::GROUP_BY_TOTAL;
+			$this->total_volunteer_stats_collection = Volunteer_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
+		} // endif
+		return $this->total_volunteer_stats_collection;
+	} // function
+	
+	/**
+	 * Get the total count of items for this event
+	 * @return int
+	 */
+	public function get_total_items_count() {
+		if ( ! isset( $this->total_items_count ) ) {
+			$stats_collection = $this->get_total_item_stats_collection();
+			$totals_array = array_values( $stats_collection->get_all_stats_array() );
+			$total_stats = isset( $totals_array[ 0 ] ) ? $totals_array[ 0 ] : NULL;
+			$this->total_items_count = isset( $total_stats ) ? $total_stats->get_item_count() : 0;			
+		} // endif
+		return $this->total_items_count;
 	} // function
 
 	/**
-	 * Set the volunteer registration record for this event.
-	 * @param Volunteer_Registration	$volunteer_registration
+	 * Get the total count of visitors for this event
+	 * @return int
 	 */
-	public function set_volunteer_registration( $volunteer_registration ) {
-		$this->volunteer_registration = $volunteer_registration;
+	public function get_total_visitors_count() {
+		if ( ! isset( $this->total_visitors_count ) ) {
+			$stats_collection = $this->get_total_visitor_stats_collection();
+			$totals_array = array_values( $stats_collection->get_all_stats_array() );
+			$total_stats = isset( $totals_array[ 0 ] ) ? $totals_array[ 0 ] : NULL;
+			$this->total_visitors_count = isset( $total_stats ) ? $total_stats->get_visitor_count() : 0;			
+		} // endif
+		return $this->total_visitors_count;
+	} // function
+
+	/**
+	 * Get the total count of volunteers for to this event
+	 * @return int
+	 */
+	public function get_total_volunteers_count() {
+		if ( ! isset( $this->total_volunteers_count ) ) {
+			$stats_collection = $this->get_total_volunteer_stats_collection();
+			$totals_array = array_values( $stats_collection->get_all_stats_array() );
+			$total_stats = isset( $totals_array[ 0 ] ) ? $totals_array[ 0 ] : NULL;
+			$this->total_volunteers_count = isset( $total_stats ) ? $total_stats->get_head_count() : 0;			
+		} // endif
+		return $this->total_volunteers_count;
 	} // function
 
 	/**
@@ -1029,7 +1404,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * @since v0.1.0
 	 */
 	public function get_calendar_entry_id( $calendar_type ) {
-		return $this->get_key();
+		return $this->get_key_string();
 	} // function
 
 	/**
@@ -1040,14 +1415,20 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 */
 	public function get_calendar_entry_title( $calendar_type ) {
 		
-		$result = $this->get_summary(); // start with just the summary
+		$event_summary = $this->get_summary();
 
-		// Mark events if they are cancelled or tentative
-		$status = $this->get_status();
-		$status_id = isset( $status ) ? $status->get_id() : Event_Status::CONFIRMED; // Defensive
-		if ( ( $status_id == Event_Status::CANCELLED ) || ( $status_id == Event_Status::TENTATIVE ) ) {
-			$label_with_status_format = _x( '(%1$s) %2$s ', 'A calendar label for an event using its status and details, e.g. (Tentative) Reference Library Repair Cafe', 'reg-man-rc' );
-			$result = sprintf( $label_with_status_format, $status->get_name(), $result );
+		// Mark events if they are cancelled, tentative, private etc.
+		$marker_text = $this->get_event_marker_text();
+		if ( ! empty( $marker_text ) ) {
+			
+			/* Translators: %1$s is a status marker text like "TENTATIVE", %2$s is an event summary */
+			$label_with_marker_format = _x( '%1$s %2$s', 'A calendar entry title for an event with its status, e.g. TENTATIVE Reference Library Repair Cafe', 'reg-man-rc' );
+			$result = sprintf( $label_with_marker_format, $marker_text, $event_summary );
+
+		} else {
+
+			$result = $event_summary;
+			
 		} // endif
 		
 		return $result;
@@ -1064,7 +1445,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * @since v0.1.0
 	 */
 	public function get_calendar_entry_start_date_time_string( $calendar_type ) {
-		$start_dt = $this->get_start_date_time_local_timezone_object();
+		$start_dt = $this->get_start_date_time_object();
 		$result = ( ! empty( $start_dt ) ) ? $start_dt->format( Calendar_Entry::DATE_FORMAT ) : NULL;
 		return $result;
 	} // function
@@ -1079,7 +1460,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * @since v0.1.0
 	 */
 	public function get_calendar_entry_end_date_time_string( $calendar_type ) {
-		$end_dt = $this->get_end_date_time_local_timezone_object();
+		$end_dt = $this->get_end_date_time_object();
 		$result = ( ! empty( $end_dt ) ) ? $end_dt->format( Calendar_Entry::DATE_FORMAT ) : NULL;
 		return $result;
 	} // function
@@ -1114,6 +1495,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * @since v0.1.0
 	 */
 	public function get_calendar_entry_class_names( $calendar_type ) {
+		
 		if ( ! isset( $this->calendar_entry_class_names ) ) {
 
 			$class_array = array();
@@ -1128,18 +1510,40 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 			// Class
 			$event_class = $this->get_class();
 			$class_array[] = strtolower( $event_class->get_id() ) . '-class'; // e.g. 'public-class'
+			
+			switch( $calendar_type ) {
+				
+				case Calendar::CALENDAR_TYPE_ADMIN:
+					// Placeholders
+					$is_placeholder = $this->get_is_placeholder_event();
+					if( $is_placeholder ) {
+						$class_array[] = 'event-placeholder';
+					} // endif
+					break;
+					
+				case Calendar::CALENDAR_TYPE_VOLUNTEER_REG:
+					// Volunteer registrations
+					$vol_reg = $this->get_volunteer_registration_for_current_request();
+					$class_array[] = ! empty( $vol_reg ) ? 'vol-reg-registered' : 'vol-reg-not-registered';
+					break;
 
-			// Volunteer registration status
-			if ( $calendar_type == Calendar::CALENDAR_TYPE_VOLUNTEER_REG ) {
-				$vol_reg = $this->get_volunteer_registration();
-				$class_array[] = isset( $vol_reg ) ? 'vol-reg-registered' : 'vol-reg-not-registered';
-			} // endif
+				case Calendar::CALENDAR_TYPE_EVENT_DESCRIPTOR:
+					// Events with registered items
+					$items_count = $this->get_total_items_count();
+					$vol_count = $this->get_total_volunteers_count();
+					if ( ( $items_count > 0 ) || ( $vol_count > 0 ) ) {
+						$class_array[] = 'event-with-registrations';
+					} // endif
+					break;
+					
+			} // endswitch
 
 			// implode the array
 			$this->calendar_entry_class_names = implode( ' ', $class_array );
 
 		} // endif
 		return $this->calendar_entry_class_names;
+		
 	} // function
 
 	/**
@@ -1156,7 +1560,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 				$view = Volunteer_Registration_View::create_for_calendar_info_window( $this, $calendar_type );
 				break;
 
-			case Calendar::CALENDAR_TYPE_ADMIN_EVENTS:
+			case Calendar::CALENDAR_TYPE_ADMIN:
 			default:
 				$view = Event_View::create_for_calendar_info_window( $this, $calendar_type );
 				break;
@@ -1194,38 +1598,46 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 			
 			case Map_View::MAP_TYPE_ADMIN_STATS:
 			case Map_View::MAP_TYPE_OBJECT_PAGE:
+			default:
 				$result = NULL;
 				break;
 				
 			case Map_View::MAP_TYPE_CALENDAR_ADMIN:
-			case Map_View::MAP_TYPE_CALENDAR_EVENTS:
 			case Map_View::MAP_TYPE_CALENDAR_VISITOR_REG:
 			case Map_View::MAP_TYPE_CALENDAR_VOLUNTEER_REG:
+			case Map_View::MAP_TYPE_CALENDAR_EVENTS:
 				
-				$calendar_type = Calendar::CALENDAR_TYPE_EVENTS; // This won't matter but is required arg
+				// Get the right calendar type for this map type
+				// TODO: Should there be a method like get_calendar_type_by_map_type() ?
+				if ( $map_type === Map_View::MAP_TYPE_CALENDAR_ADMIN ) {
+
+					$calendar_type = Calendar::CALENDAR_TYPE_ADMIN;
+
+				} elseif ( $map_type === Map_View::MAP_TYPE_CALENDAR_VISITOR_REG ) {
+
+					$calendar_type = Calendar::CALENDAR_TYPE_VISITOR_REG;
+
+				} elseif ( $map_type === Map_View::MAP_TYPE_CALENDAR_VOLUNTEER_REG ) {
+
+					$calendar_type = Calendar::CALENDAR_TYPE_VOLUNTEER_REG;
+
+				} else {
+
+					$calendar_type = Calendar::CALENDAR_TYPE_EVENTS;
+
+				} // endif
+				
 				$classes = $this->get_calendar_entry_class_names( $calendar_type );
 				
-				$text = $this->get_start_date(); // start with just the date
+				$text = $this->get_start_date_string_in_display_format(); // start with just the date
 				
-				// Mark events if they are cancelled or tentative
-				$status = $this->get_status();
-				$status_id = isset( $status ) ? $status->get_id() : Event_Status::CONFIRMED; // Defensive
-				if ( ( $status_id == Event_Status::CANCELLED ) || ( $status_id == Event_Status::TENTATIVE ) ) {
-					/* Translators: %1$s is a status like "Cancelled", %2$s is an event date */
-					$label_with_status_format = _x( '(%1$s) %2$s ', 'A map marker label for an event using its status and date, e.g. (Tentative) Sat Jun 24, 2023', 'reg-man-rc' );
-					$text = sprintf( $label_with_status_format, $status->get_name(), $text );
+				// Mark events if they are cancelled, tentative, private etc.
+				$marker_text = $this->get_event_marker_text();
+				if ( ! empty( $marker_text ) ) {
+					/* Translators: %1$s is a status marker text like "TENTATIVE", %2$s is an event summary */
+					$label_with_marker_format = _x( '%1$s %2$s', 'A map marker label for an event with its status, e.g. TENTATIVE Reference Library Repair Cafe', 'reg-man-rc' );
+					$text = sprintf( $label_with_marker_format, $marker_text, $text );
 				} // endif
-		
-				if ( $map_type === Map_View::MAP_TYPE_CALENDAR_VOLUNTEER_REG ) {
-
-					$vol_reg = $this->get_volunteer_registration();
-					$is_registered = isset( $vol_reg );
-					if ( $is_registered ) {
-						$classes .= ' vol-reg-registered';
-					} // endif
-
-				} // endif
-
 				$result = Map_Marker_Label::create( $text, $classes );
 				
 				break;
@@ -1254,7 +1666,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * @since v0.1.0
 	 */
 	public function get_map_marker_id( $map_type ) {
-		return $this->get_key();
+		return $this->get_key_string();
 	} // function
 
 	/**
@@ -1350,7 +1762,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 		$class_id = isset( $class ) ? $class->get_id() : Event_Class::PUBLIC;
 
 		$result = array(
-			'key'				=> $this->get_key(),
+			'key'				=> $this->get_key_string(),
 			'summary'			=> $descriptor->get_event_summary(), // avoid getting 'No Summary' from this object's get_summary()
 			'status'			=> $status_id,
 			'class'				=> $class_id,
@@ -1372,7 +1784,7 @@ final class Event implements Calendar_Entry, Map_Marker, \JsonSerializable {
 	 * @return string	The event's key as a string
 	 */
 	public function __toString() {
-		$result = $this->get_key();
+		$result = $this->get_key_string();
 		return $result;
 	} // function
 

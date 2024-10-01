@@ -7,6 +7,7 @@ use Reg_Man_RC\Model\Volunteer_Registration;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Volunteer_Role;
 use Reg_Man_RC\Model\Event;
+use Reg_Man_RC\Model\Internal_Event_Descriptor;
 
 class Volunteer_Registration_Form {
 
@@ -34,7 +35,7 @@ class Volunteer_Registration_Form {
 		$result = new self();
 		$result->volunteer = $volunteer;
 		$result->event = $event;
-		$event_key = $event->get_key();
+		$event_key = $event->get_key_string();
 		$result->volunteer_registration = Volunteer_Registration::get_registration_for_volunteer_and_event( $volunteer, $event_key );
 		$result->form_type = self::FORM_TYPE_EVENT_REGISTRATION;
 		return $result;
@@ -86,7 +87,7 @@ class Volunteer_Registration_Form {
 
 	private function get_volunteer() {
 		if ( ! isset( $this->volunteer ) ) {
-			$this->volunteer = Volunteer::get_current_volunteer();
+			$this->volunteer = Volunteer::get_volunteer_for_current_request();
 		} // endif
 		return $this->volunteer;
 	} // function
@@ -125,7 +126,7 @@ class Volunteer_Registration_Form {
 			// Add a nonce
 			$name = '_wpnonce';
 			$ajax_action = $this->get_ajax_action();
-			$value = wp_nonce_field( $ajax_action ); // Note that this renders the nonce in place
+			wp_nonce_field( $ajax_action, $name ); // Note that this renders the nonce in place
 			// Render the input list
 			$input_list->render();
 		$result = ob_get_clean();
@@ -161,11 +162,8 @@ class Volunteer_Registration_Form {
 			$vol_reg = $this->get_volunteer_registration();
 
 			$is_registered = isset( $vol_reg );
-			$is_event_complete = $event->get_is_event_complete();
-			$is_event_cancelled = $event->get_is_event_cancelled();
 
 			$volunteer = $this->get_volunteer();
-			$fixer_stations = $event->get_fixer_stations(); // If this is empty then it's a non-repair event
 
 			$input_list = Form_Input_List::create();
 			$classes = $is_registered ? '' : 'not-registered';
@@ -179,11 +177,12 @@ class Volunteer_Registration_Form {
 			// Registration status
 			$this->add_registration_status( $input_list, $is_registered, $volunteer );
 
-			if ( ( ! $is_event_complete ) && ( ! $is_event_cancelled ) ) {
+			$is_allow_reg = $event->get_is_allow_volunteer_registration();
+			if ( $is_allow_reg ) {
 
 				// Event
 				$name = 'event-key';
-				$event_key = $event->get_key();
+				$event_key = $event->get_key_string();
 				$input_list->add_hidden_input( $name, $event_key );
 
 				// Volunteer
@@ -291,7 +290,7 @@ class Volunteer_Registration_Form {
 
 		// When the status is for the current volunteer the label should be like "You are registered"
 		// When it's for someone other than the current volunteer it should be like "Dave is registered"
-		$curr_vol = Volunteer::get_current_volunteer();
+		$curr_vol = Volunteer::get_volunteer_for_current_request();
 		$vol_for_label = ( $curr_vol->get_id() == $volunteer->get_id() ) ? NULL : $volunteer;
 		$label_text = Volunteer_Registration_View::create_registration_status_label( $event, $is_registered, $vol_for_label );
 		$icon = $is_registered ? 'yes' : 'no';
@@ -310,7 +309,7 @@ class Volunteer_Registration_Form {
 	 */
 	private function add_action_button( $input_list, $is_registered, $volunteer ) {
 
-		$current_volunteer = Volunteer::get_current_volunteer();
+		$current_volunteer = Volunteer::get_volunteer_for_current_request();
 		$is_current_volunteer = ( $current_volunteer->get_id() == $volunteer->get_id() );
 
 		if ( $is_registered ) {
@@ -318,17 +317,34 @@ class Volunteer_Registration_Form {
 			$label_text = ( $is_current_volunteer ) ? __( 'Not able to make it?', 'reg-man-rc' ) : '';
 			$button_text = esc_html__( 'Cancel registration', 'reg-man-rc' );
 			$label = "<span class=\"dashicons dashicons-dismiss icon\"></span><span class=\"label-text text\">$button_text</span>";
-			$classes = 'reg-man-rc-volunteer-registration-form-cancel-button reg-man-rc-icon-text-container';
+			$classes = 'reg-man-rc-button reg-man-rc-volunteer-registration-form-cancel-button reg-man-rc-icon-text-container';
 			$info_html = "<button type=\"button\" class=\"$classes\">$label</button>";
 
 		} else {
+			
+			$info_html = '';
+			
+			$event = $this->get_event();
+			$event_desc = $event->get_event_descriptor();
+			if ( $event_desc instanceof Internal_Event_Descriptor ) {
+				$internal_event_desc = $event_desc;
+				$note = $internal_event_desc->get_volunteer_pre_reg_note();
+				$class = 'reg-man-rc-volunteer-registration-note reg-man-rc-volunteer-pre-registration-note';
+				$info_html .= "<p class=\"$class\">$note</p>";
+			} // endif
 
+			// TODO: Allow organizer to prevent online registration and replace this button with instructions
 			$label_text = '';
 			$button_text = esc_html__( 'Register', 'reg-man-rc' );
 			$label = "<span class=\"dashicons dashicons-welcome-write-blog icon\"></span><span class=\"label-text text\">$button_text</span>";
-			$classes = 'reg-man-rc-volunteer-registration-form-signup-button reg-man-rc-icon-text-container';
-			$info_html = "<button type=\"submit\" class=\"$classes\">$label</button>";
+			$classes = 'reg-man-rc-button reg-man-rc-volunteer-registration-form-signup-button reg-man-rc-icon-text-container';
+			$info_html .= "<button type=\"submit\" class=\"$classes\">$label</button>";
 
+			// TODO: This should be a setting
+			$msg = __( 'Note: your email address might be used by the event administrator for event volunteer communications.', 'reg-man-rc' );
+			$class = 'reg-man-rc-volunteer-registration-note reg-man-rc-volunteer-registration-form-signup-note';
+			$info_html .= "<p class=\"$class\">$msg</p>";
+			
 		} // endif
 
 		$label = "<span class=\"label-text\">$label_text</span>";

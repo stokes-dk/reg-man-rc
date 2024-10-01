@@ -4,34 +4,28 @@ namespace Reg_Man_RC\Model\Stats;
 
 use Reg_Man_RC\Model\Event_Category;
 use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Model\Events_Collection;
 
 class Events_Chart_Model implements Chart_Model {
 
 	const CHART_TYPE = 'events';
-
-	private $event_keys_array;
+	
+	private $event_stats_collection;
 
 	private function __construct() {}
 	
 	/**
 	 * Create an instance of this class showing the specified events in a bar chart
 	 *
-	 * @param	string[]	$event_keys_array		The collection of events to be shown in the chart
+	 * @param	Events_Collection	$events_collection		The collection of events to be shown in the chart
 	 * @return	Events_Chart_Model
 	 * @since	v0.1.0
 	 */
-	public static function create_bar_chart( $event_keys_array ) {
+	public static function create_bar_chart_for_events_collection( $events_collection ) {
 		$result = new self();
-		$result->event_keys_array = $event_keys_array;
+		$group_by = Event_Stats_Collection::GROUP_BY_EVENT_CATEGORY;
+		$result->event_stats_collection = Event_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
 		return $result;
-	} // function
-	
-	/**
-	 * Get the array of event keys for this chart
-	 * @return string[]
-	 */
-	private function get_event_keys_array() {
-		return $this->event_keys_array;
 	} // function
 	
 	/**
@@ -44,6 +38,14 @@ class Events_Chart_Model implements Chart_Model {
 	} // function
 	
 	/**
+	 * Get the event stats collection
+	 * @return Event_Stats_Collection
+	 */
+	private function get_event_stats_collection() {
+		return $this->event_stats_collection;
+	} // function
+	
+	/**
 	 * Gets a chart config object for a bar chart of events organized by event category
 	 *
 	 * @return	Chart_Config
@@ -51,10 +53,7 @@ class Events_Chart_Model implements Chart_Model {
 	 */
 	private function get_bar_chart_config() {
 
-		$event_keys_array = $this->get_event_keys_array();
-
-		$group_by = Event_Stats_Collection::GROUP_BY_EVENT_CATEGORY;
-		$event_stats_col = Event_Stats_Collection::create_for_event_keys_array( $event_keys_array, $group_by );
+		$event_stats_col = $this->get_event_stats_collection();
 		$category_count_array = $event_stats_col->get_event_counts_array();
 //		Error_Log::var_dump( $event_stats_col, $category_count_array );
 
@@ -81,7 +80,7 @@ class Events_Chart_Model implements Chart_Model {
 		$label = __( 'Event Categories', 'reg-man-rc' );
 		$chart_config->set_labels( array( $label ) );
 
-		$event_count = is_array( $event_keys_array ) ? count( $event_keys_array ) : Event_Stats_Collection::get_all_known_events_count();
+		$event_count = $event_stats_col->get_total_event_count();
 		$event_count_text = sprintf( _n( '%s event', '%s events', $event_count, 'reg-man-rc' ), number_format_i18n( $event_count ) );
 		$chart_config->set_title( $event_count_text );
 

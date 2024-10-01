@@ -8,14 +8,14 @@
  * the appropriate hooks and filters.
  *
  * xxx@link			http://example.com
- * @version			v0.5.0
+ * @version			v0.9.8
  * @since			v0.1.0
  *
  * @wordpress-plugin
  * Plugin Name:		Registration Manager for Repair Café
  * xxxPlugin URI:	PLUGIN SITE HERE
- * Description:		Allows a repair café organization to create a calendar of events, register items and volunteers and view statistics.
- * Version:			0.5.0
+ * Description:		Allows a Repair Café organization to create a calendar of events, register items and volunteers, and view statistics.
+ * Version:			0.9.8
  * Author:			David Stokes
  * xxxAuthor URI:	YOUR SITE HERE
  * License:			GPL-2.0+
@@ -34,7 +34,7 @@ if ( ! defined( 'WPINC' ) ) {
 /**
  *  Define the plugin version constant.  This is under my namespace and can be accessed as \Reg_Man_RC\PLUGIN_VERSION
  */
-const PLUGIN_VERSION = '0.5.0';
+const PLUGIN_VERSION = '0.9.8';
 
 /**
  *  Define the plugin bootstrap filename.  This is used to do things like get a plugin_url()

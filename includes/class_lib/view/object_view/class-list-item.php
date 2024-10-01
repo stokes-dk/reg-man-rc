@@ -9,6 +9,7 @@ class List_Item {
 
 	const EVENT_STATUS					= 'event-status';
 	const EVENT_VISIBILITY				= 'event-visibility';
+	const EVENT_PLACEHOLDER_INFO		= 'event-placeholder-info';
 	const EVENT_CATEGORIES				= 'event-categories';
 	const EVENT_DATE					= 'event-date';
 	const EVENT_UPCOMING_DATES			= 'event-upcoming-dates';
@@ -32,6 +33,7 @@ class List_Item {
 	const ADMIN_EVENT_VOLUNTEERS_ITEMIZED	= 'admin-event-volunteers-itemized';
 	const ADMIN_EVENT_VOL_AREA_LINK			= 'admin-vol-area-link';
 	const ADMIN_EVENT_MORE_DETAILS_LINK		= 'admin-event-more-details-link';
+	const ADMIN_RECUR_DATE_CANCEL_BUTTON	= 'admin-recur-date-cancel-button';
 	
 	const VISITOR_REG_LAUNCH_LINK		= 'visitor-reg-launch';
 

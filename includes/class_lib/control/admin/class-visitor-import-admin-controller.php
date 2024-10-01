@@ -6,6 +6,7 @@ use Reg_Man_RC\Model\Ajax_Form_Response;
 use Reg_Man_RC\View\Admin\Visitor_Import_Admin_View;
 use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Control\User_Role_Controller;
 
 /**
  * The administrative controller for importing Visitors
@@ -37,15 +38,38 @@ class Visitor_Import_Admin_Controller {
 	 */
 	public static function register() {
 
-		if ( current_user_can( 'edit_posts' ) && current_user_can( 'import' ) ) {
+		if ( self::current_user_can_import_visitors() ) {
 			add_action( 'wp_ajax_' . self::AJAX_ACTION, array( __CLASS__, 'do_ajax_import' ) );
 		} // endif
 
-		// Register the action to clean up my imported files
-		add_action( self::$CLEANUP_ACTION, array( __CLASS__, 'importer_scheduled_cleanup' ) );
-
 	} // function
 
+	/**
+	 * Get a boolean indicating whether the current user has authorization to perform this action
+	 * @return boolean
+	 */
+	public static function current_user_can_import_visitors() {
+		// Only users who are able to read private emails should be able to do this
+		//  because when we import we need to look them up by email address
+		
+		$result =
+			current_user_can( 'import' ) &&
+			current_user_can( 'create_'			. User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) &&
+			current_user_can( 'read_private_'	. User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL );
+		return $result;
+	} // function
+	
+	/**
+	 * Register the action for my cron job.
+	 * Note that this must be done before 'init' so it's separate from the usual register() function above
+	 */
+	public static function register_action_handlers() {
+
+		// Register the action to clean up my imported files
+		add_action( self::$CLEANUP_ACTION, array( __CLASS__, 'importer_scheduled_cleanup' ) );
+		
+	} // function
+	
 	/**
 	 * Handle an AJAX import form post.
 	 *
@@ -60,9 +84,17 @@ class Visitor_Import_Admin_Controller {
 
 		$nonce = isset( $_REQUEST[ '_wpnonce' ] ) ? $_REQUEST[ '_wpnonce' ] : '';
 		$is_valid_nonce = wp_verify_nonce( $nonce, self::AJAX_ACTION );
+
 		if ( ! $is_valid_nonce ) {
+
 			$err_msg = __( 'Your security token has expired.  Please refresh the page and try again.', 'reg-man-rc' );
 			$form_response->add_error( '_wpnonce', '', $err_msg );
+
+		} elseif ( ! self::current_user_can_import_visitors() ) {
+
+			$err_msg = __( 'You are not authorized to perform this action.', 'reg-man-rc' );
+			$form_response->add_error( '', '', $err_msg );
+
 		} else {
 //			Error_Log::var_dump( $_REQUEST );
 			$attachment_id = isset( $_REQUEST[ 'visitor-import-attachment-id' ] ) ? $_REQUEST[ 'visitor-import-attachment-id' ] : NULL;
@@ -82,26 +114,18 @@ class Visitor_Import_Admin_Controller {
 						$form_response->add_error( 'visitor-import-file-name', '', $err_msg );
 						$result = FALSE;
 					} else {
-						$file_type = $file_upload_desc[ 'type' ];
-						$valid_types = array( 'text/csv', 'text/plain' );
-						if ( ! in_array( $file_type, $valid_types ) ) {
-							$err_msg = __( 'The file is not a CSV file.', 'reg-man-rc' );
-							$form_response->add_error( 'visitor-import-file-name', '', $err_msg );
-							$result = FALSE;
-						} else {
-							$file_name = $file_upload_desc[ 'tmp_name' ];
-							$is_valid_file = self::get_is_valid_csv_file( $file_name, $form_response );
-							if ( $is_valid_file !== FALSE ) {
-								$file_move_result = self::move_file_to_uploads( $file_upload_desc, $form_response );
-								if ( $file_move_result !== FALSE ) {
-									$attachment_id = $file_move_result;
-									$view = Visitor_Import_Admin_View::create();
-									$view->set_import_file_attachment_id( $attachment_id );
-									ob_start();
-										$view->render_form_contents();
-									$content = ob_get_clean();
-									$form_response->set_html_data( $content );
-								} // endif
+						$file_name = $file_upload_desc[ 'tmp_name' ];
+						$is_valid_file = self::get_is_valid_csv_file( $file_name, $form_response );
+						if ( $is_valid_file !== FALSE ) {
+							$file_move_result = self::move_file_to_uploads( $file_upload_desc, $form_response );
+							if ( $file_move_result !== FALSE ) {
+								$attachment_id = $file_move_result;
+								$view = Visitor_Import_Admin_View::create();
+								$view->set_import_file_attachment_id( $attachment_id );
+								ob_start();
+									$view->render_form_contents();
+								$content = ob_get_clean();
+								$form_response->set_html_data( $content );
 							} // endif
 						} // endif
 					} // endif
@@ -237,50 +261,37 @@ class Visitor_Import_Admin_Controller {
 				$last_name_index = array_search( 'Last Name', $header_array );
 				$join_mail_list_index = array_search( 'Join Mail List?', $header_array );
 				$first_event_key_index = array_search( 'First Event Key', $header_array );
+				
 				if ( $result === TRUE ) {
-					$record_count = 0;
+					$new_record_count = 0;
 					$skipped_count = 0;
 					$line_number = 2; // line 2 is the first row of data after the header
 
-					// We want to make sure that the first event key refers to a valid event so we will get the Event object.
-					// Rather than constructing a new Event object every time, we will keep a cache of keys and events.
-					$event_cache = array();
-
-					$false_values = array(
-							__( 'false', 'reg-man-rc' ),
-							__( 'no','reg-man-rc' ),
-					);
 					while ( ( $data_array = fgetcsv( $handle ) ) !== FALSE ) {
 						
 						$visitor = NULL; // Make sure we get a new visitor record each time
-						$email = trim( $data_array[ $email_index ] );
+						
+						$email = filter_var( trim( $data_array[ $email_index ] ), FILTER_VALIDATE_EMAIL, FILTER_NULL_ON_FAILURE ) ;
 						$first_name = $data_array[ $first_name_index ];
 						$last_name = $data_array[ $last_name_index ];
-						$join_mail_list_text = trim( strtolower( $data_array[ $join_mail_list_index ] ) );
 						$first_event_key_string = trim( $data_array[ $first_event_key_index ] );
+						if ( $first_event_key_string === 'NULL' ) {
+							// A string value of "NULL" should be considered NULL not a string
+							$first_event_key_string = '';
+						} // endif
 
 						if ( empty( $email ) && empty( $first_name ) && empty( $last_name ) ) {
+							
 							/* translators: %s is a line number in a file */
 							$err_msg = sprintf( __( 'Unable to create visitor record for line number %s because no email or name was provided.', 'reg-man-rc' ), $file_path );
 							$form_response->add_error( "visitor-import-attachment-id[$line_number]" , '', $err_msg );
 							
 						} else {
+							
 							$full_name = trim( "$first_name $last_name" );
 							$public_name = Visitor::get_default_public_name( $full_name );
-							$is_join = ( in_array( $join_mail_list_text , $false_values ) ) ? FALSE : boolval( $join_mail_list_text );
-
-							// Find the event for the visitor's first event key
-							if ( empty( $first_event_key_string ) ) {
-								$first_event = NULL;
-							} elseif ( isset( $event_cache[ $first_event_key_string ] ) ) {
-								$first_event = $event_cache[ $first_event_key_string ];
-							} else {
-								$first_event = Event::get_event_by_key( $first_event_key_string );
-								if ( isset( $first_event ) ) {
-									$event_cache[ $first_event_key_string ] = $first_event;
-								} // endif
-							} // endif
-
+							$is_join = filter_var( $data_array[ $join_mail_list_index ], FILTER_VALIDATE_BOOLEAN );
+							
 							// Create the new visitor record
 							$visitor = Visitor::get_visitor_by_email_or_full_name( $email, $full_name );
 							if ( isset( $visitor ) ) {
@@ -294,8 +305,15 @@ class Visitor_Import_Admin_Controller {
 									$err_msg = sprintf( __( 'Unable to create visitor record for line number %s.', 'reg-man-rc' ), $file_path );
 									$form_response->add_error( "visitor-import-attachment-id[$line_number]" , '', $err_msg );
 								} else {
-									$visitor->set_is_join_mail_list( $is_join );
-									$visitor->set_first_event_key( $first_event_key_string );
+									$new_record_count++;
+									if ( $is_join ) {
+										// We only need add it for a new record if it's true
+										$visitor->set_is_join_mail_list( $is_join );
+									} // endif
+									if ( ! empty( $first_event_key_string ) ) {
+										// We only need to assign it if it's not empty
+										$visitor->set_first_event_key( $first_event_key_string );
+									} // endif
 								} // endif
 							} // endif
 						} // endif
@@ -310,7 +328,7 @@ class Visitor_Import_Admin_Controller {
 					*/
 					$details = sprintf(
 								__( '%1$s lines read from the file.  %2$s new visitors created, %3$s existing visitors skipped.', 'reg-man-rc' ),
-								( $line_number - 2 ), $record_count, $skipped_count
+								( $line_number - 2 ), $new_record_count, $skipped_count
 							);
 					ob_start();
 						echo '<div>';

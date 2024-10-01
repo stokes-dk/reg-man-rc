@@ -27,6 +27,8 @@ class Event_Group_Map_Marker implements Map_Marker {
 	private $is_event_group_complete; // A flag set to TRUE if all events in this group are complete (in the past)
 	private $is_event_group_cancelled; // A flag set to TRUE if all events in this group are cancelled
 	private $is_event_group_tentative; // A flag set to TRUE if all events in this group are tentative
+	private $is_event_group_private; // A flag set to TRUE if all events in this group are private
+	private $is_event_group_confidential; // A flag set to TRUE if all events in this group are confidential
 	private $is_volunteer_registered; // A flag set to TRUE if the current volunteer is registered to any event in the group
 	private $map_marker_label_class_names; // A list of HTML class names applied to the map marker label for this group
 	
@@ -70,7 +72,9 @@ class Event_Group_Map_Marker implements Map_Marker {
 				$current_group->add_event( $event );
 
 			} else {
+				
 				$no_venue_events[] = $event;
+
 			} // endif
 
 		} // endfor
@@ -113,7 +117,7 @@ class Event_Group_Map_Marker implements Map_Marker {
 
 				// The event has no venue or geographic position
 				// Put it in a group by itself so we can list event individual summaries with no location
-				$group_id = 'TBD-' . $event->get_key();
+				$group_id = 'TBD-' . $event->get_key_string();
 				if ( ! isset( $result[ $group_id ] ) ) {
 //					$place_name = NULL; // Without a venue there is no place name
 					$location = $event->get_location(); // We'll use this for the whole group
@@ -127,9 +131,8 @@ class Event_Group_Map_Marker implements Map_Marker {
 
 		} // endfor
 
-
-//		Error_Log::var_dump( $repeat_count );
 //		Error_Log::var_dump( count( $events_array ), count( $result ) );
+//		Error_Log::var_dump( $result );
 		return $result;
 
 	} // function
@@ -247,9 +250,10 @@ class Event_Group_Map_Marker implements Map_Marker {
 		$event_descriptor = $event->get_event_descriptor();
 		$event_descriptor_id = $event_descriptor->get_event_descriptor_id();
 		$provider_id = $event_descriptor->get_provider_id();
-		$event_key = Event_Key::create( $event_descriptor_id, $provider_id );
-		$key_string = $event_key->get_as_string();
-		$this->event_descriptors_array[ $key_string ] = $event_descriptor;
+		// The event key contains the event date so event keys are different even when they have the same descriptor
+		// To differentiate event descriptors we need to invent an event descriptor key string
+		$descriptor_key_string = "$event_descriptor_id $provider_id";
+		$this->event_descriptors_array[ $descriptor_key_string ] = $event_descriptor;
 	} // function
 
 	/**
@@ -384,6 +388,49 @@ class Event_Group_Map_Marker implements Map_Marker {
 	} // endif
 
 	/**
+	 * Get a flag indicating whether all events in this group are private
+	 * @return boolean	TRUE if all events are cancelled, FALSE otherwise
+	 */
+	private function get_is_event_group_private() {
+		if ( ! isset( $this->is_event_group_private ) ) {
+			$event_desc_array = $this->get_event_descriptors_array();
+			$result = TRUE; // Assume yes unless we discover otherwise
+			foreach( $event_desc_array as $event_desc ) {
+				$class = $event_desc->get_event_class();
+				$class_id = isset( $class ) ? $class->get_id() : Event_CLASS::PUBLIC; // Defensive
+				if ( $class_id !== Event_Class::PRIVATE ) {
+					$result = FALSE;
+					break;
+				} // endif
+			} // endfor
+			$this->is_event_group_private = $result;
+		} // endif
+		return $this->is_event_group_private;
+	} // endif
+	
+	/**
+	 * Get a flag indicating whether all events in this group are private
+	 * @return boolean	TRUE if all events are cancelled, FALSE otherwise
+	 */
+	private function get_is_event_group_confidential() {
+		if ( ! isset( $this->is_event_group_confidential ) ) {
+			$event_desc_array = $this->get_event_descriptors_array();
+			$result = TRUE; // Assume yes unless we discover otherwise
+			foreach( $event_desc_array as $event_desc ) {
+				$class = $event_desc->get_event_class();
+				$class_id = isset( $class ) ? $class->get_id() : Event_CLASS::PUBLIC; // Defensive
+				if ( $class_id !== Event_Class::CONFIDENTIAL ) {
+					$result = FALSE;
+					break;
+				} // endif
+			} // endfor
+			$this->is_event_group_confidential = $result;
+		} // endif
+		return $this->is_event_group_confidential;
+	} // endif
+	
+	
+	/**
 	 * Get a flag indicating whether the current volunteer is registered to any event in the group
 	 * @return boolean	TRUE if the volunteer is registered to any event in the group, FALSE otherwise
 	 */
@@ -392,8 +439,8 @@ class Event_Group_Map_Marker implements Map_Marker {
 			$events_array = $this->get_events_array();
 			$result = FALSE; // Assume no unless we discover otherwise
 			foreach( $events_array as $event ) {
-				$vol_reg = $event->get_volunteer_registration();
-				if ( isset( $vol_reg ) ) {
+				$vol_reg = $event->get_volunteer_registration_for_current_request();
+				if ( ! empty( $vol_reg ) ) {
 					$result = TRUE;
 					break;
 				} // endif
@@ -481,6 +528,34 @@ class Event_Group_Map_Marker implements Map_Marker {
 		return $this->map_marker_title;
 	} // function
 
+	private function get_event_group_marker_text() {
+		// Mark group as appropriate based on its status and class
+
+		if ( $this->get_is_event_group_cancelled() ) {
+			$status = Event_Status::get_event_status_by_id( Event_Status::CANCELLED );
+		} elseif( $this->get_is_event_group_tentative() ) {
+			$status = Event_Status::get_event_status_by_id( Event_Status::TENTATIVE );
+		} else {
+			$status = Event_Status::get_event_status_by_id( Event_Status::CONFIRMED );
+		} // endif
+
+		if ( $this->get_is_event_group_private() ) {
+			$class = Event_Class::get_event_class_by_id( Event_Class::PRIVATE );
+		} elseif( $this->get_is_event_group_confidential() ) {
+			$class = Event_Class::get_event_class_by_id( Event_Class::CONFIDENTIAL );
+		} else {
+			$class = Event_Class::get_event_class_by_id( Event_Class::PUBLIC );
+		} // endif
+
+		$status_id = $status->get_id();
+		$class_id = $class->get_id();
+		
+		$text_values_array = Event_Descriptor_View::get_event_marker_text_values_array();
+		$result = isset( $text_values_array[ $status_id ][ $class_id ] ) ? $text_values_array[ $status_id ][ $class_id ] : NULL;
+		
+		return $result;
+	} // function
+	
 	/**
 	 * Get the marker label as a string.  May return NULL if no label is required.
 	 * This string, if provided, is shown as text next to the marker.
@@ -510,80 +585,22 @@ class Event_Group_Map_Marker implements Map_Marker {
 				$text = sprintf( $format, number_format_i18n( $event_count ) ); // start with count of events
 				$classes = $this->get_map_marker_label_class_names( $map_type );
 				
-				// Mark group if it is are cancelled or tentative
-				if ( $this->get_is_event_group_cancelled() ) {
+				$marker_text = $this->get_event_group_marker_text();
+				
+				if ( ! empty( $marker_text ) ) {
 					
-					/* Translators: %1$s is a count of event dates like "4 dates" */
-					$format = __( '(Cancelled) %1$s ', 'reg-man-rc' );
-					$text = sprintf( $format, $text );
-					
-				} elseif( $this->get_is_event_group_tentative() ) {
-					
-					/* Translators: %1$s is a count of event dates like "4 dates" */
-					$format = __( '(Tentative) %1$s ', 'reg-man-rc' );
-					$text = sprintf( $format, $text );
+					/* Translators: %1$s is a status marker text like "TENTATIVE", %2$s is an event summary */
+					$label_with_marker_format = _x( '%1$s %2$s', 'A map marker label for an event group with its status, e.g. TENTATIVE Reference Library Repair Cafe', 'reg-man-rc' );
+					$text = sprintf( $label_with_marker_format, $marker_text, $text );
 					
 				} // endif
 
 				$result = Map_Marker_Label::create( $text, $classes );
-				
 					
 			} // endif
 			
 		} // endif
 		
-		return $result;
-
-		
-		// For the admin stats maps we don't want any labels because there could be hundreds of events
-		if ( $map_type !== Map_View::MAP_TYPE_ADMIN_STATS ) {
-
-			$is_complete = $this->get_is_event_group_complete();
-
-			// Show Cancelled for all events that were cancelled
-			$sole_desc = $this->get_sole_event_descriptor();
-			if ( ! empty( $sole_desc ) ) {
-				$status = $sole_desc->get_event_status();
-				$status_id = $status->get_id();
-				if ( $status_id == Event_Status::CANCELLED ) {
-					$result = $status->get_name();
-				} elseif ( ! $is_complete && ( $status_id === Event_Status::TENTATIVE ) ) {
-					$result = $status->get_name();
-				} // endif
-			} // endif
-
-	/* TODO: Completed events are already low opacity and these labels clutter the map, removing for now
-	 * This could be a setting
-			// If there's no label yet like Cancelled, then label it as completed as appropriate
-			if ( ! isset( $result ) ) {
-				// Otherwise show a marker if all events are complete for this group
-				$result = $this->get_is_event_group_complete() ? __( 'Completed', 'reg-man-rc' ) : NULL;
-			} // endif
-	*/
-			if ( ! isset( $result ) && $map_type === Map_View::MAP_TYPE_CALENDAR_VOLUNTEER_REG ) {
-
-				// If the volunteer is registered for ANY event in this group then we'll mark it with "Registered"
-				$events_array = $this->get_events_array();
-				$is_registered = FALSE;
-				foreach( $events_array as $event ) {
-					$vol_reg = $event->get_volunteer_registration();
-					$is_registered = isset( $vol_reg );
-					if ( $is_registered && ! $event->get_is_event_complete() ) {
-						break;
-					} // endif
-				} // endfor
-
-				if ( $is_registered ) {
-//					$label = isset( $result ) ? $result : __( 'Registered', 'reg-man-rc' );
-					$label = __( 'Registered', 'reg-man-rc' );
-					$classes = 'vol-reg-registered';
-					$result = Map_Marker_Label::create( $label, $classes );
-				} // endif
-
-			} // endif
-
-		} // endif
-
 		return $result;
 
 	} // function

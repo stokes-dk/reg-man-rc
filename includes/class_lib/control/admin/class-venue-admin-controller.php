@@ -44,7 +44,7 @@ class Venue_Admin_Controller {
 					$zoom = isset( $_POST[ 'venue_map_zoom' ] ) ? $_POST[ 'venue_map_zoom' ] : NULL;
 					$venue->set_location( $loc );
 					if ( ! empty( $loc ) ) {
-						$geo = isset( $lat_lng ) ? Geographic_Position::create_from_google_map_marker_position_string( $lat_lng ) : NULL;
+						$geo = isset( $lat_lng ) ? Geographic_Position::create_from_google_map_marker_position_json_string( $lat_lng ) : NULL;
 						$venue->set_geo( $geo );
 						$venue->set_map_marker_zoom_level( $zoom );
 					} else {

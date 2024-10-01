@@ -10,6 +10,8 @@ use Reg_Man_RC\Model\Calendar_View_Format;
 use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\Model\Calendar_Duration;
 use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\View\Form_Input_List;
+use Reg_Man_RC\View\Calendar_View;
 
 /**
  * An instance of this class provides a user interfrace for a calendar.
@@ -49,15 +51,29 @@ class Calendar_Admin_View {
 	public static function add_calendar_meta_boxes( $post_type, $post ) {
 		if ( $post_type == Calendar::POST_TYPE ) {
 
+			// Slug metabox
+			// Because this custom post type is not queryable (does not have its own page) the slug is not shown
+			//  automatically in the editor
+			// But the slug can be used to reference the calendar in shortcodes and the user may wish to change it
+			// So we will add our own slug metabox
+			add_meta_box(
+					'reg-man-rc-calendar-slug-metabox',
+					__( 'Calendar Name', 'reg-man-rc' ),
+					array( __CLASS__, 'render_slug_metabox'),
+					Calendar::POST_TYPE,
+					'side', // section to place the metabox (normal, side or advanced)
+					'default' // priority within the section (high, low or default)
+			);
+			
 			// Status metabox
 			add_meta_box(
 					'reg-man-rc-event-status-metabox',
 					__( 'Event Statuses', 'reg-man-rc' ),
 					array( __CLASS__, 'render_event_status_metabox'),
 					Calendar::POST_TYPE,
-					'side', // section to place the metabox (normal, side or advanced)
+					'normal', // section to place the metabox (normal, side or advanced)
 					'default' // priority within the section (high, low or default)
-					);
+			);
 			
 			// Category metabox
 			$view = Event_Category_Admin_View::create();
@@ -66,10 +82,20 @@ class Calendar_Admin_View {
 					__( 'Event Categories', 'reg-man-rc' ),
 					array( $view, 'render_post_metabox' ),
 					Calendar::POST_TYPE,
-					'side', // section to place the metabox (normal, side or advanced)
+					'normal', // section to place the metabox (normal, side or advanced)
 					'default' // priority within the section (high, low or default)
 			);
 
+			// iCalendar feed metabox
+			add_meta_box(
+					'reg-man-rc-ical-feed-metabox',
+					__( 'Sharing', 'reg-man-rc' ),
+					array( __CLASS__, 'render_ical_feed_metabox'),
+					Calendar::POST_TYPE,
+					'normal', // section to place the metabox (normal, side or advanced)
+					'default' // priority within the section (high, low or default)
+			);
+			
 			// Show Past Events
 			add_meta_box(
 					'reg-man-rc-past-events-metabox',
@@ -93,37 +119,105 @@ class Calendar_Admin_View {
 			// Calendar durations metabox
 			add_meta_box(
 					'reg-man-rc-durations-metabox',
-					__( 'Timespans', 'reg-man-rc' ),
+					__( 'Months per page', 'reg-man-rc' ),
 					array( __CLASS__, 'render_durations_metabox' ),
 					Calendar::POST_TYPE,
 					'side', // section to place the metabox (normal, side or advanced)
 					'default' // priority within the section (high, low or default)
 					);
-			
-			// Class metabox
-			add_meta_box(
-					'reg-man-rc-event-class-metabox',
-					__( 'Event Classes', 'reg-man-rc' ),
-					array( __CLASS__, 'render_event_class_metabox' ),
-					Calendar::POST_TYPE,
-					'side', // section to place the metabox (normal, side or advanced)
-					'default' // priority within the section (high, low or default)
-			);
-			
-			
-/* FIXME - NOT USED, these are assigned in the settings
-			// Registration metabox
-			add_meta_box(
-					'reg-man-rc-calendar-purpose-metabox',
-					__( 'Registration', 'reg-man-rc' ),
-					array( __CLASS__, 'render_registration_calendars_metabox' ),
-					Calendar::POST_TYPE,
-					'side', // section to place the metabox (normal, side or advanced)
-					'default' // priority within the section (high, low or default)
-					);
-*/
-
 		} // endif
+		
+	} // function
+
+	/**
+	 * Render the iCalendar feed metabox for the calendar
+	 * @param	\WP_Post	$post
+	 * @return	void
+	 * @since	v0.7.0
+	 */
+	public static function render_slug_metabox( $post ) {
+		
+		echo '<div class="reg-man-rc-calendar-slug-metabox-container">';
+			// We need a flag to distinguish the case where no slug is assigned by the user
+			//  versus the case where no metabox was presented at all like in quick edit mode
+			echo '<input type="hidden" name="slug_flag" value="TRUE">';
+			
+			$slug = $post->post_name;
+			
+			$input_list = Form_Input_List::create();
+			$label = '';// __( 'Slug', 'reg-man-rc' );
+			$name = 'post_name';
+			$val = $slug;
+			$shortcode = Calendar_View::CALENDAR_SHORTCODE;
+			$shortcode = sprintf( '[%1$s calendar="%2$s"]', $shortcode, $slug ); // Code, not to be translated
+			/* Translators: %1$s is a shortcode like "[rc-calendar calendar=upcoming-events]" */
+			$hint_format = __( 'Use this name in shortcodes, e.g. %1$s', 'reg-man-rc' );
+			$hint = sprintf( $hint_format, $shortcode );
+			$classes = '';
+			$is_required = FALSE; // The system will assign a default if it's not provided
+			$input_list->add_text_input( $label, $name, $val, $hint, $classes, $is_required );
+			
+			$input_list->render();
+
+		echo '</div>';
+			
+	} // function
+
+	/**
+	 * Render the iCalendar feed metabox for the calendar
+	 * @param	\WP_Post	$post
+	 * @return	void
+	 * @since	v0.7.0
+	 */
+	public static function render_ical_feed_metabox( $post ) {
+		
+		echo '<div class="reg-man-rc-calendar-ical-feed-metabox-container">';
+			// We need a flag to distinguish the case where no feed is assigned by the user
+			//  versus the case where no metabox was presented at all like in quick edit mode
+			echo '<input type="hidden" name="ical_feed_flag" value="TRUE">';
+	
+			$slug = $post->post_name;
+			
+			$calendar = Calendar::get_calendar_by_post_id( $post->ID );
+			$feed_name = $calendar->get_icalendar_feed_name();
+			$has_feed = ! empty( $feed_name );
+	
+			$input_list = Form_Input_List::create();
+			
+			$feed_input_list = Form_Input_List::create();
+			$feed_input_list->add_list_classes( 'ical-feed-input-list' );
+			
+			$label = __( 'Allow people to subscribe to a feed of events on this calendar ', 'reg-man-rc' );
+			$title = __( 'This will create a public iCalendar events feed', 'reg-man-rc' );
+			$checked = $has_feed ? 'checked="checked"' : '';
+			$checkbox_format =
+					'<label title="%2$s">' .
+						'<input type="checkbox" name="has-ical-feed" value="1" %3$s></input>' .
+						'<span>%1$s</span>' .
+					'</label>';
+			$fieldset_label = sprintf( $checkbox_format, $label, $title, $checked );
+
+			$label = __( 'Feed name', 'reg-man-rc' );
+			$name = 'ical-feed-name';
+			$val = $has_feed ? $feed_name : "$slug-ical";
+			$hint = '';
+			$classes = '';
+			$is_required = TRUE;
+			$addn_attrs = $has_feed ? '' : 'disabled="disabled"';
+			$feed_input_list->add_text_input( $label, $name, $val, $hint, $classes, $is_required, $addn_attrs );
+
+			$label = __( 'Include a "Subscribe" button when this calendar is shown on a public page', 'reg-man-rc' );
+			$name = 'has-ical-feed-subscribe-button';
+			$val = '1';
+			$is_checked = $calendar->get_icalendar_is_show_subscribe_button();
+			$hint = __( 'Note: To show a subscribe button in the volunteer area you must go to "Settings > Volunteer Area"', 'reg-man-rc' );
+			$feed_input_list->add_checkbox_input( $label, $name, $val, $is_checked, $hint );
+			
+			$input_list->add_fieldset( $fieldset_label, $feed_input_list );
+			
+			$input_list->render();
+
+		echo '</div>';
 	} // function
 
 	/**
@@ -133,10 +227,10 @@ class Calendar_Admin_View {
 	 * @since	v0.1.0
 	 */
 	public static function render_event_status_metabox( $post ) {
-		$calendar = Calendar::get_calendar_by_id( $post->ID );
+		$calendar = Calendar::get_calendar_by_post_id( $post->ID );
 		$selected_id_array = isset( $calendar ) ? $calendar->get_event_status_array() : array();
 		self::render_status_checkboxes( $selected_id_array );
-		$msg = __( 'Select the event statuses to be included in this calendar', 'reg-man-rc' );
+		$msg = __( 'Select the statuses for events to be shown in this calendar', 'reg-man-rc' );
 		echo '<p>' . $msg . '</p>';
 	} // function
 
@@ -150,51 +244,13 @@ class Calendar_Admin_View {
 		$input_name = 'event_status';
 
 		$format =
-			'<div><label title="%1$s">' .
+			'<div><label title="%1$s" class="reg-man-rc-metabox-radio-label">' .
 				'<input type="checkbox" name="' . $input_name . '[]" value="%2$s" %3$s>' .
 				'<span>%4$s</span>' .
 			'</label></div>';
 		foreach ( $event_statuses as $status_obj ) {
 			$id = $status_obj->get_id();
 			$name = $status_obj->get_name();
-			$html_name = esc_html( $name );
-			$attr_name = esc_attr( $name );
-			$checked = in_array( $id, $selected_id_array ) ? 'checked="checked"' : '';
-			printf( $format, $attr_name, $id, $checked, $html_name );
-		} // endfor
-	} // function
-
-	/**
-	 * Render the event class metabox for the calendar
-	 * @param	\WP_Post	$post
-	 * @return	void
-	 * @since	v0.1.0
-	 */
-	public static function render_event_class_metabox( $post ) {
-		$calendar = Calendar::get_calendar_by_id( $post->ID );
-		$selected_id_array = isset( $calendar ) ? $calendar->get_event_class_array() : array();
-		self::render_class_checkboxes( $selected_id_array );
-
-		$msg = __(
-				'Public events are always included in the calendar, confidential events are never included.' .
-				'  Private events are only visible to logged-in users who have the authority to see private events.'
-				, 'reg-man-rc' );
-		echo '<p>' . $msg . '</p>';
-	} // function
-
-	private static function render_class_checkboxes( $selected_id_array ) {
-
-		$event_classes = Event_Class::get_all_event_classes();
-		$input_name = 'event_class';
-
-		$format =
-			'<div><label title="%1$s">' .
-				'<input type="checkbox" name="' . $input_name . '[]" value="%2$s" %3$s autocomplete="off" disabled="disabled">' .
-				'<span>%4$s</span>' .
-			'</label></div>';
-		foreach ( $event_classes as $class_obj ) {
-			$id = $class_obj->get_id();
-			$name = $class_obj->get_name();
 			$html_name = esc_html( $name );
 			$attr_name = esc_attr( $name );
 			$checked = in_array( $id, $selected_id_array ) ? 'checked="checked"' : '';
@@ -214,11 +270,11 @@ class Calendar_Admin_View {
 		//  versus the case where no checkboxes were presented at all like in quick edit mode
 		echo '<input type="hidden" name="past_events_selection_flag" value="TRUE">';
 
-		$calendar = Calendar::get_calendar_by_id( $post->ID );
+		$calendar = Calendar::get_calendar_by_post_id( $post->ID );
 		$is_show_past_events = isset( $calendar ) ? $calendar->get_is_show_past_events() : FALSE;
 
 		$radio_format =
-			'<div><label>' .
+			'<div><label class="reg-man-rc-metabox-radio-label">' .
 				'<input type="radio" name="is-show-past-events" value="%2$s" %3$s autocomplete="off">' .
 				'<span>%1$s</span>' .
 			'</label></div>';
@@ -248,7 +304,7 @@ class Calendar_Admin_View {
 	 * @since	v0.1.0
 	 */
 	public static function render_view_format_metabox( $post ) {
-		$calendar = Calendar::get_calendar_by_id( $post->ID );
+		$calendar = Calendar::get_calendar_by_post_id( $post->ID );
 		$selected_id_array = isset( $calendar ) ? $calendar->get_view_format_ids_array() : array();
 		self::render_view_format_checkboxes( $selected_id_array );
 		$msg = __(
@@ -268,7 +324,7 @@ class Calendar_Admin_View {
 		$input_name = 'view_format';
 
 		$format =
-			'<div><label title="%1$s">' .
+			'<div><label title="%1$s" class="reg-man-rc-metabox-radio-label">' .
 				'<input type="checkbox" name="' . $input_name . '[]" value="%2$s" %3$s>' .
 				'<span>%4$s</span>' .
 			'</label></div>';
@@ -290,12 +346,11 @@ class Calendar_Admin_View {
 	 * @since	v0.1.0
 	 */
 	public static function render_durations_metabox( $post ) {
-		$calendar = Calendar::get_calendar_by_id( $post->ID );
+		$calendar = Calendar::get_calendar_by_post_id( $post->ID );
 		$selected_id_array = isset( $calendar ) ? $calendar->get_duration_ids_array() : array();
 		self::render_duration_checkboxes( $selected_id_array );
 		$msg = __(
-				'Select the timespans used to display events in this calendar.' .
-				'  The calendar may show one or more months at a time.',
+				'Select the options for viewing multiple months on the calendar page.',
 				'reg-man-rc'
 				);
 		echo '<p>' . $msg . '</p>';
@@ -311,10 +366,10 @@ class Calendar_Admin_View {
 		$input_name = 'duration';
 		
 		$format =
-		'<div><label title="%1$s">' .
-		'<input type="checkbox" name="' . $input_name . '[]" value="%2$s" %3$s>' .
-		'<span>%4$s</span>' .
-		'</label></div>';
+			'<div><label title="%1$s" class="reg-man-rc-metabox-radio-label">' .
+				'<input type="checkbox" name="' . $input_name . '[]" value="%2$s" %3$s>' .
+				'<span>%4$s</span>' .
+			'</label></div>';
 		foreach ( $durations as $duration_obj ) {
 			$id = $duration_obj->get_id();
 			$name = $duration_obj->get_name();
@@ -325,77 +380,6 @@ class Calendar_Admin_View {
 			printf( $format, $attr_desc, $id, $checked, $html_name );
 		} // endfor
 	} // function
-	
-	
-	/**
-	 * Render the registration calendars metabox for the calendar
-	 * @param	\WP_Post	$post
-	 * @return	void
-	 * @since	v0.1.0
-	 */
-/* FIXME - NOT USED
-	public static function render_registration_calendars_metabox( $post ) {
-		self::render_registration_select_inputs( $post->ID );
-		$msg = __(
-				'Select the calendars used to provide events during registration.',
-				'reg-man-rc'
-		);
-		echo '<p>' . $msg . '</p>';
-	} // function
-
-	private static function render_registration_select_inputs( $calendar_post_id ) {
-
-		// We need a flag to distinguish the case where no special purposes were chosen by the user
-		//  versus the case where no checkboxes were presented at all like in quick edit mode
-		echo '<input type="hidden" name="registration_calendars_input_flag" value="TRUE">';
-
-		$calendars_array = Calendar::get_all_calendars();
-		$calendar_names_array = array();
-		$calendar_names_array[ $calendar_post_id ] = __( '[ Use this calendar ]', 'reg-man-rc' ); // Put this at top
-		foreach( $calendars_array as $calendar ) {
-			$id = $calendar->get_post_id();
-			if ( $id !== $calendar_post_id ) {
-				$calendar_names_array[ $id ] = $calendar->get_name();
-			} // endif
-		} // endfor
-
-		$input_name = Calendar::CALENDAR_TYPE_VISITOR_REG;
-		$label = __( 'Visitor / Item Registration', 'reg-man-rc' );
-		$selected_id = Settings::get_visitor_registration_calendar_post_id();
-		echo '<p>';
-			echo "<label for=\"$input_name\">$label";
-				self::render_calendar_select( $calendar_names_array, $input_name, $selected_id );
-			echo '<label>';
-		echo '</p>';
-
-		$input_name = Calendar::CALENDAR_TYPE_VOLUNTEER_REG;
-		$label = __( 'Volunteer Registration', 'reg-man-rc' );
-		$selected_id = Settings::get_volunteer_registration_calendar_post_id();
-		echo '<p>';
-			echo "<label for=\"$input_name\">$label";
-				self::render_calendar_select( $calendar_names_array, $input_name, $selected_id );
-			echo '<label>';
-		echo '</p>';
-
-	} // function
-
-
-	private static function render_calendar_select( $calendar_names_array, $input_name, $selected_id, $is_required = TRUE ) {
-
-		$input_name = esc_attr( $input_name );
-		$input_id = esc_attr( $input_name );
-		$required = $is_required ? 'required="required"' : '';
-		echo "<select id=\"$input_id\" name=\"$input_name\" $required autocomplete=\"off\">";
-			foreach ( $calendar_names_array as $id => $name ) {
-				$html_name = esc_html( $name );
-				$selected = selected( $id, $selected_id, $echo = FALSE );
-				echo "<option value=\"$id\" $selected>$html_name</option>";
-			} // endfor
-		echo '</select>';
-
-	} // function
-
-*/
 
 	/**
 	 * Conditionally enqueue the correct scripts for this user interface on the backend when we're on the right page
@@ -414,26 +398,38 @@ class Calendar_Admin_View {
 		} // endif
 	} // function
 
+	/**
+	 * Filter the columns shown in the admin UI
+	 * @param string[] $columns
+	 * @return string[]
+	 */
 	public static function filter_admin_UI_columns( $columns ) {
 
 		$event_category_tax_col = 'taxonomy-' . Event_Category::TAXONOMY_NAME;
 
 		$result = array(
-			'cb'						=> $columns[ 'cb' ],
-			'title'						=> __( 'Calendar Title',			'reg-man-rc' ),
-			$event_category_tax_col		=> __( 'Event Categories',			'reg-man-rc' ),
-			'event_statuses'			=> __( 'Event Statuses',			'reg-man-rc' ),
-			'view_formats'				=> __( 'Views',						'reg-man-rc' ),
-			'durations'					=> __( 'Timespans',					'reg-man-rc' ),
-			'date'						=> __( 'Last Update',				'reg-man-rc' ),
-			'author'					=> __( 'Author',					'reg-man-rc' ),
+				'cb'						=> $columns[ 'cb' ],
+				'title'						=> __( 'Calendar Title',			'reg-man-rc' ),
+				$event_category_tax_col		=> __( 'Event Categories',			'reg-man-rc' ),
+				'event_statuses'			=> __( 'Event Statuses',			'reg-man-rc' ),
+				'shortcode'					=> __( 'Shortcode',					'reg-man-rc' ),
+				'ical_feed'					=> __( 'iCalendar Feed',			'reg-man-rc' ),
+				'view_formats'				=> __( 'Views',						'reg-man-rc' ),
+				'durations'					=> __( 'Months per Page',			'reg-man-rc' ),
+				'date'						=> __( 'Last Update',				'reg-man-rc' ),
+				'author'					=> __( 'Author',					'reg-man-rc' ),
 		);
 		return $result;
 
 	} // function
 
+	/**
+	 * Render the value shown in the specified column of the admin UI
+	 * @param string $column_name
+	 * @param string|int $post_id
+	 */
 	public static function render_admin_UI_column_values( $column_name, $post_id ) {
-		$calendar = Calendar::get_calendar_by_id( $post_id );
+		$calendar = Calendar::get_calendar_by_post_id( $post_id );
 		$em_dash = __( '—', 'reg-man-rc' ); // an em-dash is used by Wordpress for empty fields
 		$result = $em_dash; // show em-dash by default
 		if ( $calendar !== NULL ) {
@@ -449,6 +445,26 @@ class Calendar_Admin_View {
 					$result = ! empty( $name_array ) ? esc_html( implode( ', ', $name_array ) ) : $em_dash;
 					break;
 
+				case 'ical_feed':
+					$feed_name = $calendar->get_icalendar_feed_name();
+					if ( empty( $feed_name ) ) {
+						$result = $em_dash;
+					} else {
+						$blog_id = NULL; // I believe this is used for multi-site
+						$path = 'feed/' . $feed_name . '/?preview';
+						$url = get_site_url( $blog_id, $path );
+						$format = '<a target="_blank" href="%1$s">%2$s</a>';
+						$result = sprintf( $format, $url, esc_html( $feed_name ) );
+					} // endif
+					break;
+
+				case 'shortcode':
+					$post = \WP_Post::get_instance( $post_id );
+					$slug = $post->post_name;
+					$shortcode = Calendar_View::CALENDAR_SHORTCODE;
+					$result = sprintf( '[%1$s calendar="%2$s"]', $shortcode, $slug ); // Code, not to be translated
+					break;
+					
 				case 'view_formats':
 					$format_id_array = $calendar->get_view_format_ids_array();
 					$name_array = array();
@@ -478,6 +494,141 @@ class Calendar_Admin_View {
 		echo $result;
 	} // function
 
+	/**
+	 * Get the set of tabs to be shown in the help for this type
+	 * @return array
+	 */
+	public static function get_help_tabs() {
+		$result = array(
+			array(
+				'id'		=> 'reg-man-rc-about',
+				'title'		=> __( 'About', 'reg-man-rc' ),
+				'content'	=> self::get_about_content(),
+			),
+		);
+		return $result;
+	} // function
+	
+	/**
+	 * Get the html content shown to the administrator in the "About" help for this post type
+	 * @return string
+	 */
+	private static function get_about_content() {
+		ob_start();
+			$heading = __( 'About Calendars', 'reg-man-rc' );
+			
+			echo "<h2>$heading</h2>";
+			echo '<p>';
+				$msg = __(
+					'A calendar represents a collection of events defined by event categories and statuses.' .
+					'  The resulting calendar of events can be shown on a page on the public website using a shortcode.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'The system uses a visitor registration calendar (assigned in the plugin settings)' .
+					' to determine which events to use in the visitor registration page when allowing visitors to register their items for an event.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'The system also uses a volunteer registration calendar (assigned in the plugin settings)' .
+					' to determine which events to use in the volunteer area when allowing volunteers to register to attend events.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'The system provides an administrative calendar inside the WordPress admin area that shows' .
+					' all the events defined in the system including all categories and all statuses.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'Note that private events (draft or privately published event descriptions) are never shown on' .
+					' any public calendar including the visitor registration and volunteer area calendars.' .
+					'  Note also that the administrative calendar (shown only inside the WordPress admin area) always shows private events.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'A calendar includes the following:',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
 
+				$item_format = '<dt>%1$s</dt><dd>%2$s</dd>';
+				echo '<dl>';
 
+					$title = esc_html__( 'Calendar Title', 'reg-man-rc' );
+					$msg = esc_html__(
+							'Used only to identify the calendar by name.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Event Categories', 'reg-man-rc' );
+					$msg = esc_html__(
+							'A list of event categories to be shown on this calendar, e.g. "Repair Café, Mini Event".' .
+							'  Events in any of the listed categories will be shown;' .
+							' events not in any of the listed categories will not be shown.' .
+							'  For example, the visitor registration calendar may include "Repair Café" events and exclude "Volunteer Appreciation" events.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Event Statuses', 'reg-man-rc' );
+					$msg = esc_html__(
+							'A list of event statuses to be shown on this calendar, e.g. "Confirmed, Cancelled".' .
+							'  Events whose status is among those listed will be shown;' .
+							' other events will not be shown.' .
+							'  For example, a public upcoming events calendar may include "Cancelled" events and exclude "Tentative" events.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Shortcode', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The shortcode to use in a website page to show this calendar.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'iCalendar Feed', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The calendar can provide an iCalendar feed so that its events can be shared with other systems.' .
+							'  If a feed name is specified then other systems can download an ".ics" file containing the calendar\'s events.' .
+							' This allows visitors or volunteers to subscribe and add our events to their personal calendar.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Views', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The view options available to the end user when the calendar is displayed on a website page.' .
+							'  View options include: Grid - a typical calendar view; List - a simple list of events; and Map - the events shown on a map by location.' .
+							'  Note that the "Map" option is only available when a Google Maps API key has been saved in the plugin settings',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Months per Page', 'reg-man-rc' );
+					$msg = esc_html__(
+							'A list of options available to the end user when the calendar is displayed on a website page.' .
+							'  The Months per Page options allow the user to select how many months are displayed on the page at one time.' .
+							'  For example, the options may include: 1 month, 6 months, and A calendar year from January to December.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+				echo '</dl>';
+			echo '</p>';
+
+		$result = ob_get_clean();
+		return $result;
+	} // function
+	
+	
 } // class

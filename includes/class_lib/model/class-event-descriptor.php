@@ -25,22 +25,23 @@ interface Event_Descriptor extends Map_Marker {
 	/**
 	 * Get the globally unique id for the event descriptor, i.e. unique across domains.
 	 *
-	 * This is used when events are shared across systems, for example imported and exported, or used in an iCalendar feed.
-	 * The UID can be the post's GUID for event implementors who use a custom post type to represent the event.
+	 * This is used when events are shared across systems, for example an iCalendar feed.
+	 * Internally we use wp_generate_uuid4() but another event provider may use something else.
 	 *
 	 * Note that UID is required by ICalendar VEvent.
-	 * But keep in mind that this is a unique ID for the descriptor which may repeat, it's not a UID for an event instance.
+	 * But keep in mind that this is a unique ID for the descriptor which may represent a repeating event,
+	 *  it's not a UID for an event instance.
 	 *
 	 * Note that for a recurring event multiple event instances will share the same uid but each will have a
-	 * unique recurrence ID.
+	 * unique recurrence date and RECURRENCE-ID in the VEVENT data.
 	 *
-	 * @return	string		The globally unique id for the event.
+	 * @return	string		The globally unique id for the event descriptor.
 	 * @since v0.1.0
 	 */
 	public function get_event_uid();
 
 	/**
-	 * Get the unique id of the provider for this event.
+	 * Get the unique id of the provider for this event descriptor.
 	 * @return	string		A unique id representing the provider (event or calendar plugin) that supplied this event.
 	 * This will be an abbreviation of the event implementor, e.g. Event Calendar WD will return "ecwd".
 	 * @since v0.1.0
@@ -60,6 +61,7 @@ interface Event_Descriptor extends Map_Marker {
 
 	/**
 	 * Get the event's start date and time as a \DateTimeInterface object, e.g. \DateTime instance.
+	 * Note that the timezone MUST be set to local time, i.e. wp_timezone()
 	 * @return	\DateTimeInterface	Event start date and time.  May be NULL if no start time is assigned.
 	 * @since v0.1.0
 	 */
@@ -67,6 +69,7 @@ interface Event_Descriptor extends Map_Marker {
 
 	/**
 	 * Get the event's end date and time as a \DateTimeInterface object, e.g. \DateTime instance.
+	 * Note that the timezone MUST be set to local time, i.e. wp_timezone()
 	 * @return	\DateTimeInterface	Event end date and time.  May be NULL if no end time is assigned.
 	 * @since v0.1.0
 	 */
@@ -80,14 +83,24 @@ interface Event_Descriptor extends Map_Marker {
 	public function get_event_summary();
 
 	/**
+	 * Get the WordPress user ID of the author of this event, if known
+	 * @return	int|string	The WordPress user ID of the author of this event if it is known, otherwise NULL or 0.
+	 * @since v0.6.0
+	 */
+	public function get_event_author_id();
+
+	/**
 	 * Get the event's status represented as an instance of the Event_Status class.
+	 * For a recurring event, get the status of the instance on the specified event date.
+	 * If the event provider does not support cancelling of a recurring event instance then this argument is ignored
+	 *  and the status of the event descriptor is returned.
 	 * The default should be CONFIRMED.
 	 *
+	 * @param	\DateTime		$event_date	The event's date, or the event's start date/time in the local timezone
 	 * @return	Event_Status	The event's status.
 	 * @since v0.1.0
 	 */
-	// FIXME - change this to get_event_status( $recur_id ) to allow for cancelling of specific event recurrence
-	public function get_event_status();
+	public function get_event_status( $event_date = NULL );
 
 	/**
 	 * Get the event's class represented as an instance of the Event_Class class.
@@ -156,16 +169,17 @@ interface Event_Descriptor extends Map_Marker {
 	public function get_event_is_non_repair();
 
 	/**
-	 * Get the url for the event descriptor page or event recurrence page when $recur_id is specified, if such a page exists.
-	 * @param	string|NULL	$recur_id	An event recurrence ID.
+	 * Get the url for the event descriptor page or event recurrence page when $recur_date is specified, if such a page exists.
+	 * @param	string|NULL	$recur_date	An event recurrence date.
 	 *  When NULL or empty the result of this method is the url for the page showing the event descriptor, if such a page exists.
-	 *  If $recur_id is specified then the result is the url for the page showing the specified recurrence, if it exists.
-	 *  If no separate page exists for the event recurrence then the result is the same as when no $recur_id is specified.
+	 *  If $recur_date is specified then the result is the url for the page showing the specified recurrence, if it exists.
+	 *  If no separate page exists for the event recurrence then the result is the same as when no $recur_date is specified.
 	 * @return	string		The url for the page that shows this event descriptor or event recurrence, if such a page exists,
 	 *  otherwise NULL or empty string.
 	 * @since v0.1.0
 	 */
-	public function get_event_page_url( $recur_id = NULL );
+	// FIXME - this should be a UTC event date-time, OR SHOULD IT???  What do we do with keys?  It should be the same!
+	public function get_event_page_url( $recur_date = NULL );
 
 	/**
 	 * Get the url to edit the event descriptor, if the page exists.

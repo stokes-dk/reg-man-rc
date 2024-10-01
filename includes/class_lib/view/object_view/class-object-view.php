@@ -10,7 +10,7 @@ interface Object_View {
 	const OBJECT_PAGE_TYPE_EVENT_DESCRIPTOR					= 'event-descriptor-page';
 	const OBJECT_PAGE_TYPE_VENUE							= 'venue-page';
 	const OBJECT_PAGE_TYPE_VOLUNTEER_REGISTRATION			= 'volunteer-registration-page';
-	const OBJECT_PAGE_TYPE_ADMIN_DASHBOARD_EVENT_DETAILS	= 'admin-dashboard-event-page';
+	const OBJECT_PAGE_TYPE_ADMIN_CALENDAR_EVENT_DETAILS		= 'admin-calendar-event-page';
 	const OBJECT_PAGE_TYPE_VISITOR_REGISTRATION				= 'visitor-registration-page';
 	
 	// TODO: Others?  We have these objects but they doesn't use this interface right now

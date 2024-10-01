@@ -7,6 +7,7 @@ use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Control\Map_Controller;
 use Reg_Man_RC\Model\Calendar;
 use Reg_Man_RC\Model\Map_Marker_Label;
+use Reg_Man_RC\Control\Calendar_Controller;
 
 /**
  * An instance of this class is a renderable map.
@@ -24,9 +25,11 @@ class Map_View {
 	const MAP_TYPE_CALENDAR_EVENTS			= 'events-cal-map';			// A map inside an events calendar like upcoming events
 	const MAP_TYPE_CALENDAR_VISITOR_REG		= 'visitor-reg-cal-map';	// In the visitor registration calendar
 	const MAP_TYPE_CALENDAR_VOLUNTEER_REG	= 'volunteer-reg-cal-map';	// In the volunteer registration calendar
-	const MAP_TYPE_CALENDAR_ADMIN			= 'admin-cal-map';			// In the administrative dashboard calendar
+	const MAP_TYPE_CALENDAR_ADMIN			= 'admin-cal-map';			// In the administrative calendar
 	const MAP_TYPE_ADMIN_STATS				= 'admin-stats';			// In the admin statistics page
 
+	private static $MAP_ID_NUM = 0; // A number used to give each map a unique ID on the page
+	
 	private $classes;
 	private $map_type;
 	private $lat;
@@ -61,7 +64,7 @@ class Map_View {
 		$result = self::create( self::MAP_TYPE_CALENDAR_EVENTS );
 		switch( $calendar->get_calendar_type() ) {
 
-			case Calendar::CALENDAR_TYPE_ADMIN_EVENTS:
+			case Calendar::CALENDAR_TYPE_ADMIN:
 				$map_type = self::MAP_TYPE_CALENDAR_ADMIN;
 				break;
 
@@ -244,6 +247,8 @@ class Map_View {
 	public function render() {
 
 		if ( self::get_is_map_view_enabled() ) {
+			
+			$map_id = 'REG_MAN_RC_MAP_' . self::$MAP_ID_NUM++;
 
 			$marker_form_id = $this->get_map_marker_ajax_form_id();
 			$svg_path = esc_attr( self::MARKER_SVG_PATH );
@@ -261,7 +266,7 @@ class Map_View {
 			} // endif
 
 			$data = implode( ' ', $data );
-			echo "<div class=\"reg-man-rc-google-map-container reg-man-rc-ajax-form-listener\" $data>";
+			echo "<div class=\"reg-man-rc-google-map-container reg-man-rc-ajax-form-listener\" id=\"$map_id\" $data>";
 
 				if ( $this->get_is_show_loading_indicator() ) {
 					// This is a busy spinner which is shown (on the client side) when the map is loading
@@ -322,9 +327,6 @@ class Map_View {
 
 		$ajax_form = $this->get_ajax_form();
 		$action = $this->get_ajax_marker_provider_action();
-		$form_id = $ajax_form->get_form_id();
-
-//		$ajax_form->set_include_nonce_fields( FALSE );
 
 		 // Autocomplete off blocks browser from autofilling the field from a cached page
 		$field_format = '<input type="hidden" name="%1$s" value="%2$s" autocomplete="off">';
@@ -339,6 +341,7 @@ class Map_View {
 				$fields = array();
 				$fields[] = sprintf( $field_format, Event_Filter_Input_Form::YEAR_INPUT_NAME, '' );
 				$fields[] = sprintf( $field_format, Event_Filter_Input_Form::CATEGORY_INPUT_NAME, '' );
+				$fields[] = sprintf( $field_format, Event_Filter_Input_Form::EVENT_AUTHOR_INPUT_NAME, '' );
 				$fields[] = sprintf( $field_format, Map_Controller::MAP_TYPE_INPUT_FIELD_NAME, $map_type );
 				$content = implode( ' ', $fields );
 				break;
@@ -348,8 +351,10 @@ class Map_View {
 				$fields = array();
 				$fields[] = sprintf( $field_format, Map_Controller::MIN_DATE_INPUT_FIELD_NAME, '' );
 				$fields[] = sprintf( $field_format, Map_Controller::MAX_DATE_INPUT_FIELD_NAME, '' );
-				$fields[] = sprintf( $field_format, Map_Controller::CALENDAR_ID_INPUT_FIELD_NAME, '' );
+				$fields[] = sprintf( $field_format, Calendar_Controller::CALENDAR_TYPE_INPUT_FIELD_NAME, '' );
+				$fields[] = sprintf( $field_format, Calendar_Controller::CALENDAR_ID_INPUT_FIELD_NAME, '' );
 				$fields[] = sprintf( $field_format, Map_Controller::IS_SHOW_PAST_EVENTS_INPUT_FIELD_NAME, '' );
+				$fields[] = sprintf( $field_format, Map_Controller::EVENT_AUTHOR_FIELD_NAME, '' );
 				$fields[] = sprintf( $field_format, Map_Controller::MAP_TYPE_INPUT_FIELD_NAME, $map_type );
 				$content = implode( ' ', $fields );
 				break;

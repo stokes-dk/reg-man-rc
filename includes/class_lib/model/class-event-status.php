@@ -32,6 +32,7 @@ class Event_Status {
 	private $id;
 	private $name;
 	private $desc;
+	private $marker_text;
 
 	private function __construct() { }
 
@@ -80,6 +81,20 @@ class Event_Status {
 	} // function
 
 	/**
+	 * Get the default event status object, to be used when an event that has no status assigned.
+	 *
+	 * @return	Event_Status	The default event status object.
+	 *
+	 * @since v0.6.0
+	 */
+	public static function get_default_event_status() {
+		$all = self::get_all_event_statuses();
+		$event_status_id = self::get_default_event_status_id();
+		$result = $all[ $event_status_id ];
+		return $result;
+	} // function
+
+	/**
 	 * Get the default event status ID, to be used when an event that has no status assigned.
 	 *
 	 * @return	string	The ID of the default event status.
@@ -87,7 +102,7 @@ class Event_Status {
 	 * @since v0.1.0
 	 */
 	public static function get_default_event_status_id() {
-		return self::CONFIRMED; // TODO: Should this be a setting?
+		return self::CONFIRMED;
 	} // function
 
 	/**
@@ -123,4 +138,37 @@ class Event_Status {
 		return $this->desc;
 	} // function
 
+	/**
+	 * Get the marker text to use for this status.
+	 * This can be applied to the event title like: "CANCELLED Creative Reuse Toronto Drop-in Event"
+	 * @return	string
+	 * @since	v0.5.0
+	 */
+	public function get_event_marker_text() {
+		if ( ! isset( $this->marker_text ) ) {
+
+			// TODO: We could have a configuration option for this
+			switch ( $this->id ) {
+
+				default:
+				case self::CONFIRMED:
+					$this->marker_text = '';
+					break;
+					
+				case self::TENTATIVE:
+					$this->marker_text = __( 'TENTATIVE', 'reg-man-rc' );
+					break;
+					
+				case self::CANCELLED:
+					$this->marker_text = __( 'CANCELLED!', 'reg-man-rc' );
+					break;
+			
+			} // endswitch
+
+		} // endif
+		
+		return $this->marker_text;
+		
+	} // function
+	
 } // class

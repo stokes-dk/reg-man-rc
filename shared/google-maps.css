@@ -32,9 +32,7 @@
 	visibility: visible;
 }
 
-.reg-man-rc-google-map-container .reg-man-rc-map-message-area,
-.reg-man-rc-google-map-container .reg-man-rc-map-legend {
-	font-size: x-small;
+.reg-man-rc-google-map-container .reg-man-rc-map-message-area {
 	border: 1px solid #ccc;
 	box-shadow: 0px 0px 2px #aaa;
 	background-color: rgba( 255, 255, 255, 1 );

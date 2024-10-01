@@ -3,6 +3,7 @@ namespace Reg_Man_RC\Control\Admin;
 
 use Reg_Man_RC\Model\Event_Category;
 use Reg_Man_RC\Model\Calendar;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The event category controller
@@ -35,11 +36,9 @@ class Event_Category_Admin_Controller {
 			// Calendars
 			$calendar_id_array = isset( $_POST[ 'event-category-calendar' ] ) ? $_POST[ 'event-category-calendar' ] : array();
 			foreach( $calendar_id_array as $calendar_id ) {
-				$calendar = Calendar::get_calendar_by_id( $calendar_id );
+				$calendar = Calendar::get_calendar_by_post_id( $calendar_id );
 				if ( isset( $calendar ) ) {
-					$event_category_array = $calendar->get_event_category_array();
-					$event_category_array[] = $event_category; // Add this new category
-					$calendar->set_event_category_array( $event_category_array );
+					$calendar->add_event_category( $event_category );
 				} // endif
 			} // foreach
 
@@ -58,6 +57,18 @@ class Event_Category_Admin_Controller {
 				$event_category->set_colour( $colour );
 			} // endif
 
+			// Calendars
+			$all_calendars_array = Calendar::get_all_calendars();
+			$selected_calendar_id_array = isset( $_POST[ 'event-category-calendar' ] ) ? $_POST[ 'event-category-calendar' ] : array();
+			foreach( $all_calendars_array as $calendar ) {
+				$calendar_id = $calendar->get_id();
+				if ( in_array( $calendar_id, $selected_calendar_id_array ) ) {
+					$calendar->add_event_category( $event_category );
+				} else {
+					$calendar->remove_event_category( $event_category );
+				} // endif
+			} // endfor
+			
 			// External names
 			$names_text = isset( $_POST[ 'event-category-ext-names' ] ) ? trim( $_POST[ 'event-category-ext-names' ] ) : NULL;
 			if ( isset( $names_text ) ) {

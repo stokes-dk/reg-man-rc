@@ -3,20 +3,22 @@
  */
 jQuery(document).ready(function($) {
 
-	$( '.reg-man-rc-admin-stats-view-container .reg-man-rc-stats-table-view' ).on( 'filter_changed', function( evt, year, category ) {
+	$( '.reg-man-rc-admin-stats-view-container .reg-man-rc-stats-table-view' ).on( 'filter_changed', function( evt, year, category, author ) {
 		var me = $( this );
 		var table = me.find( '.admin-stats-table' );
 		// Only re-load the table if the filter has changed since the last update
 		var curr_year = table.data( 'event_filter_year' );
 		var curr_category = table.data( 'event_filter_category' );
-		if ( ( curr_year !== year ) || ( curr_category !== category ) ) {
+		var curr_author = table.data( 'event_filter_author' );
+		if ( ( curr_year !== year ) || ( curr_category !== category ) || ( curr_author !== author ) ) {
 			table.data( 'event_filter_year', year );
 			table.data( 'event_filter_category', category );
+			table.data( 'event_filter_author', author );
 			table.trigger( 'load_datatable' );
 		} // endif
 	});
 
-	$( '.reg-man-rc-admin-stats-view-container .reg-man-rc-ajax-chart-view' ).on( 'filter_changed', function( evt, year, category ) {
+	$( '.reg-man-rc-admin-stats-view-container .reg-man-rc-ajax-chart-view' ).on( 'filter_changed', function( evt, year, category, author ) {
 		var me = $( this );
 		var ajax_form = me.find( '.reg-man-rc-get-chart-data-form' );
 		// Only re-load the chart if the filter has changed since the last update
@@ -24,10 +26,32 @@ jQuery(document).ready(function($) {
 		var curr_year = year_input.val();
 		var category_input = ajax_form.find( 'input[name="event_filter_category"]' );
 		var curr_category = category_input.val();
-		if ( ( curr_year !== year ) || ( curr_category !== category ) ) {
+		var author_input = ajax_form.find( 'input[name="event_filter_author"]' );
+		var curr_author = author_input.val();
+		if ( ( curr_year !== year ) || ( curr_category !== category ) || ( curr_author !== author ) ) {
 			year_input.val( year );
 			category_input.val( category );
+			author_input.val( author );
 			ajax_form.submit();
+		} // endif
+	});
+
+	$( '.reg-man-rc-admin-events-map-container' ).on( 'filter_changed', function( evt, year, category, author ) {
+		var me = $( this );
+		var form_id = me.data( 'map-marker-ajax-form-id' );
+		var ajax_form = $( '#' + form_id );
+		// Only re-load the map markers if the filter has changed since the last update
+		var year_input = ajax_form.find( 'input[ name="event_filter_year" ]' );
+		var curr_year = year_input.val();
+		var category_input = ajax_form.find( 'input[ name="event_filter_category" ]' );
+		var curr_category = category_input.val();
+		var author_input = ajax_form.find( 'input[name="event_filter_author"]' );
+		var curr_author = author_input.val();
+		if ( ( curr_year !== year ) || ( curr_category !== category ) || ( curr_author !== author ) ) {
+			year_input.val( year );
+			category_input.val( category );
+			author_input.val( author );
+			ajax_form.submit(); // This will trigger the map to go busy and load the markers via Ajax
 		} // endif
 	});
 
@@ -67,16 +91,15 @@ jQuery(document).ready(function($) {
 		var active_index = tabs_container.tabs( 'option', 'active' );
 		var tabs_panel = tabs_container.find( '.tab-panel' );
 		var active_panel = $( tabs_panel[ active_index ] );
-		active_panel.find( '.reg-man-rc-stats-table-view' ).trigger( 'load_event_stats', [ event_key ] );
+//		active_panel.find( '.reg-man-rc-stats-table-view' ).trigger( 'load_event_stats', [ event_key ] );
 		
 		// Load datatable, if there is one
 		var table = active_panel.find( '.admin-stats-table' );
-		if ( table.length > 0 ) {
 			// Only re-load the table if it's not already loaded
-			var curr_event = table.data( 'event-key' );
-	//		console.log( curr_event );
-			if ( curr_event != event_key ) {
-				table.data( 'event-key', event_key );
+		if ( table.length > 0 ) {
+			var curr_event_key = table.data( 'curr-event-key' );
+			if ( typeof curr_event_key == 'undefined' ) {
+				table.data( 'curr-event-key', event_key );
 				table.trigger( 'load_datatable' );
 			} // endif
 		} // endif
@@ -133,11 +156,13 @@ jQuery(document).ready(function($) {
 		var year = year_select.val();
 		var category_select = me.find( 'select[name="event_filter_category"]' );
 		var category = category_select.val();
+		var author_select = me.find( 'select[name="event_filter_author"]' );
+		var author = author_select.val();
 		var tabs_container = me.find( '.reg-man-rc-tabs-container' );
 		var active_index = tabs_container.tabs( 'option', 'active' );
 		var tabs_panel = tabs_container.find( '.tab-panel' );
 		var active_panel = $( tabs_panel[ active_index ] );
-		active_panel.find( '.event-filter-change-listener' ).trigger( 'filter_changed', [ year, category ] );
+		active_panel.find( '.event-filter-change-listener' ).trigger( 'filter_changed', [ year, category, author ] );
 	});
 	
 	$( '.reg-man-rc-admin-stats-view-container' ).on( 'tab-activated', function( evt ) {
@@ -156,12 +181,75 @@ jQuery(document).ready(function($) {
 		me.trigger( 'load_all_stats_data' );
 	});
 
+	$( '.reg-man-rc-admin-stats-view-container .reg-man-rc-stats-table-view.row-grouping-table-view' ).on( 'update-row-grouping', function( evt, datatable, row_group_column_class_name ) {
+		var me = $(this);
+
+		if ( row_group_column_class_name == '' ) {
+
+			// This means turn off grouping
+			datatable.rowGroup().disable();
+			datatable.draw();
+
+		} else {
+			
+			var column = datatable.column( '.' + row_group_column_class_name );
+			var index = column.index();
+	
+			datatable.rowGroup().enable();
+			datatable.rowGroup().dataSrc( index );
+			datatable.order( [ index, 'asc' ], [ 0, 'asc' ] ); // Always include the first column (e.g. name)
+			datatable.draw();
+			
+		} // endif
+	});
+
+
 	$( '.admin-stats-table' ).on( 'init-datatable', function( evt ) {
 		var me = $(this);
+
+		var export_file_name = me.data( 'export-file-name' );
+		var print_page_title = me.data( 'print-page-title' );
+		export_file_name = ( typeof export_file_name === 'undefined' ) ? __( 'Repair Café Data Export', 'reg-man-rc' ) : export_file_name;
+		print_page_title = ( typeof print_page_title === 'undefined' ) ? __( 'Repair Café Data', 'reg-man-rc' ) : print_page_title;
+
+		var supplemental_button_class =  me.data( 'supplemental-data-button-class' );
+		var is_include_suppl_data_button = ( typeof supplemental_button_class !== 'undefined' );
+
+		var import_button_class =  me.data( 'import-data-button-class' );
+		var is_include_import_button = ( typeof import_button_class !== 'undefined' );
+
+		var email_button_class =  me.data( 'email-list-button-class' );
+		var is_include_email_button = ( typeof email_button_class !== 'undefined' );
+
+		var row_group_column_class_name = me.data( 'row-group-column-class-name' );
+		var is_allow_row_grouping = ( typeof row_group_column_class_name !== 'undefined' );
+
 		var datatable_args = { };
+// FIXME - testing responsive - not working, do we need to add a column?
+		datatable_args.responsive = true;
+		
 		var view_container = me.closest( '.reg-man-rc-stats-table-view' );
 
-		datatable_args.initComplete = function( settings, json ) { me.addClass( 'datatable-init-complete' ); };
+		datatable_args.initComplete = function( settings, json ) {
+			me.addClass( 'datatable-init-complete' );
+			if ( is_allow_row_grouping ) {
+				var datatable = this.api(); // This is how you're supposed to get the table!
+				me.trigger( 'update-row-grouping', [ datatable, row_group_column_class_name ] ); // update the row grouping
+			} // endif
+		};
+		
+		if ( is_allow_row_grouping ) {
+			// To allow row grouping, the arguments MUST include rowGroup.  It can't be enabled later
+			datatable_args.rowGroup = {
+				// We need to update the correct column during init, doing it here does not work properly
+				startRender: function ( rows, group ) {
+					/* Translators: %1$s is a row group heading, %2$s is a count of rows in that group*/
+					var group_heading_format = __( '%1$s (%2$s)', 'reg-man-rc' );
+					return sprintf( group_heading_format, group, rows.count() );
+				} // endif
+			};
+		} // endif
+		
 		datatable_args.dom = 'lBfrtip'; // Default 'lfrtip';
 		datatable_args.stateSave = true; // Save the user's state between visits
 		
@@ -204,17 +292,23 @@ jQuery(document).ready(function($) {
 			);
 		} // endif
 		
-		var column_vis_button_text = __( 'Columns', 'reg-man-rc' );
+		var icon_format =
+			'<span class="reg-man-rc-icon-text-container">' + 
+				'<span class="icon dashicons dashicons-%2$s"></span>' + 
+				'<span class="text">%1$s</span>' + 
+			'</span>';
+
+		var column_vis_button_text = sprintf( icon_format, __( 'Columns', 'reg-man-rc' ), 'columns' );
 		var column_vis_button_title = __( 'Select which columns are visible in the table', 'reg-man-rc' );
 
-		var copy_button_text = __( 'Copy', 'reg-man-rc' );
-		var copy_button_title = __( 'Copy the table contents to your clipboard', 'reg-man-rc' );
+		var refresh_button_text = sprintf( icon_format, __( 'Refresh', 'reg-man-rc' ), 'update' );
+		var refresh_button_title = __( 'Refresh the table contents', 'reg-man-rc' );
 
-		var csv_button_text = __( 'Export', 'reg-man-rc' );
-		var csv_button_title = __( 'Export the table contents to a CSV file', 'reg-man-rc' );
-
-		var print_button_text = __( 'Print', 'reg-man-rc' );
+		var print_button_text = sprintf( icon_format, __( 'Print', 'reg-man-rc' ), 'printer' );
 		var print_button_title = __( 'Print the table contents', 'reg-man-rc' );
+		
+		var csv_button_text = sprintf( icon_format, __( 'Export', 'reg-man-rc' ), 'database-export' );
+		var csv_button_title = __( 'Export the table contents to a CSV file', 'reg-man-rc' );
 
 		datatable_args.buttons = [
 			{
@@ -224,9 +318,17 @@ jQuery(document).ready(function($) {
 				columns		: ':not(.always-hidden)'
 			},
 			{
-				extend		: 'copy',
-				text		: copy_button_text,
-				titleAttr	: copy_button_title,
+				text		: refresh_button_text,
+				titleAttr	: refresh_button_title,
+				action		: function( e, dt, node, config ) {
+					me.trigger( 'load_datatable' );
+				}
+			},
+			{
+				extend		: 'print',
+				text		: print_button_text,
+				titleAttr	: print_button_title,
+				title		: print_page_title,
 				exportOptions: {
 					columns: ':visible'
 				},
@@ -235,32 +337,59 @@ jQuery(document).ready(function($) {
 				extend		: 'csv',
 				text		: csv_button_text,
 				titleAttr	: csv_button_title,
+				filename	: export_file_name,
 				exportOptions: {
-					columns: ':visible'
+					columns: [ ':visible', '.always-export' ]
 				},
 			},
-			{
-				extend		: 'print',
-				text		: print_button_text,
-				titleAttr	: print_button_title,
-				exportOptions: {
-					columns: ':visible'
-				},
-			},
-			{
-				text: 'Refresh',
-				action: function( e, dt, node, config ) {
-					me.trigger( 'load_datatable' );
-				}
-			}
 		];
+
+		// Import
+		if ( is_include_import_button ) {
+			var import_button_text = sprintf( icon_format, __( 'Import&hellip;', 'reg-man-rc' ), 'database-import' );
+			var import_button_title = __( 'Import data from a CSV file', 'reg-man-rc' );
+			datatable_args.buttons.push({
+					text		: import_button_text,
+					titleAttr	: import_button_title,
+					className	: import_button_class,
+			});
+		} // endif
+
+		// Supplemental Data
+		if ( is_include_suppl_data_button ) {
+			var supplemental_button_text = sprintf( icon_format, __( 'Supplemental&hellip;', 'reg-man-rc' ), 'database-add' );
+			var supplemental_button_title = __( 'Change the supplemental data for this table', 'reg-man-rc' );
+			datatable_args.buttons.push({
+					text		: supplemental_button_text,
+					titleAttr	: supplemental_button_title,
+					className	: supplemental_button_class,
+			});
+		} // endif
+		
+		// Email button
+		if ( is_include_email_button ) {
+			var email_button_text = sprintf( icon_format, __( 'Emails&hellip;', 'reg-man-rc' ), 'email-alt' );
+			var email_button_title = __( 'Show the list of volunteer emails for this event', 'reg-man-rc' );
+			datatable_args.buttons.push({
+					text		: email_button_text,
+					titleAttr	: email_button_title,
+					className	: email_button_class,
+			});
+		} // endif
+		
+		// Create the datatable
 		var my_data_table = me.DataTable( datatable_args );
+		
+		// Store the datatable object for later reference
+		me.data( 'my-datatable', my_data_table );
+		
 		me.on( 'datatable-replace-data', function( evt, new_data ) {
 			my_data_table.clear();
 			my_data_table.rows.add( new_data );
 			my_data_table.columns.adjust();
 			my_data_table.draw();
 		});
+		
 		me.on( 'load_datatable', function( evt ) {
 			view_container.addClass( 'reg-man-rc-table-loading' );
 			my_data_table.search( '' );
@@ -269,104 +398,31 @@ jQuery(document).ready(function($) {
 				'dataType'	: 'json',
 				'data' : {
 					'action'				: me.data( 'ajax-action' ),
+					'_wpnonce' 				: me.data( 'ajax-nonce' ),
 					'table_type'			: me.data( 'table-type' ),
 					'group_by'				: me.data( 'group-by' ),
 					'event_filter_year'		: me.data( 'event_filter_year' ),
 					'event_filter_category'	: me.data( 'event_filter_category' ),
+					'event_filter_author'	: me.data( 'event_filter_author' ),
 					'event_key'				: me.data( 'event-key' )
 				}
 			}).done( function( result ) {
-				me.trigger( 'datatable-replace-data', [ result.data ] );
+				if ( result.error ) {
+					alert( result.error );
+				} else {
+					me.trigger( 'datatable-replace-data', [ result.data ] );
+				} // endif
 			}).fail( function( jqXHR, textStatus, error ) {
 				console.log( 'Admin stats table Ajax load failed, text status: ' + textStatus + ', error: ' + error );
 			}).always( function( ) {
 				view_container.removeClass( 'reg-man-rc-table-loading' );
 			});
 		});
-		me.data( 'my-datatable', my_data_table );
+		
 	});
 	$( '.admin-stats-table' ).trigger( 'init-datatable' );
 
-/*
-	$( '.admin-stats-table.events-admin-table' ).trigger( 'init-datatable', [{
-		'columnDefs' : [
-			{
-				'targets'	: 'num-with-empty-placeholder', //[ 5 ],
-				'className'	: 'dt-body-right',
-				'type'		: 'num-with-empty-placeholder'
-			},
-			{
-				'targets'		: 'event-date-text', // Order the date column using data from Date ISO 8601
-				'orderData'		: 8 // 'event-date-iso-8601' - Note that orderData ONLY accepts a column index, not name
-			},
-			{
-				'targets'		: 'event-date-iso-8601', // Hide the Date ISO 8601
-				'visible'		: false,
-				'searchable'	: false,
-			},
-		]
-	}] );
-	$( '.admin-stats-table.items-admin-table' ).trigger( 'init-datatable', [{
-		'columnDefs' : [
-			{
-				'targets'		: 'event-date-text', //1, // Order the date column using data from Date ISO 8601
-				'orderData'		: 7 // 'event-date-iso-8601' - Note that orderData ONLY accepts a column index, not name
-			},
-			{
-				'targets'		: 'event-date-iso-8601', // Hide the Date ISO 8601
-				'visible'		: false,
-				'searchable'	: false,
-			},
-		]
-	}] );
-	$( '.admin-stats-table.vol-reg-admin-table' ).trigger( 'init-datatable', [{
-		'columnDefs' : [
-			{
-				'targets'		: 1, // Order the event column using data from Date ISO 8601
-				'orderData'		: 7
-			},
-			{
-				'targets'		: 7, // Hide the Date ISO 8601
-				'visible'		: false,
-				'searchable'	: false,
-			},
-		]
-	}] );
-	$( '.admin-stats-table.visitors-admin-table' ).trigger( 'init-datatable', [{
-		'columnDefs' : [
-			{
-				'targets'		: 1, // Order the event column using data from Date ISO 8601
-				'orderData'		: 6
-			},
-			{
-				'targets'		: 6, // Hide the Date ISO 8601
-				'visible'		: false,
-				'searchable'	: false,
-			},
-		]
-	}] );
-	$( '.admin-stats-table.items-fixed-admin-table' ).trigger( 'init-datatable', [{
-		'columnDefs' : [
-			{
-				'targets'	: [ 3, 4, 5, 6, 7, 8, 9 ],
-				'className'	: 'dt-body-right'
-			},
-			{
-				'targets'	: [ 7, 10 ], // Hide these, user can make visible with colvis
-				'visible'	: false,
-			},
-			{
-				'targets'	: [ 10 ],
-				'sortable'	: false,
-				'className'	: 'dt-body-center'
-			},
-			{
-				'targets'	: [ 8, 9 ],
-				'type'		: 'num-with-empty-placeholder'
-			}
-		]
-	}] );
-*/
+
 	$.fn.dataTableExt.oSort[ 'num-with-empty-placeholder-asc' ] = function( x, y ) {
 		var result;
 		// Convert everything to a string (like null) and remove commas in numbers like 1,432
@@ -400,6 +456,7 @@ jQuery(document).ready(function($) {
 		} // endif
 		return result;
 	};
+	
 	$( '.reg-man-rc-admin-stats-view-container .reg-man-rc-stats-table-view.items-fixed-table .group-by-select' ).on( 'change', function( evt ) {
 		var me = $(this);
 		var container = me.closest( '.reg-man-rc-stats-table-view' ); // container for select + table
@@ -408,20 +465,24 @@ jQuery(document).ready(function($) {
 		table.trigger( 'load_datatable' );
 	});
 
-	$( '.reg-man-rc-admin-events-map-container' ).on( 'filter_changed', function( evt, year, category ) {
-		var me = $( this );
-		var form_id = me.data( 'map-marker-ajax-form-id' );
-		var ajax_form = $( '#' + form_id );
-		// Only re-load the map markers if the filter has changed since the last update
-		var year_input = ajax_form.find( 'input[ name="event_filter_year" ]' );
-		var curr_year = year_input.val();
-		var category_input = ajax_form.find( 'input[ name="event_filter_category" ]' );
-		var curr_category = category_input.val();
-		if ( ( curr_year !== year ) || ( curr_category !== category ) ) {
-			year_input.val( year );
-			category_input.val( category );
-			ajax_form.submit(); // This will trigger the map to go busy and load the markers via Ajax
-		} // endif
+	$( '.reg-man-rc-admin-stats-view-container .reg-man-rc-stats-table-view.row-grouping-table-view .group-by-select' ).on( 'change', function( evt ) {
+		var me = $(this);
+		var row_group_column_class_name = me.val(); // The value is the class name for the column to group
+		
+		var container = me.closest( '.reg-man-rc-stats-table-view' ); // container for select + table
+		var table = container.find( '.admin-stats-table' ); // the actual table
+		var datatable = table.data( 'my-datatable' );
+		
+		me.trigger( 'update-row-grouping', [ datatable, row_group_column_class_name ] );
+
 	});
-	
+
+	$( '.reg-man-rc-admin-stats-view-container .reg-man-rc-stats-table-view.items-fixed-table .group-by-select' ).on( 'change', function( evt ) {
+		var me = $(this);
+		var container = me.closest( '.reg-man-rc-stats-table-view' ); // container for select + table
+		var table = container.find( '.admin-stats-table' ); // the actual table
+		table.data( 'group-by', me.val() );
+		table.trigger( 'load_datatable' );
+	});
+
 });

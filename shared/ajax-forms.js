@@ -57,6 +57,11 @@ jQuery(document).ready(function($) {
 		var listener = me.data( 'ajax-form-listener' );
 		listener.trigger( evt, [ response ] );
 	});
+	$( '.reg-man-rc-ajax-footer-form' ).on( 'msg-arrival', function( evt, msg_array, is_error ) {
+		var me = $( this );
+		var listener = me.data( 'ajax-form-listener' );
+		listener.trigger( evt, [ msg_array, is_error ] );
+	});
 	
 	$( '.reg-man-rc-ajax-form' ).on( 'submit', function( evt ) {
 		evt.preventDefault(); // we will do the submit via ajax
@@ -104,6 +109,7 @@ jQuery(document).ready(function($) {
 //					} // endif
 					form.trigger( 'submit-response-returned', [ response, jqXHR, textStatus ] );
 				}).fail( function( jqXHR, textStatus, error ) {
+					// TODO This message should be translatable and this js file should be translated
 					console.log( 'Ajax submit form failed, text status: ' + textStatus + ', error: ' + error );
 					form.trigger( 'submit-fail', [ jqXHR, textStatus, error ] );
 				}).always( function( ) {
@@ -283,109 +289,10 @@ jQuery(document).ready(function($) {
 			} // endif
 		} //endfor
 	});
-	$('.reg-man-rc-ajax-form').on('click', '.ajax-form-message-container .message-close', function(evt) {
+	$( '.reg-man-rc-ajax-form' ).on( 'click', '.ajax-form-message-container .message-close', function( evt ) {
 		var targetMsg = $(evt.target).closest('.ajax-form-message-container'); // Get the message container where the click occurred
 		targetMsg.remove();
 	});
 	
-	
-	
-	// Validation
-	$('.form-input-list .input-item').on('remove-error', function() {
-		$(this).removeClass('error').find('.error-container').html('');						
-	});
-	
-	$('.reg-man-rc-js-validation').submit(function(evt) {
-		var result = $(this).triggerHandler('reg-man-rc-validate-form');
-		if (result === false) evt.preventDefault(); // don't submit the form when there are errors
-	});
-	$('.reg-man-rc-js-validation').on('reg-man-rc-validate-form', function() {
-		// This handler returns a boolean value!  true if the form validates without error, false on errors
-		// NOTE that it is meant to be called using triggerHandler() as above to get the function result
-		// Note also that when you use triggerHandler the event does not bubble up the DOM so you can check just one part
-		//  of a larger form, as is the case with the visitor registration form split into accordion sections
-		var me = $(this);
-		me.find('.input-item.error').trigger('remove-error'); // clear old errors if any
-		me.triggerHandler('js-additional-verification'); // visitor survey listens for this, it will add any errors it finds
-		var requiredItems = me.find('.input-item.required');
-		var errMsg;
-		requiredItems.each(function(index, item) {
-			errMsg = '';
-			var reqItem = $(item);
-			if (reqItem.hasClass('radio-group')) {
-				var checked = reqItem.find('input:checked');
-				if (checked.length == 0) {
-					errMsg = __('Please select an option', 'reg-man-rc');
-					reqItem.find('input:radio').on('change', function() {
-						reqItem.trigger('remove-error');
-					});
-				} else if (checked.hasClass('custom')) {
-					var customInput = reqItem.find('.radio-custom-input');
-					if ($.trim(customInput.val()) == '') {
-						errMsg = __('This field is required', 'reg-man-rc');
-						reqItem.find('input:radio').on('change', function() {
-							reqItem.trigger('remove-error');
-						});
-						customInput.on('input', function() {
-							reqItem.trigger('remove-error');
-						});
-					} // endif
-				} // endif
-			} else if (reqItem.hasClass('check-list')) {
-				var checked = reqItem.find('input:checked');
-				if (checked.length == 0) {
-					errMsg = __('This field is required', 'reg-man-rc');
-					reqItem.find('input:checkbox').on('change', function() {
-						reqItem.trigger('remove-error');
-					});
-				} else if (checked.hasClass('custom')) {
-					var customInput = reqItem.find('.checkbox-custom-input');
-					if ($.trim(customInput.val()) == '') {
-						errMsg = __('This field is required', 'reg-man-rc');
-						reqItem.find('input:checkbox').on('change', function() {
-							reqItem.trigger('remove-error');
-						});
-						customInput.on('input', function() {
-							reqItem.trigger('remove-error');
-						});
-					} // endif
-				} // endif
-			} else {
-				if (reqItem.hasClass('textarea')) {
-					var input = reqItem.find('textarea');
-				} else {
-					var input = reqItem.find('input');
-					if (input.length == 0) input = reqItem.find('select'); // no input look for select 
-				} // endif
-				if ($.trim(input.val()) == '') {
-					errMsg = __('This field is required', 'reg-man-rc');
-					input.on('input', function() {
-						reqItem.trigger('remove-error');
-					});
-				} // endif
-			} // endif
-			if (errMsg != '') {
-				reqItem.addClass('error');
-				reqItem.find('> .error-container').html(errMsg);
-			} // endif
-		}); // end each required item
-		var errorInputs = me.find('.input-item.error');
-		var result;
-		if (errorInputs.length != 0) {
-			errorInputs.first().find('input').focus();
-			if (me.hasClass('auto-scroll-to-error-input')) {
-				// Scroll the view so that we are showing the first error
-				var offset = errorInputs.first().offset(); // Contains .top and .left
-				$('html, body').animate({
-						scrollTop: (offset.top - 20),
-						scrollLeft: (offset.left - 20) // we shouldn't actually have any horizontal scroll
-				});
-			} // endif
-			// me.trigger('.reg-man-rc-js-validation-failure'); // DO I need event to indicate this has failed?
-			result = false;
-		} else {
-			result = true;
-		} // endif
-		return result;
-	});
+
 });

@@ -143,11 +143,7 @@ class Item_Suggestion_Admin_Controller {
 					$item_type = $item_suggestion->get_item_type();
 					if ( empty( $station ) ) {
 						$item_suggestion->set_fixer_station( NULL );
-						// If the item type has a default fixer station then we'll just use that
-						// Otherwise we'll tell the uesr that this is missing
-						if ( ! isset( $item_type) || ( $item_type->get_fixer_station() === NULL ) ) {
-							$set_post_status_draft = TRUE;
-						} // endif
+						$set_post_status_draft = TRUE;
 					} else {
 						$item_suggestion->set_fixer_station( $station );
 					} // endif
@@ -187,15 +183,15 @@ class Item_Suggestion_Admin_Controller {
 			if ( ! empty( $item_suggestion ) ) {
 
 				$error_format = '<div class="error below-h2"><p>%s</p></div>';
-
-				if ( empty( $item_suggestion->get_item_type() ) ) {
+				
+				if ( empty( $item_suggestion->get_item_type() ) && ! empty( Item_Type::get_all_item_types() ) ) {
 					printf( $error_format, esc_html__( __( 'Item type is required.', 'reg-man-rc' ) ) );
 				} // endif
-/*
-				if ( empty( $item->get_fixer_station() ) ) {
+
+				if ( empty( $item_suggestion->get_fixer_station() ) ) {
 					printf( $error_format, esc_html__( __( 'Fixer station is required.', 'reg-man-rc' ) ) );
 				} // endif
-*/
+
 			} // endif
 
 		} // endif

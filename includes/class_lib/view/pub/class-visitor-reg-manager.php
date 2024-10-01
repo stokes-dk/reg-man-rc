@@ -13,8 +13,9 @@ use Reg_Man_RC\Control\Template_Controller;
 use Reg_Man_RC\Model\Calendar;
 use Reg_Man_RC\View\Calendar_View;
 use Reg_Man_RC\View\Event_View;
-use Reg_Man_RC\Model\Fixer_Station;
-use Reg_Man_RC\View\Editable\Editable_Fixer_Station;
+use Reg_Man_RC\Control\User_Role_Controller;
+use Reg_Man_RC\View\Form_Input_List;
+use Reg_Man_RC\View\Ajax_Form;
 
 /**
  * The visitor registration manager user interface
@@ -25,21 +26,13 @@ use Reg_Man_RC\View\Editable\Editable_Fixer_Station;
  *
  */
 class Visitor_Reg_Manager {
+	
 	/** The slug for the visitor registration manager page */
 	const DEFAULT_PAGE_SLUG = 'rc-reg';
 
 	const POST_ID_OPTION_KEY = 'reg-man-rc-reg-man-page-post-id';
 
-	/** The shortcode used to render the visitor registration manager on any page */
-	const SHORTCODE = 'rc-visitor-reg-manager';
-
 	private $event; // the currently selected event, if any
-
-	// FIXME - not used
-//	private static $IS_REG_MANAGER_PAGE; // A flag to indicate whether the current page is this page
-
-	// FIXME - not used
-//	private static $PAGE_URL; // The permalink for this page
 
 	private static $VISITOR_REG_PAGE_POST; // The post containing the visitor registration page
 
@@ -57,24 +50,6 @@ class Visitor_Reg_Manager {
 		return $result;
 	} // function
 
-	/**
-	 * Get a boolean flag indicating whether the current page is the virtual page for the registration manager
-	 * @return	boolean		TRUE if the current page is the virtual page for the registration manager, FALSE otherwise
-	 */
-/* FIXME - not used
-	public static function get_is_registration_manager_page() {
-		if ( ! isset( self::$IS_REG_MANAGER_PAGE ) ) {
-			global $post;
-			$my_post_id = get_option( self::POST_ID_OPTION_KEY ); // get the post id for my page
-//			Error_Log::var_dump( $post->ID, $my_post_id );
-
-			self::$IS_REG_MANAGER_PAGE = ( $my_post_id !== FALSE ) && ( $my_post_id == $post->ID );
-
-		} // endif
-		return self::$IS_REG_MANAGER_PAGE;
-	} // function
-*/
-	
 	/**
 	 * Get the currently selected event
 	 * @return	\Reg_Man_RC\Model\Event	An event instance if a valid one was specified in the GET arguments, NULL otherwise
@@ -103,16 +78,37 @@ class Visitor_Reg_Manager {
 	public function render() {
 
 		if ( ! is_user_logged_in() ) { //user is NOT logged in, show the login form
-			echo '<h2 class="login-title">' . __('You must be logged in to use this page', 'reg-man-rc') . '</h2>';
+			
+			echo '<h2 class="login-title">' . __( 'You must be logged in to use this page', 'reg-man-rc' ) . '</h2>';
 			echo '<div class="login-form-container">';
 				wp_login_form();
 			echo '</div>';
+			
 		} else { // User is logged in so show the page content
-			$this->render_view_content();
+
+			if ( ! self::get_can_current_user_access_visitor_registration_manager() ) {
+
+				// User is logged in BUT does not have capability to create items
+				echo '<h2 class="login-title">' . 
+						__( 'You are not authorized to register visitors', 'reg-man-rc' ) .
+					'</h2>';
+
+			} else {
+				
+				// User is logged in and has capability so show the page content
+				$this->render_view_content();
+
+			} // endif
 		} // endif
 
 	} // function
 
+	public static function get_can_current_user_access_visitor_registration_manager() {
+		$capability = 'publish_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL;
+		$result = current_user_can( $capability );
+		return $result;
+	} // function
+	
 	/**
 	 * Render the visitor registration manager view contents
 	 *
@@ -124,96 +120,122 @@ class Visitor_Reg_Manager {
 	 */
 	private function render_view_content() {
 		echo '<div class="visitor-reg-manager-container">';
+		
 		// If there is an event in the GET args then show that event's registration.  Otherwise show the event select
 		$event = $this->get_event();
 		if ( ( $event === NULL ) || ( $event === FALSE ) ) {
 			// If there's no event then we need to get one
 
-			$action = esc_url( admin_url('admin-post.php') );
-			echo "<form action=\"$action\" method=\"POST\" class=\"visitor-reg-manager-event-select-form\">";
-				echo '<input type="hidden" name="action" value="' . Visitor_Registration_Controller::EVENT_SELECT_FORM_POST_ACTION . '">'; // required for admin-post
-				self::render_event_select( );
-			echo '</form>';
-//			if (self::getIsStandaloneServer()) { // these are forms so must be rendered outside above form
-//				self::renderStandaloneDownloadEventsDialog();
-//				self::renderStandaloneCreateEventDialog();
-//			} // endif
+			self::render_event_selection_display( );
+
 		} else {
+			
 			// The person has selected an event
-			$event_date = $event->get_start_date_time_object();
-			$today = new \DateTime( 'now', wp_timezone() );
-			$diff = ( $event_date !== NULL ) ? $event_date->diff( $today ) : -1;
-			if ( $diff->days !== 0 ) {
-				$date_format = get_option('date_format');
-				$event_date_text = ( $event_date !== NULL ) ? $event_date->format( $date_format ) : __( 'Event Date Missing', 'reg-man-rc' );
-				$today_text = $today->format( $date_format );
-//				$launch_url = site_url( Settings::get_registration_manager_page_slug() );
-				$launch_url = self::get_page_permalink();
-				$link_text = __( 'Visitor Registration Manager', 'reg-man-rc' );
-				$link = "<a href=\"$launch_url\">$link_text</a>";
+			$can_register = $event->get_is_current_user_able_to_register_items();
+			
+			if ( ! $can_register ) {
+				
+				self::render_event_display( $event );
 
-				/* translators: %s is replaced with a date */
-				$msg = '<p>' . sprintf( __( 'The event you selected is scheduled for: <b>%s</b>', 'reg-man-rc' ), $event_date_text) . '</p>';
-				/* translators: %s is replaced with a date */
-				$msg .= '<p>' . sprintf( __('Today\'s date is: %s', 'reg-man-rc' ), $today_text) . '</p>';
-				$msg .= '<p>' . __( 'Please make sure you have selected the right event', 'reg-man-rc' ) . '</p>';
-				/* translators: %s is replaced with a link to a different page */
-				$msg .= '<p>' . sprintf( __('To choose a different event go here: %s', 'reg-man-rc'), $link ) . '</p>';
-				$title = __( 'Warning: Check Event Date', 'reg-man-rc' );
-				echo "<div class=\"form-user-message-dialog\" title=\"$title\">$msg</div>";
+			} else {
+				
+				$event_date = $event->get_start_date_time_object();
+				$today = new \DateTime( 'now', wp_timezone() );
+				$diff = ( $event_date !== NULL ) ? $event_date->diff( $today ) : NULL;
+				if ( ! isset( $diff) || ( $diff->days !== 0 ) ) {
+					$date_format = get_option('date_format');
+					$event_date_text = ( $event_date !== NULL ) ? $event_date->format( $date_format ) : __( 'Event Date Missing', 'reg-man-rc' );
+					$today_text = $today->format( $date_format );
+					$launch_url = self::get_page_permalink();
+					$link_text = __( 'Visitor Registration Manager', 'reg-man-rc' );
+					$link = "<a href=\"$launch_url\">$link_text</a>";
+	
+					/* translators: %s is replaced with a date */
+					$msg = '<p>' . sprintf( __( 'The event you selected is scheduled for: <b>%s</b>', 'reg-man-rc' ), $event_date_text) . '</p>';
+					/* translators: %s is replaced with a date */
+					$msg .= '<p>' . sprintf( __('Today\'s date is: %s', 'reg-man-rc' ), $today_text) . '</p>';
+					$msg .= '<p>' . __( 'Please make sure you have selected the right event', 'reg-man-rc' ) . '</p>';
+					/* translators: %s is replaced with a link to a different page */
+					$msg .= '<p>' . sprintf( __('To choose a different event go here: %s', 'reg-man-rc'), $link ) . '</p>';
+					$title = __( 'Warning: Check Event Date', 'reg-man-rc' );
+					echo "<div class=\"form-user-message-dialog\" title=\"$title\">$msg</div>";
+				} // endif
+	
+				// Render the data for autocomplete of items (used by registration dialog and add item to visitor)
+				echo '<script class="visitor-reg-item-autocomplete-data" type="application/json">'; // json data for autocomplete
+					$suggestion_array = Item_Suggestion::get_item_autocomplete_suggestions();
+					echo json_encode( $suggestion_array );
+				echo '</script>';
+
+				self::render_event_display( $event );
+				
+				echo '<div class="reg-man-rc-swappable-container">';
+					
+					// Registration List
+					echo '<div class="reg-man-rc-swappable-element reg-man-rc-visitor-reg-list-container">';
+						self::render_registration_list( $event );
+					echo '</div>';
+
+					// Add Visitor form
+					echo '<div class="reg-man-rc-swappable-element reg-man-rc-visitor-add-visitor-container">';
+						$form = Visitor_Reg_Ajax_Form::create( $event );
+						$form->render();
+					echo '</div>';
+
+					// Add Visitor details (add item to visitor)
+					echo '<div class="reg-man-rc-swappable-element reg-man-rc-visitor-details-container">';
+						$form = Single_Visitor_Details_View::create( $event );
+						$form->render();
+					echo '</div>';
+					
+					// Add item details (update item) 
+					echo '<div class="reg-man-rc-swappable-element reg-man-rc-item-details-container">';
+						$form = Single_Item_Details_View::create();
+						$form->render();
+					echo '</div>';
+					
+					// Thank you dialog
+					self::render_registration_thank_you_message_dialog();
+		
+		
+		//			self::render_add_item_to_visitor_dialog( $event );
+		//			$this->renderSurveyDialog($event);
+		//			$this->renderSurveyThankYouMessageDialog();
+
+				echo '</div>';
+
 			} // endif
-
-			// Render the data for autocomplete of items (used by registration dialog and add item to visitor)
-			echo '<script class="visitor-reg-item-autocomplete-data" type="application/json">'; // json data for autocomplete
-				$suggestion_array = Item_Suggestion::get_item_autocomplete_suggestions();
-				echo json_encode( $suggestion_array );
-			echo '</script>';
-
-			// render the list and all the dialogs etc.
-			self::render_event_display( $event );
-			self::render_registration_list( $event );
-			self::render_registration_dialog( $event );
-			self::render_registration_thank_you_message_dialog();
-
-//			$this->renderIsFixedDialog($event);
-
-			self::render_add_item_to_visitor_dialog( $event );
-//			$this->renderSurveyDialog($event);
-//			$this->renderSurveyThankYouMessageDialog();
-
+	
 		} // endif
+
 		echo '</div>';
+
 	} // function
 
 
-	private function render_event_select() {
+	private function render_event_selection_display() {
 
-		if ( Settings::get_is_visitor_registration_event_select_using_calendar() ) {
+		$calendar_view = Calendar_View::create_for_visitor_registration_calendar();
+		$calendar_view->render();
 
-			$calendar_view = Calendar_View::create_for_visitor_registration_calendar();
-			$calendar_view->render();
-
-		} else {
-
-			$input_list = \Reg_Man_RC\View\Form_Input_List::create();
-			$label = __( 'Register visitors for this event', 'reg-man-rc' );
-			$hint = __( 'Select the event then press the button to start registering visitors.', 'reg-man-rc' );
-
-			$input_name = 'event-select';
-			$classes = '';
-			$selected_event_key = '';
-			$calendar = Calendar::get_visitor_registration_calendar();
-			ob_start();
-				Event_View::render_event_select( $input_name, $classes, $calendar, $selected_event_key );
-			$html = ob_get_clean();
-			$input_list->add_custom_html_input( $label, 'event-select-custom-input', $html, $hint );
-
-			$input_list->render();
-
-			$buttonText = __('Launch Visitor Registration', 'reg-man-rc');
-			echo '<div class="form-input-buttons">';
-				echo '<button type="submit" class="form-button reg-manager-launch" name="reg-manager-launch">' . $buttonText . '</button>';
+		if ( current_user_can( 'create_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+		
+			echo '<div class="reg-man-rc-visitor-reg-event-not-on-calendar">';
+				$heading = __( 'If the event is not on the calendar', 'reg-man-rc' );
+				echo '<h2>' . $heading . '</h2>';
+				echo '<p>';
+//					echo __( 'Add an event', 'reg-man-rc' );
+//				echo '</p>';
+//				echo '<p>';
+					$button_text = __( 'Add Event&hellip;', 'reg-man-rc' );
+					$button_label = $button_text;
+					echo '<button class="reg-man-rc-button visitor-reg-add-event">' . $button_label . '</button>';
+				echo '</p>';
+				
+				self::render_add_event_dialog();
+				
 			echo '</div>';
+			
 		} // endif
 	} // function
 
@@ -222,18 +244,39 @@ class Visitor_Reg_Manager {
 	 * @param	Event	$event
 	 */
 	private static function render_event_display( $event ) {
+		
 		// Add the event date and title to the specified input list as well as a hidden input for its key
-		$event_key = ($event !== NULL) ? $event->get_key() : NULL;
+		$event_key = ($event !== NULL) ? $event->get_key_string() : NULL;
 		echo '<input type="hidden" name="hidden-event-key" value="' . $event_key . '">'; // we need this again later
-		$name = $event->get_label();
-		$date_time = $event->get_end_date_time_local_timezone_object();
-		$date_format = get_option('date_format');
-		$date_text = ($date_time !== NULL) ? $date_time->format($date_format) : __( 'Event date missing', 'reg-man-rc' );
-//		$launch_url = site_url( Settings::get_registration_manager_page_slug() );
+		$event_label = $event->get_label(); // This includes the date
 		$launch_url = self::get_page_permalink();
-		$link_text = __( '(change event)', 'reg-man-rc' );
-		$change_event = "<a class=\"change-event-link\" href=\"$launch_url\">$link_text</a>";
-		echo "<div class=\"form-event-display\">$date_text : $name $change_event</div>";
+
+		$event_display_format = '<h2 class="visitor-reg-manager-event-display">%1$s</h2>';
+		
+		if ( $event->get_is_current_user_able_to_register_items() ) {
+
+//			$link_text = _x( '(change)', 'Text for a link to change events', 'reg-man-rc' );
+//			$change_event = "<a class=\"change-event-link\" href=\"$launch_url\">$link_text</a>";
+
+			echo '<div class="visitor-reg-manager-event-header">';
+				echo '<h2 class="visitor-reg-manager-event-display">' . $event_label . '</h2>';
+//				echo $change_event;
+			echo '</div>';
+			
+		} else {
+
+			printf( $event_display_format, $event_label );
+			
+			$link_text = __( 'Please select another event', 'reg-man-rc' );
+			$change_event = "<a class=\"change-event-link\" href=\"$launch_url\">$link_text</a>";
+
+			/* Translators: %1$s is is a link to choose a different event */
+			$format = __( 'You are not authorized to register visitors for this event.  %1$s', 'reg-man-rc' );
+			
+			printf( $format, $change_event );
+			
+		} // endif
+				
 	} // function
 
 	/**
@@ -246,15 +289,65 @@ class Visitor_Reg_Manager {
 			$list->render();
 		echo '</div>';
 	} // endif
-
-	private static function render_registration_dialog( $event ) {
-		$title = __( 'Visitor Registration', 'reg-man-rc' );
-		echo "<div class=\"visitor-reg-dialog dialog-container\" title=\"$title\">";
-			$form = Visitor_Reg_Ajax_Form::create( $event );
-			$form->render();
+	
+	private static function render_add_event_dialog() {
+		$title = __( 'Add Event', 'reg-man-rc' );
+		echo "<div class=\"visitor-reg-add-event-dialog dialog-container\" title=\"$title\">";
+		
+			$input_list = Form_Input_List::create();
+			$input_list->set_required_inputs_flagged( FALSE );
+			
+			$label = __( 'Event title', 'reg-man-rc' );
+			$name = 'event-title';
+			$val = '';
+			$hint = '';
+			$classes = '';
+			$is_required = TRUE;
+			$addn_attrs = 'size="40"';
+			$input_list->add_text_input( $label, $name, $val, $hint, $classes, $is_required, $addn_attrs );
+			
+			$label = __( 'Event date', 'reg-man-rc' );
+			$name = 'event-date';
+			$val = '';
+			$hint = '';
+			$classes = '';
+			$is_required = TRUE;
+			$input_list->add_date_input( $label, $name, $val, $hint, $classes, $is_required );
+			
+			$label = __( 'Event category', 'reg-man-rc' );
+			$name = 'event-category';
+			$selected = NULL;
+			$hint = '';
+			$classes = '';
+			$is_required = TRUE;
+			$visitor_reg_calendar = Calendar::get_visitor_registration_calendar();
+			$categories = $visitor_reg_calendar->get_event_category_array();
+			$options = array();
+			foreach( $categories as $category ) {
+				$options[ $category->get_name() ] = $category->get_id();
+			} // endfor
+			$input_list->add_radio_group( $label, $name, $options, $selected, $hint, $classes, $is_required );
+			
+			$label = __( 'Cancel', 'reg-man-rc' );
+			$type = 'button';
+			$classes = 'visitor-reg-add-event-dialog-cancel-button reg-man-rc-button';
+			$input_list->add_form_button( $label, $type, $classes );
+			
+			$label = __( 'Add Event', 'reg-man-rc' );
+			$type = 'submit';
+			$classes = 'visitor-reg-add-event-dialog-submit-button reg-man-rc-button';
+			$input_list->add_form_button( $label, $type, $classes );
+			
+			$ajax_action = Visitor_Registration_Controller::ADD_EVENT_AJAX_ACTION;
+			$method = 'POST';
+			$classes = 'visitor-reg-add-event-form';
+			$ajax_form = Ajax_Form::create( $ajax_action, $method, $classes );
+			$ajax_form->add_input_list_to_form_content( $input_list );
+			$ajax_form->render();
+			
 		echo '</div>';
 	} // function
-
+	
 	private static function render_registration_thank_you_message_dialog() {
 		$title = __( 'Registration Complete', 'reg-man-rc' );
 		$msg = __( 'Thank you and enjoy the event!', 'reg-man-rc' );
@@ -262,15 +355,6 @@ class Visitor_Reg_Manager {
 		echo "<p>$msg</p>";
 		echo '</div>';
 	} // function
-
-	private static function render_add_item_to_visitor_dialog( $event ) {
-		$title = __( 'Add Item to Visitor Registration', 'reg-man-rc' );
-		echo "<div class=\"add-item-to-visitor-reg-dialog dialog-container\" title=\"$title\">";
-			$form = Add_Item_To_Visitor_Ajax_Form::create( $event );
-			$form->render();
-		echo '</div>';
-	} // function
-
 
 	/**
 	 * Perform the necessary steps to register this view with the appropriate Wordpress hooks, actions and filters
@@ -284,11 +368,8 @@ class Visitor_Reg_Manager {
 	public static function register() {
 
 		 // conditionally add my scripts and styles on the right page
-		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'handle_wp_enqueue_scripts_for_shortcode' ) );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'handle_wp_enqueue_scripts_and_styles' ) );
 
-		// create my shortcode
-		add_shortcode( self::SHORTCODE, array( __CLASS__, 'get_manager_content' ) ); 
-		
 		// Add a filter to change the content written for my page
 		add_filter( 'the_content', array(__CLASS__, 'modify_post_content') );
 
@@ -305,20 +386,18 @@ class Visitor_Reg_Manager {
 		$result = $content; // return the original content by default
 		if ( ( $post->ID == self::get_post_id() ) && in_the_loop() && is_main_query() ) {
 			if ( ! post_password_required( $post ) ) {
-				$result .= self::get_manager_content();
+				$result = self::get_manager_content();
 			} // endif
 		} // endif
 		return $result;
 	} // function
 
-
 	/**
 	 * Get the content for the manager
 	 *
 	 * This method is called automatically when the Visitor Registration Manager page is rendered 
-	 *  or when the shortcode is inserted into a page
 	 *
-	 * @return	string	The contents of the Visitor Registration Manager view
+	 * @return	string	The contents of the Visitor Registration Manager
 	 *
 	 * @since	v0.1.0
 	 */
@@ -334,44 +413,29 @@ class Visitor_Reg_Manager {
 	} // function
 
 	/**
-	 * Conditionally enqueue the correct scripts for this user interface if the shortcode is present
+	 * Conditionally enqueue the correct scripts and styles for this user interface
 	 *
 	 * This method is triggered by the wp_enqueue_scripts hook
 	 *
 	 * @return void
 	 * @since	v0.1.0
 	 */
-	public static function handle_wp_enqueue_scripts_for_shortcode() {
+	public static function handle_wp_enqueue_scripts_and_styles() {
 		global $post;
 		$visitor_reg_post_id = self::get_post_id();
-		if ( ( $post instanceof \WP_Post ) && 
-			( ( $post->ID == $visitor_reg_post_id ) || has_shortcode( $post->post_content, self::SHORTCODE ) ) ) {
-			self::enqueue_scripts();
+		if ( ( $post instanceof \WP_Post ) && ( $post->ID == $visitor_reg_post_id ) ) {
+			self::enqueue_scripts_and_styles();
 		} // endif
 	} // function
 
 	/**
 	 * Enqueue the correct scripts when showing this view
 	 */
-	public static function enqueue_scripts() {
+	private static function enqueue_scripts_and_styles() {
 		Scripts_And_Styles::enqueue_public_base_scripts_and_styles();
 		Scripts_And_Styles::enqueue_public_registration_scripts_and_styles();
-		if ( Settings::get_is_visitor_registration_event_select_using_calendar() ) {
-			Scripts_And_Styles::enqueue_fullcalendar(); // For Calendar on event select
-		} else {
-			Scripts_And_Styles::enqueue_select2();
-		} // endif
+		Scripts_And_Styles::enqueue_fullcalendar(); // For Calendar on event select
 	} // function
-
-	/**
-	 * Handle plugin activation.
-	 * This function is called by the plugin controller during plugin activation
-	 */
-/* FIXME - we don't do this anymore, if the page does not exist at any time we create it
-	public static function handle_plugin_activation() {
-		self::insert_page(); // create the page for this view
-	} // function
-*/
 
 	/**
 	 * Handle plugin deactivation.

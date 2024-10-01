@@ -23,11 +23,10 @@ class Event_Filter {
 	private $accept_maximum_date_time; // Accept only events on or before the maximum date and time
 	private $is_accept_boundary_spanning_events = TRUE; // Accept only events on or before the maximum date and time
 	private $search_string; // Accept only events whose label contains the specified search string
+	private $accept_event_author_id; // Accept only events whose author ID is the specified ID
 
 	const SORT_BY_DATE_ASCENDING = 'date_ascending';
 	const SORT_BY_DATE_DESCENDING = 'date_descending';
-//	const SORT_BY_LOCATION_ASCENDING = 'location_ascending';
-//	const SORT_BY_LOCATION_DESCENDING = 'location_descending';
 
 	private $sort_order;
 
@@ -367,6 +366,22 @@ class Event_Filter {
 	} // function
 
 	/**
+	 * Get the WordPress user ID for the author of events to be accepted by the filter
+	 * @return	int|string
+	 */
+	public function get_accept_event_author_id() {
+		return $this->accept_event_author_id;
+	} // function
+
+	/**
+	 * Set the WordPress user ID for the author of events to be accepted by the filter
+	 * @param	int|string	$wp_user_id
+	 */
+	public function set_accept_event_author_id( $wp_user_id ) {
+		$this->accept_event_author_id = $wp_user_id;
+	} // function
+
+	/**
 	 * Apply this filter to the specified array of events.
 	 * @param	Event[]	$events_array	An array of events to be filtered
 	 * @return	Event[]	A new array containg the events accpted by the filter.
@@ -381,6 +396,7 @@ class Event_Filter {
 		$accept_min_date_time = $this->get_accept_minimum_date_time();
 		$accept_max_date_time = $this->get_accept_maximum_date_time();
 		$search_string = $this->get_search_string();
+		$accept_author_id = $this->get_accept_event_author_id();
 //		Error_Log::var_dump( $accept_classes, $accept_statuses, $accept_category_names, $accept_min_date_time, $accept_max_date_time, $search_string );
 
 		// If any of classes, statuses and categories are empty arrays then we can exclude everything
@@ -389,8 +405,11 @@ class Event_Filter {
 			 ( is_array( $accept_statuses ) && ( count( $accept_statuses ) == 0 ) ) ||
 //			 ( is_array( $accept_category_names ) && ( count( $accept_category_names ) == 0 ) && ( $accept_uncategorized == FALSE ) ) ) {
 			 ( is_array( $accept_category_names ) && ( count( $accept_category_names ) == 0 ) ) ) {
-			$result = array();
+
+			 $result = array();
+
 		} else {
+
 			 // Figure out which attributes of each event we need to check
 			$class_flag = ( is_array( $accept_classes ) && ( count( $accept_classes ) !== 0 ) );
 			$status_flag = ( is_array( $accept_statuses ) && ( count( $accept_statuses ) !== 0 ) );
@@ -399,6 +418,7 @@ class Event_Filter {
 			$date_flag = ( ( $accept_min_date_time !== NULL ) || ( $accept_max_date_time !== NULL ) );
 			$is_accept_boundary_flag = $this->get_is_accept_boundary_spanning_events();
 			$search_flag = ! empty( $search_string );
+			$author_flag = ! empty( $accept_author_id );
 
 			$result = array(); // start with an empty array and add the events that pass the filter
 			foreach ( $events_array as $event ) {
@@ -468,6 +488,16 @@ class Event_Filter {
 				if ( $search_flag ) {
 					$label = $event->get_label();
 					if ( empty( $label ) || ( stristr( $label, $search_string ) === FALSE ) ) {
+						continue; // This event does not meet the criteria
+					} // endif
+				} // endif
+
+				if ( $author_flag ) {
+					// The flag is set when we only accept events from a specific author
+					// If the current event has no author then we cannot accept it
+					// Or if the current author does not match the specified author to accept, we can't accept it
+					$curr_author_id = $event->get_author_id();
+					if ( empty( $curr_author_id ) || ( $curr_author_id != $accept_author_id ) ) {
 						continue; // This event does not meet the criteria
 					} // endif
 				} // endif

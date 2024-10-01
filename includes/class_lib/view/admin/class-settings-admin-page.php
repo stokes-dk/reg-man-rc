@@ -9,27 +9,30 @@ use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\View\Pub\Visitor_Reg_Manager;
 use Reg_Man_RC\Model\Calendar;
 use Reg_Man_RC\View\Pub\Volunteer_Area;
+use Reg_Man_RC\Control\User_Role_Controller;
+use Reg_Man_RC\Model\Stats\ORDS_Feed_Writer;
+use Reg_Man_RC\Model\Item_Type;
 
 /**
  * The settings admin page for the plugin
  *
  */
-
 class Settings_Admin_Page {
 
-	const MENU_SLUG					= 'reg-man-rc-settings';
+	const MENU_SLUG						= 'reg-man-rc-settings';
 
-	const VISITOR_REGISTRATION_TAB_ID	= 'visitor-reg';
-	const EVENT_TAB_ID					= 'events';
-//	const CALENDARS_TAB_ID				= 'calendars';
-	const GOOGLE_MAPS_TAB_ID			= 'maps';
-	const VOLUNTEER_AREA_TAB_ID			= 'volunteer-area';
+	const EVENT_TAB_ID					= 'reg-man-rc-events';
+	const GOOGLE_MAPS_TAB_ID			= 'reg-man-rc-maps';
+	const VISITOR_REGISTRATION_TAB_ID	= 'reg-man-rc-visitor-reg';
+	const VOLUNTEER_AREA_TAB_ID			= 'reg-man-rc-volunteer-area';
+	const ORDS_TAB_ID					= 'reg-man-rc-ords';
+	const ROLES_AND_CAPS_TAB_ID			= 'reg-man-rc-roles-and-caps';
 	
-	// The following key is used in the settings admin view to register the setting
+	// The following keys are used in the settings admin view to register the settings
 	const ALLOW_VOLUNTEER_AREA_COMMENTS_OPTION_NAME		= 'reg-man-rc-volunteer-area-is-allow-comments';
-
+	
 	private $tabs_array; // the tab IDs and titles
-	const DEFAULT_TAB = self::VISITOR_REGISTRATION_TAB_ID;
+	const DEFAULT_TAB = self::EVENT_TAB_ID;
 
 	private function __construct() {
 	} // construct
@@ -44,17 +47,19 @@ class Settings_Admin_Page {
 	} // function
 	
 	private static function get_active_tab() {
-		$result = isset( $_GET[ 'tab' ] ) ? $_GET[ 'tab' ] : self::VISITOR_REGISTRATION_TAB_ID;
+		$result = isset( $_GET[ 'tab' ] ) ? $_GET[ 'tab' ] : self::DEFAULT_TAB;
 		return $result;
 	} // function
 	
 	private function get_tabs_array() {
 		if ( ! isset( $this->tabs_array ) ) {
 			$this->tabs_array = array(
-				self::VISITOR_REGISTRATION_TAB_ID	=> __( 'Visitor Registration', 'reg-man-rc' ),
-				self::VOLUNTEER_AREA_TAB_ID			=> __( 'Volunteer Area', 'reg-man-rc' ),
-				self::EVENT_TAB_ID					=> __( 'Events', 'reg-man-rc' ),
-				self::GOOGLE_MAPS_TAB_ID			=> __( 'Maps', 'reg-man-rc' ),
+				self::EVENT_TAB_ID					=> __( 'Events',						'reg-man-rc' ),
+				self::GOOGLE_MAPS_TAB_ID			=> __( 'Maps',							'reg-man-rc' ),
+				self::VISITOR_REGISTRATION_TAB_ID	=> __( 'Visitor Registration',			'reg-man-rc' ),
+				self::VOLUNTEER_AREA_TAB_ID			=> __( 'Volunteer Area',				'reg-man-rc' ),
+				self::ORDS_TAB_ID					=> __( 'Open Repair Data',				'reg-man-rc' ),
+				self::ROLES_AND_CAPS_TAB_ID			=> __( 'User Roles and Capabilities',	'reg-man-rc' ),
 			);
 		} // endif
 		return $this->tabs_array;
@@ -205,13 +210,118 @@ class Settings_Admin_Page {
 	
 	private static function create_tabs() {
 		
-		self::create_visitor_registration_tab();
-		self::create_volunteer_area_tab();
 		self::create_events_tab();
 		self::create_google_maps_tab();
+		self::create_visitor_registration_tab();
+		self::create_ords_tab();
+		self::create_volunteer_area_tab();
+		self::create_roles_and_caps_tab();
 		
 	} // function
 
+	/**
+	 * Create the Open Repair Data settings tab
+	 */
+	private static function create_ords_tab() {
+
+		$tab_id = self::ORDS_TAB_ID;
+		$page_slug = self::MENU_SLUG;
+		$option_group = $tab_id; // For simplicity, the option group is the tab ID
+		
+		// Main section
+		$section_id = "{$tab_id}-main";		
+		$title = NULL; // __( 'Open Repair Data', 'reg-man-rc' );
+		$desc_fn = NULL; // array( __CLASS__, 'render_ords_tab_description' ); // used to echo description content between heading and fields
+		add_settings_section( $section_id, $title, $desc_fn, $page_slug );
+
+		
+		// Create ORDS feed?
+		$option_name = Settings::IS_CREATE_ORDS_FEED_OPTION_KEY;
+		$title = __( 'Create a public feed to serve Open Repair Data?', 'reg-man-rc' );
+		$render_fn = array( __CLASS__, 'render_allow_ORDS_feed_input' );
+		add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
+		register_setting( $option_group, $option_name );
+		
+		if ( Settings::get_is_create_ORDS_feed() ) {
+
+			flush_rewrite_rules(); // In case the feed name has changed
+			
+			// Feed name
+			$option_name = Settings::ORDS_FEED_NAME_OPTION_KEY;
+			$title = __( 'Feed name', 'reg-man-rc' );
+			$render_fn = array( __CLASS__, 'render_ords_feed_name_input' );
+			add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
+			$args = array( 'sanitize_callback' => array( __CLASS__, 'sanitize_ords_feed_name' ) );
+			register_setting( $option_group, $option_name, $args );
+			
+			// Country code
+			$option_name = Settings::ORDS_FEED_COUNTRY_CODE_OPTION_KEY;
+			$title = __( '3-letter country code', 'reg-man-rc' );
+			$render_fn = array( __CLASS__, 'render_ords_feed_country_code_input' );
+			add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
+			$args = array( 'sanitize_callback' => array( __CLASS__, 'sanitize_ords_feed_country_code' ) );
+			register_setting( $option_group, $option_name, $args );
+			
+			// Item Types
+			$option_name = Settings::ORDS_FEED_ITEM_TYPES_ARRAY_OPTION_KEY;
+			$title = __( 'Item types', 'reg-man-rc' );
+			$render_fn = array( __CLASS__, 'render_ords_item_types_array_input' );
+			add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
+			$args = NULL; //array( 'sanitize_callback' => array( __CLASS__, 'sanitize_ords_item_types_array' ) );
+			register_setting( $option_group, $option_name, $args );
+			
+		} // endif
+		
+	} // function
+
+	public static function render_allow_ORDS_feed_input() {
+		$input_name = Settings::IS_CREATE_ORDS_FEED_OPTION_KEY;
+		$value = Settings::get_is_create_ORDS_feed();
+		$true_label = __( 'Yes, create a public feed to serve Open Repair Data', 'reg-man-rc' );
+		$false_label = __( 'No, do not create a feed for Open Repair Data', 'reg-man-rc' );
+		self::render_true_false_radio_buttons( $input_name, $value, $true_label, $false_label );
+	} // function
+
+	public static function render_ords_feed_name_input() {
+		$name = Settings::ORDS_FEED_NAME_OPTION_KEY;
+		$value = Settings::get_ORDS_feed_name();
+		echo "<input name='$name' value='$value' size=\"50\" autocomplete=\"off\">";
+	} // function
+
+	public static function sanitize_ords_feed_name( $value ) {
+		$value = sanitize_file_name( $value );
+		$value = ! empty( $value ) ? $value : ORDS_Feed_Writer::DEFAULT_FEED_NAME;
+		return $value;
+	} // function
+	
+	public static function render_ords_feed_country_code_input() {
+		$name = Settings::ORDS_FEED_COUNTRY_CODE_OPTION_KEY;
+		$value = Settings::get_ORDS_feed_country_code();
+		echo "<input type='text' pattern='[A-Za-z]{3}' name='$name' value='$value' size=\"3\" autocomplete=\"off\">";
+	} // function
+
+	public static function sanitize_ords_feed_country_code( $value ) {
+		$value = strtoupper( $value );
+		$value = substr( $value, 0, 3 );
+		$value = ( strlen( $value ) === 3 ) ? $value : ORDS_Feed_Writer::DEFAULT_COUNTRY_CODE;
+		return $value;
+	} // function
+	
+	public static function render_ords_item_types_array_input() {
+		$input_name = Settings::ORDS_FEED_ITEM_TYPES_ARRAY_OPTION_KEY;
+		$ids_array = Settings::get_ORDS_feed_item_type_ids_array();
+		$format = '<p><label><input type="checkbox" name="%3$s[]" value="%2$s" %4$s/>%1$s</label></p>';
+		$all_item_types = Item_Type::get_all_item_types();
+		foreach( $all_item_types as $item_type ) {
+			$id = $item_type->get_id();
+			$type_name = $item_type->get_name();
+			$is_checked = ! empty( $ids_array ) ? in_array( $id, $ids_array ) : TRUE;
+			$checked = $is_checked ? 'checked="checked"' : '';
+			printf( $format, $type_name, $id, $input_name, $checked );
+		} // endfor
+	} // function
+
+	
 	/**
 	 * Create the visitor registration settings tab
 	 */
@@ -224,13 +334,20 @@ class Settings_Admin_Page {
 
 		// Main section
 		$section_id = "{$tab_id}-main";
-		$title = __( 'Visitor registration page', 'reg-man-rc' );
-		$desc_fn = array( __CLASS__, 'render_visitor_reg_main_section_desc' ); // used to echo description content between heading and fields
+		$title = NULL; //__( 'Visitor registration page', 'reg-man-rc' );
+		$desc_fn = NULL;
 		add_settings_section( $section_id, $title, $desc_fn, $page_slug );
 		
+		// Page URL
+		$option_name = ''; // This is just info and not really an option so there's no name needed
+		$title = __( 'Visitor registration page', 'reg-man-rc' );
+		$render_fn = array( __CLASS__, 'render_visitor_reg_page' );
+		add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
+		// NOTE: This is not registered because it's just info, there's nothing to be saved!
+
 		// Calendar
 		$option_name = Settings::VISITOR_REG_CALENDAR_OPTION_KEY;
-		$title = __( 'Event calendar', 'reg-man-rc' );
+		$title = __( 'Events calendar', 'reg-man-rc' );
 		$render_fn = array( __CLASS__, 'render_visitor_reg_calendar_input' );
 		add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
 		register_setting( $option_group, $option_name );
@@ -244,14 +361,14 @@ class Settings_Admin_Page {
 		
 	} // function
 	
-	public static function render_visitor_reg_main_section_desc() {
+	public static function render_visitor_reg_page() {
 		// We will show the link for the registration page here
 		$post = Visitor_Reg_Manager::get_post();
 		if ( isset( $post ) ) {
 			$post_id = $post->ID;
 			$view_href = get_page_link( $post_id );
 			$view_link = "<a href=\"$view_href\">$view_href</a>";
-			echo "<p><b>$view_link</b></p>";
+			echo $view_link;
 		} // endif
 	} // function
 	
@@ -326,13 +443,20 @@ class Settings_Admin_Page {
 
 		// Main section
 		$section_id = "{$tab_id}-main";		
-		$title = __( 'Volunteer area page', 'reg-man-rc' );
-		$desc_fn = array( __CLASS__, 'render_volunteer_area_main_section_desc' ); // used to echo description content between heading and fields
+		$title = NULL; // __( 'Volunteer area page', 'reg-man-rc' );
+		$desc_fn = NULL;
 		add_settings_section( $section_id, $title, $desc_fn, $page_slug );
+
+		// Page URL
+		$option_name = ''; // This is just info and not really an option so there's no name needed
+		$title = __( 'Volunteer area page', 'reg-man-rc' );
+		$render_fn = array( __CLASS__, 'render_volunteer_reg_page' );
+		add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
+		// NOTE: This is not registered because it's just info, there's nothing to be saved!
 
 		// Calendar
 		$option_name = Settings::VOLUNTEER_REG_CALENDAR_OPTION_KEY;
-		$title = __( 'Event calendar', 'reg-man-rc' );
+		$title = __( 'Events calendar', 'reg-man-rc' );
 		$render_fn = array( __CLASS__, 'render_volunteer_area_calendar_input' );
 		add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
 		register_setting( $option_group, $option_name );
@@ -352,17 +476,31 @@ class Settings_Admin_Page {
 		$args = array( 'sanitize_callback' => array( __CLASS__, 'sanitize_allow_volunteer_area_comments' ) );
 		register_setting( $option_group, $option_name, $args );
 
+		// Create Feed
+		$option_name = Settings::IS_CREATE_VOLUNTEER_CALENDAR_FEED_OPTION_KEY;
+		$title = __( 'Create iCalendar Feed', 'reg-man-rc' );
+		$render_fn = array( __CLASS__, 'render_create_volunteer_calendar_feed_input' );
+		add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
+		register_setting( $option_group, $option_name );
+
+		// Allow Volunteers to register for tentative events
+		$option_name = Settings::ALLOW_VOLUNTEER_REG_FOR_TENTATIVE_EVENTS_OPTION_KEY;
+		$title = __( 'Allow volunteers to register for tentative events', 'reg-man-rc' );
+		$render_fn = array( __CLASS__, 'render_allow_volunteer_reg_for_tentative_events_input' );
+		add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
+		register_setting( $option_group, $option_name );
+		
 	} // function
 	
 	
-	public static function render_volunteer_area_main_section_desc() {
+	public static function render_volunteer_reg_page() {
 		// We will show the link for the volunteer area page here
 		$post = Volunteer_Area::get_post();
 		if ( isset( $post ) ) {
 			$post_id = $post->ID;
 			$view_href = get_page_link( $post_id );
 			$view_link = "<a href=\"$view_href\">$view_href</a>";
-			echo "<p><b>$view_link</b></p>";
+			echo $view_link;
 		} // endif
 	} // function
 	
@@ -392,8 +530,59 @@ class Settings_Admin_Page {
 		echo '</p>';
 
 	} // function
-
 	
+	/**
+	 * Render the input for whether to require a WordPress user ID and password to enter the volunteer area
+	 */
+	public static function render_require_volunteer_area_registered_user_input() {
+		$input_name = Settings::REQUIRE_VOLUNTEER_AREA_REGISTERED_USER_OPTION_KEY;
+		$value = Settings::get_is_require_volunteer_area_registered_user();
+		$true_label = __( 'Yes, volunteers must provide a WP User password to access the volunteer area', 'reg-man-rc' );
+		$false_label = __( 'No, volunteers can access the volunteer area using a valid Fixer or Volunteer email address and NO password', 'reg-man-rc' );
+		self::render_true_false_radio_buttons( $input_name, $value, $true_label, $false_label );
+		$note = __(
+			'To require password login you must create a WP User with matching email address for each Fixer & Volunteer.',
+			'reg-man-rc' );
+		echo "<p><i>$note</i></p>";
+	} // function
+	
+	/**
+	 * Render the input for whether to allow volunteers to register for tentative events
+	 */
+	public static function render_allow_volunteer_reg_for_tentative_events_input() {
+		$input_name = Settings::ALLOW_VOLUNTEER_REG_FOR_TENTATIVE_EVENTS_OPTION_KEY;
+		$value = Settings::get_is_allow_volunteer_registration_for_tentative_events();
+		$true_label = __( 'Yes, allow volunteers to register for tentative events', 'reg-man-rc' );
+		$false_label = __( 'No, volunteers may only register for confirmed events', 'reg-man-rc' );
+		self::render_true_false_radio_buttons( $input_name, $value, $true_label, $false_label );
+	} // function
+	
+	/**
+	 * Render the inputs for allowing volunteers to post comments on event pages
+	 */
+	public static function render_allow_volunteer_area_comments_input() {
+		$input_name = self::ALLOW_VOLUNTEER_AREA_COMMENTS_OPTION_NAME;
+		$value = Settings::get_is_allow_volunteer_area_comments();
+		$true_label = __( 'Yes, allow volunteers to post comments on event pages in the volunteer area', 'reg-man-rc' );
+		$false_label = __( 'No, do not allow volunteers to post comments in the volunteer area', 'reg-man-rc' );
+		self::render_true_false_radio_buttons( $input_name, $value, $true_label, $false_label );
+		$note = __(
+			'When allowing comments, please also check your Discussion settings for restrictions on logged-in users etc.' .
+			'  Those settings will apply to comments in the volunteer area.', 
+			'reg-man-rc' );
+		echo "<p><i>$note</i></p>";
+	} // function
+	
+	/**
+	 * Render the inputs for allowing volunteers to subscribe to their callendar
+	 */
+	public static function render_create_volunteer_calendar_feed_input() {
+		$input_name = Settings::IS_CREATE_VOLUNTEER_CALENDAR_FEED_OPTION_KEY;
+		$value = Settings::get_is_create_volunteer_calendar_feed();
+		$true_label = __( 'Yes, create an iCalendar feed so that volunteers can subscribe to a personalized feed of events they have registered to attend', 'reg-man-rc' );
+		$false_label = __( 'No, do not create an iCalendar feed for volunteer area events', 'reg-man-rc' );
+		self::render_true_false_radio_buttons( $input_name, $value, $true_label, $false_label );
+	} // function
 	
 	/**
 	 * "Sanitize" the value for the setting to allow volunteer area comments.
@@ -409,6 +598,7 @@ class Settings_Admin_Page {
 		return FALSE; // This will prevent WP from storing the value in the options table, which is what I want here
 	} // function
 
+	
 	/**
 	 * Create the event settings tab
 	 */
@@ -420,7 +610,7 @@ class Settings_Admin_Page {
 		
 		// Main section
 		$section_id = "{$tab_id}-main";
-		$title = ''; // __( 'Event settings', 'reg-man-rc' );
+		$title = NULL; //__( 'Events', 'reg-man-rc' );
 		$desc_fn = NULL; // used to echo description content between heading and fields
 		add_settings_section( $section_id, $title, $desc_fn, $page_slug );
 
@@ -445,58 +635,6 @@ class Settings_Admin_Page {
 		add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
 		register_setting( $option_group, $option_name );
 
-	} // function
-
-	/**
-	 * Create the Google mpas settings tab
-	 */
-	private static function create_google_maps_tab() {
-
-		$tab_id = self::GOOGLE_MAPS_TAB_ID;
-		$page_slug = self::MENU_SLUG;
-		$option_group = $tab_id; // For simplicity, the option group is the tab ID
-		
-		// Main section
-		$section_id = "{$tab_id}-main";		
-		$title = ''; // __( 'Google Maps', 'reg-man-rc' );
-		$desc_fn = array( __CLASS__, 'render_google_maps_tab_description' ); // used to echo description content between heading and fields
-		add_settings_section( $section_id, $title, $desc_fn, $page_slug );
-
-		// Google Maps API Key
-		$option_name = Settings::GOOGLE_MAPS_API_KEY_OPTION_KEY;
-		$title = __( 'Google maps API key', 'reg-man-rc' );
-		$render_fn = array( __CLASS__, 'render_google_maps_api_key_input' );
-		add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
-		register_setting( $option_group, $option_name );
-
-		// We will only show the remaining inputs once the API key is entered
-		if ( Map_View::get_is_map_view_enabled() ) {
-
-			// Place input
-			$option_name = Settings::GOOGLE_MAPS_DEFAULT_CENTRE_PLACE_OPTION_KEY;
-			$title = __( 'Your geographic region', 'reg-man-rc' );
-			$render_fn = array( __CLASS__, 'render_google_maps_default_centre_input' );
-			add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
-			register_setting( $option_group, $option_name );
-
-			// Geo input (will be rendered by function above but must be registered here)
-			$option_name = Settings::GOOGLE_MAPS_DEFAULT_CENTRE_GEO_OPTION_KEY;
-			register_setting( $option_group, $option_name );
-
-			// Zoom input (will be rendered by function above but must be registered here)
-			$option_name = Settings::GOOGLE_MAPS_DEFAULT_ZOOM_OPTION_KEY;
-			register_setting( $option_group, $option_name );
-
-		} // endif
-
-	} // function
-
-
-	public static function render_google_maps_tab_description() {
-		if ( ! Map_View::get_is_map_view_enabled() ) {
-			$desc = __( 'To use maps you will need to have a valid Google maps API key.', 'reg-man-rc' );
-			echo '<p>' . $desc . '</p>';
-		} // endif
 	} // function
 
 	public static function render_default_event_start_time_input() {
@@ -546,6 +684,57 @@ class Settings_Admin_Page {
 		$true_label = __( 'Yes, allow each event to have multiple categories', 'reg-man-rc' );
 		$false_label = __( 'No, each event may have only one category (recommended)', 'reg-man-rc' );
 		self::render_true_false_radio_buttons( $input_name, $value, $true_label, $false_label );
+	} // function
+
+	/**
+	 * Create the Google mpas settings tab
+	 */
+	private static function create_google_maps_tab() {
+
+		$tab_id = self::GOOGLE_MAPS_TAB_ID;
+		$page_slug = self::MENU_SLUG;
+		$option_group = $tab_id; // For simplicity, the option group is the tab ID
+		
+		// Main section
+		$section_id = "{$tab_id}-main";		
+		$title = NULL; // __( 'Maps', 'reg-man-rc' );
+		$desc_fn = array( __CLASS__, 'render_google_maps_tab_description' ); // used to echo description content between heading and fields
+		add_settings_section( $section_id, $title, $desc_fn, $page_slug );
+
+		// Google Maps API Key
+		$option_name = Settings::GOOGLE_MAPS_API_KEY_OPTION_KEY;
+		$title = __( 'Google maps API key', 'reg-man-rc' );
+		$render_fn = array( __CLASS__, 'render_google_maps_api_key_input' );
+		add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
+		register_setting( $option_group, $option_name );
+
+		// We will only show the remaining inputs once the API key is entered
+		if ( Map_View::get_is_map_view_enabled() ) {
+
+			// Place input
+			$option_name = Settings::GOOGLE_MAPS_DEFAULT_CENTRE_PLACE_OPTION_KEY;
+			$title = __( 'Your geographic region', 'reg-man-rc' );
+			$render_fn = array( __CLASS__, 'render_google_maps_default_centre_input' );
+			add_settings_field( $option_name, $title, $render_fn, $page_slug, $section_id );
+			register_setting( $option_group, $option_name );
+
+			// Geo input (will be rendered by function above but must be registered here)
+			$option_name = Settings::GOOGLE_MAPS_DEFAULT_CENTRE_GEO_OPTION_KEY;
+			register_setting( $option_group, $option_name );
+
+			// Zoom input (will be rendered by function above but must be registered here)
+			$option_name = Settings::GOOGLE_MAPS_DEFAULT_ZOOM_OPTION_KEY;
+			register_setting( $option_group, $option_name );
+
+		} // endif
+
+	} // function
+
+	public static function render_google_maps_tab_description() {
+		if ( ! Map_View::get_is_map_view_enabled() ) {
+			$desc = __( 'To use maps you will need to have a valid Google maps API key.', 'reg-man-rc' );
+			echo '<p>' . $desc . '</p>';
+		} // endif
 	} // function
 
 	public static function render_google_maps_api_key_input() {
@@ -609,30 +798,36 @@ class Settings_Admin_Page {
 		return $result;
 	} // function
 	
-	public static function render_require_volunteer_area_registered_user_input() {
-		$input_name = Settings::REQUIRE_VOLUNTEER_AREA_REGISTERED_USER_OPTION_KEY;
-		$value = Settings::get_is_require_volunteer_area_registered_user();
-		$true_label = __( 'Yes, volunteers must provide a WP User password to access the volunteer area', 'reg-man-rc' );
-		$false_label = __( 'No, volunteers can access the volunteer area using a valid Fixer or Volunteer email address and NO password', 'reg-man-rc' );
-		self::render_true_false_radio_buttons( $input_name, $value, $true_label, $false_label );
-		$note = __(
-			'To require password login you must create a WP User with matching email address for each Fixer & Volunteer.',
-			'reg-man-rc' );
-		echo "<p><i>$note</i></p>";
-	} // function
-	
+	/**
+	 * Create the roles and capabilities settings tab
+	 */
+	private static function create_roles_and_caps_tab() {
 
-	public static function render_allow_volunteer_area_comments_input() {
-		$input_name = self::ALLOW_VOLUNTEER_AREA_COMMENTS_OPTION_NAME;
-		$value = Settings::get_is_allow_volunteer_area_comments();
-		$true_label = __( 'Yes, allow volunteers to post comments on event pages in the volunteer area', 'reg-man-rc' );
-		$false_label = __( 'No, do not allow volunteers to post comments in the volunteer area', 'reg-man-rc' );
-		self::render_true_false_radio_buttons( $input_name, $value, $true_label, $false_label );
-		$note = __(
-			'When allowing comments, please also check your Discussion settings for restrictions on logged-in users etc.' .
-			'  Those settings will apply to comments in the volunteer area.', 
-			'reg-man-rc' );
-		echo "<p><i>$note</i></p>";
+		// Fixer/Volunteer
+		$role = User_Role_Controller::VOLUNTEER_ROLE_NAME;
+		$role_section = User_Role_Settings_Section::create( $role );
+		$role_section->add_settings_section();
+		
+		// Item Registrar
+		$role = User_Role_Controller::ITEM_REGISTRAR_ROLE_NAME;
+		$role_section = User_Role_Settings_Section::create( $role );
+		$role_section->add_settings_section();
+		
+		// Event Coordinator
+		$role = User_Role_Controller::EVENT_COORDINATOR_ROLE_NAME;
+		$role_section = User_Role_Settings_Section::create( $role );
+		$role_section->add_settings_section();
+		
+		// Volunteer Coordinator
+		$role = User_Role_Controller::VOLUNTEER_COORDINATOR_ROLE_NAME;
+		$role_section = User_Role_Settings_Section::create( $role );
+		$role_section->add_settings_section();
+		
+		// Community Event Leader
+		$role = User_Role_Controller::COMMUNITY_EVENT_LEADER_ROLE_NAME;
+		$role_section = User_Role_Settings_Section::create( $role );
+		$role_section->add_settings_section();
+
 	} // function
 	
 	private static function render_true_false_radio_buttons( $input_name, $value, $true_label, $false_label ) {

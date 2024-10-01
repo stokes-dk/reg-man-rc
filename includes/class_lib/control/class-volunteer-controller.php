@@ -6,6 +6,7 @@ use Reg_Man_RC\Model\Ajax_Form_Response;
 use Reg_Man_RC\View\Pub\Volunteer_Area;
 use Reg_Man_RC\Model\Event_Key;
 use Reg_Man_RC\Model\Settings;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * The volunteer controller
@@ -31,15 +32,7 @@ class Volunteer_Controller {
 	 */
 	public static function register() {
 
-		// Filter the clauses for volunteers so that we can join our side table
-		add_filter( 'posts_clauses', array( __CLASS__, 'filter_posts_clauses' ), 1000, 2 );
-
-		// Remove all post links
-		add_filter( 'previous_post_link', array( __CLASS__, 'remove_post_prev_next_link' ), 10, 5 );
-		add_filter( 'next_post_link', array( __CLASS__, 'remove_post_prev_next_link' ), 10, 5 );
-
-
-		// Add handler methods for my form posts.
+		// Add handler methods for my form posts etc.
 		// Handle user login post.
 		// This is not a normal login form because volunteers may identify themselves by email only, and may not have a password
 		// If a logged-in user, like the system administrator is also be a volunteer
@@ -54,23 +47,6 @@ class Volunteer_Controller {
 		add_action( "admin_post_{$action}", array( __CLASS__, 'handle_volunteer_area_exit_action' ) );
 		add_action( "admin_post_nopriv_{$action}", array( __CLASS__, 'handle_volunteer_area_exit_action' ) );
 
-	} // function
-
-	/**
-	 * Remove the previous/next links for this custom post type
-	 * @param string	$output
-	 * @param string	$format
-	 * @param string	$link
-	 * @param \WP_Post	$post
-	 * @param string	$adjacent
-	 */
-	public static function remove_post_prev_next_link( $output, $format, $link, $post, $adjacent ) {
-		if ( ! empty( $post ) && ( $post->post_type == Volunteer::POST_TYPE ) ) {
-			$result = FALSE; // Never show next/previous links for my post type
-		} else {
-			$result = $output;
-		} // endif
-		return $result;
 	} // function
 
 	/**
@@ -168,8 +144,10 @@ class Volunteer_Controller {
 
 					} else {
 
+						// There are no errors so we will identify the volunteer by storing a cookie
 						Volunteer::set_volunteer_email_cookie( $email, $is_remember );
 						$ajax_response->set_redirect_url( $redirect_url );
+						$volunteer->set_volunteer_area_last_login_datetime();
 
 					} // endif
 
@@ -181,9 +159,9 @@ class Volunteer_Controller {
 
 				// There are no errors so we will identify the volunteer by storing a cookie
 				Volunteer::set_volunteer_email_cookie( $email, $is_remember );
-
 				$ajax_response->set_redirect_url( $redirect_url );
-
+				$volunteer->set_volunteer_area_last_login_datetime();
+				
 			} // endif
 
 		} // endif
@@ -207,7 +185,6 @@ class Volunteer_Controller {
 			$redirect_url = add_query_arg( $args, $redirect_url );
 		} // endif
 		wp_safe_redirect( $redirect_url );
-//		header( "Location: $redirect_url" );
 	} // function
 
 	/**
@@ -218,113 +195,5 @@ class Volunteer_Controller {
 		$result = Volunteer::set_volunteer_email_cookie( NULL );
 		return $result;
 	} // function
-
-	/**
-	 * Filter the clauses of the WP_Query when we're dealing with volunteers.
-	 *
-	 * The parts of the query we will modify are these:
-	 *   join 	To join our side table
-	 *   fields	To add the fields from our side table
-	 *
-	 * @param	string[]	$clauses
-	 * @param	\WP_Query	$query
-	 * @return string
-	 */
-	public static function filter_posts_clauses( $clauses, $query ) {
-		global $wpdb;
-		$post_type = Volunteer::POST_TYPE;
-
-//	Error_Log::log_msg( 'Filter posts clauses called' );
-//	Error_Log::var_dump( $clauses, $query );
-
-		$capability = 'read_private_' . User_Role_Controller::VOLUNTEER_CAPABILITY_TYPE_PLURAL;
-
-		// Update the order by clause if necessary (when sorting by public profiles)
-		if ( ! is_admin() && ( $query->get( 'post_type' ) == $post_type ) ) {
-
-			// Make sure we only ever show public posts when rendering the frontend
-			// FIXME - I needed to remove this
-			// First, WP will take care of this for me.  It should NEVER show private posts on the front end
-			// Second, I need to be able to query private posts inside the volunteer area for things like proxies
-//			$status_where = " {$wpdb->posts}.post_status='publish'";
-//			$clauses[ 'where' ] .= " AND $status_where";
-
-		} elseif ( is_admin() && current_user_can( $capability ) &&
-			$query->is_main_query() && ( $query->get( 'post_type' ) == $post_type ) ) {
-
-			$orderby_key = self::get_orderby();
-			if ( $orderby_key == 'is_public' ) {
-				$order = $query->get( 'order' );
-				$order_clause = " ( CASE WHEN {$wpdb->posts}.post_status='publish' THEN 0 ELSE 1 END ) ";
-				$clauses[ 'orderby' ] = " $order_clause $order";
-			} // endif
-
-//	Error_Log::log_msg( 'Joining volunteer side table' );
-
-			$volunteer_table = $wpdb->prefix . Volunteer::VOLUNTEER_SIDE_TABLE_NAME;
-			$alias = 'reg_man_rc_volunteer';
-
-			$join = "LEFT JOIN $volunteer_table AS $alias";
-			$join .= " ON ( {$wpdb->posts}.ID = {$alias}.post_id )";
-			$clauses[ 'join' ] .= ' ' . $join;
-
-			$fields = 	'1 as volunteer_table_joined, ' .
-						"$alias.full_name as volunteer_full_name, " .
-						"$alias.email as volunteer_email";
-			$clauses[ 'fields' ] .= ', ' . $fields;
-
-			if ( is_search() ) {
-				$query_vars = $query->query_vars;
-				$search_string = isset( $query_vars[ 's' ] ) ? $query_vars[ 's' ] : NULL;
-				if ( ( $search_string !== NULL ) && ( $search_string != '' ) ) {
-					$search_terms = self::get_search_terms_from_string( $search_string );
-					$parts_array = array(); // create an array of parts so we can search all terms and all places
-					foreach ( $search_terms as $term ) {
-						$esc_term = $wpdb->esc_like( $term );
-//						$esc_term = addcslashes( $term, '_%' );
-						$parts_array[] = "{$wpdb->posts}.post_title LIKE '%$esc_term%'";
-						$parts_array[] = "{$wpdb->posts}.post_excerpt LIKE '%$esc_term%'";
-						$parts_array[] = "{$wpdb->posts}.post_content LIKE '%$esc_term%'";
-						$parts_array[] = "{$alias}.full_name LIKE '%$esc_term%'";
-						$parts_array[] = "{$alias}.email LIKE '%$esc_term%'";
-					} // endfor
-					// Create the search clause for the search terms
-					$new_wheres[] = implode( ' OR ', $parts_array );
-					$search_where = implode( ' AND ', $new_wheres ); // Combine the where clauses with AND
-
-					// Always search only inside our post type
-					$post_where = " {$wpdb->posts}.post_type='$post_type' ";
-
-					// Make sure that status is something valid
-					$statuses = array( 'publish', 'future', 'draft', 'pending', 'private' );
-					$status_parts = array();
-					foreach ( $statuses as $status ) {
-						$status_parts[] = " {$wpdb->posts}.post_status='$status' ";
-					} // endfor
-					$status_where = ' ( ' . implode( 'OR', $status_parts ) . ' ) ';
-
-					// Assign the complete where clause
-					$clauses[ 'where' ] = " AND $post_where AND $status_where AND ( $search_where )";
-				} // endif
-			} // endif
-
-		} // endif
-
-//		Error_Log::var_dump( $clauses );
-
-		return $clauses;
-	} // function
-
-	private static function get_orderby() {
-		$result = isset( $_REQUEST[ 'orderby' ] ) ? $_REQUEST[ 'orderby' ] : 'is_public';
-		return $result;
-	} // function
-
-
-	private static function get_search_terms_from_string( $search_string, $remove_stopwords = TRUE ) {
-		$result = preg_split( '/\s+/', $search_string, -1, PREG_SPLIT_NO_EMPTY ); // split search string into terms separated by whitespace
-		return $result;
-	} // function
-
 
 } // class

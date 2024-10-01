@@ -6,6 +6,8 @@ use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Item_Status;
 use Reg_Man_RC\Model\Visitor;
+use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Control\User_Role_Controller;
 
 /**
  * The item controller
@@ -20,10 +22,10 @@ class Item_Admin_Controller {
 	public static function register() {
 
 		// Add an action hook to upate our custom fields when a post is saved
-		add_action( 'save_post_' . Item::POST_TYPE, array( __CLASS__, 'handle_post_save' ) );
+		add_action( 'save_post_' . Item::POST_TYPE, array( __CLASS__, 'handle_post_save' ), 10, 3 );
 
 		// Check to make sure that an item type is selected and show an error message if not
-		add_action( 'edit_form_top', array( __CLASS__, 'show_required_field_error_msg' ) );
+		add_action( 'edit_form_top', array( __CLASS__, 'show_edit_form_error_msgs' ) );
 
 		// Tell WP how to do the filtering for my taxonomies
 		add_action( 'pre_get_posts', array( __CLASS__, 'modify_query_for_filters' ) );
@@ -39,24 +41,54 @@ class Item_Admin_Controller {
 	 * @since v0.1.0
 	 *
 	 */
-	public static function handle_post_save( $post_id ) {
+	public static function handle_post_save( $post_id, $post, $is_update ) {
+
+//		Error_Log::var_dump( $is_update, $post_id, defined( 'DOING_AUTOSAVE' ), ( defined( 'DOING_AUTOSAVE' ) ? DOING_AUTOSAVE : FALSE ) );
+		
 		if ( ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) ) {
+			
 			// Don't do anything during an autosave
 			return;
+			
+		} elseif ( ! $is_update ) {
+			
+			// This is a new post created with "Add New" so we just need to assign the visitor if necessary
+			// Everything else, like event, status, fixer station etc. will be assigned as an update when the user saves the post
+			
+			// If this WP user is NOT allowed to read private items then we will assume she is registering an item for herself
+			// In that case, we will assign the volunteer, fixer station and volunteer roles to this new record
+			if ( ! current_user_can( 'read_private_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL ) ) {
+				
+				$is_create_new_visitor = TRUE; // Create a new visitor record if none exists for this user
+				$visitor = Visitor::get_visitor_for_current_wp_user( $is_create_new_visitor );
+				if ( ! empty( $visitor ) ) {
+					
+					$visitor_id = $visitor->get_id();
+					update_post_meta( $post_id, Item::VISITOR_META_KEY, $visitor_id );
+					
+				} // endif
+				
+			} // endif
+			
 		} else {
+			
+			// This is an update to a post
+			
 			$item = Item::get_item_by_id( $post_id );
 			if ( ! empty( $item ) ) {
+				
+				$visitor_before_update = $item->get_visitor();
+				$event_key_before_update = $item->get_event_key_string();
 
 				// If there are any missing required settings then I will set this post to DRAFT status later
 				$set_post_status_draft = FALSE;
 
 				// Update the event
 				if ( isset( $_POST[ 'item_event_selection_flag' ] ) ) {
-					$event_key = isset( $_POST['item_event'] ) ? wp_unslash( $_POST['item_event'] ) : NULL;
+					$event_key = isset( $_POST[ 'item_event' ] ) ? wp_unslash( $_POST[ 'item_event' ] ) : NULL;
 					// If there is no item event posted then don't do anything, this may be a quick edit
 					if ( isset( $_POST[ 'item_event' ] ) ) {
-						if ( $event_key == '-1' ) {
-							// -1 indicates no event selected
+						if ( empty( $event_key ) ) {
 							$item->set_event_key( NULL );
 							$set_post_status_draft = TRUE;
 						} else {
@@ -67,14 +99,14 @@ class Item_Admin_Controller {
 
 				// Update the visitor
 				if ( isset( $_POST[ 'item_visitor_input_flag' ] ) ) {
-					$visitor_selection = isset( $_POST[ 'item_visitor_select' ] ) ? $_POST[ 'item_visitor_select' ] : '';
-					if ( $visitor_selection == '' ) {
+					$item_visitor_id = isset( $_POST[ 'item_visitor' ] ) ? $_POST[ 'item_visitor' ] : '';
+					if ( $item_visitor_id == '' ) {
 
 						// The user selected "No visitor"
 						$item->set_visitor( NULL ); // remove any existing visitor
 						$set_post_status_draft = TRUE; // The record has no visitor
 
-					} elseif ( $visitor_selection == -1 ) {
+					} elseif ( $item_visitor_id == -1 ) {
 
 						// The user selected "Add visitor"
 						$item->set_visitor( NULL ); // remove any existing visitor then create the new one
@@ -87,21 +119,44 @@ class Item_Admin_Controller {
 						$visitor = Visitor::create_visitor( $public_name, $full_name, $email, $first_event_key, $is_join );
 
 						if ( empty( $visitor ) ) {
+							
 							$set_post_status_draft = TRUE; // The visitor could not be created successfully
 							$item->set_visitor( NULL ); // Make sure we remove any setting for the visitor
+							
 						} else {
+							
 							$item->set_visitor( $visitor );
+							
 						} // endif
 
 					} else {
 
 						// The user selected a specific visitor by ID
-						$visitor = Visitor::get_visitor_by_id( $visitor_selection );
+						$visitor = Visitor::get_visitor_by_id( $item_visitor_id );
 						if ( empty( $visitor ) ) {
+							
 							$set_post_status_draft = TRUE; // The visitor selection is not valid
 							$item->set_visitor( NULL ); // Make sure we remove any setting for the visitor
+							
 						} else {
+							
 							$item->set_visitor( $visitor );
+							
+							if ( isset( $_POST[ 'item_visitor_details_update_flag' ] ) ) {
+								
+								// This means that the user is updating the details of the visitor
+								
+								$public_name  = isset( $_POST[ 'visitor_public_name' ] ) ? $_POST[ 'visitor_public_name' ] : '';
+								$full_name  = isset( $_POST[ 'visitor_full_name' ] ) ? $_POST[ 'visitor_full_name' ] : '';
+								$is_join_mailing_list = isset( $_POST[ 'visitor_join_mail_list' ] ) ? $_POST[ 'visitor_join_mail_list' ] : FALSE;
+								// Note that the email cannot be changed
+								
+								$visitor->set_public_name( $public_name );
+								$visitor->set_full_name( $full_name );
+								$visitor->set_is_join_mail_list( $is_join_mailing_list );
+																
+							} // endif
+							
 						} // endif
 
 					} // endif
@@ -111,10 +166,10 @@ class Item_Admin_Controller {
 				if ( isset( $_POST[ 'item_status_input_flag' ] ) ) {
 					$status = isset( $_POST['status_id'] ) ? Item_Status::get_item_status_by_id( $_POST['status_id'] ) : NULL;
 					if ( empty( $status ) ) {
-						$item->set_status( NULL );
+						$item->set_item_status( NULL );
 						$set_post_status_draft = TRUE;
 					} else {
-						$item->set_status( $status );
+						$item->set_item_status( $status );
 					} // endif
 				} // endif
 
@@ -137,11 +192,6 @@ class Item_Admin_Controller {
 					$fixer_station_id = isset( $_POST[ 'fixer_station' ] ) ? $_POST[ 'fixer_station' ] : 0;
 					$station = Fixer_Station::get_fixer_station_by_id( $fixer_station_id );
 					if ( empty( $station ) ) {
-						// Use the item type's default station if there is one
-						$item_type = $item->get_item_type();
-						$station = ! empty( $item_type ) ? $item_type->get_fixer_station() : NULL;
-					} // endif
-					if ( empty( $station ) ) {
 						// If there is no station then we'll tell the user
 						$item->set_fixer_station( NULL );
 						$set_post_status_draft = TRUE;
@@ -161,10 +211,46 @@ class Item_Admin_Controller {
 					wp_update_post( $post_data );
 				} // endif
 
+				
+				// Enforce the rule that each visitor may have only 1 active item per event
+				// If any of item status, visitor or event have been updated
+				if ( isset( $_POST[ 'item_status_input_flag' ] ) || isset( $_POST[ 'item_event_selection_flag' ] ) || isset( $_POST[ 'item_visitor_input_flag' ] ) ) {
+
+					// Apply this rule for the current item's visitor and event
+					if(  ! empty( $visitor ) && ! empty( $event_key ) ) {
+					
+						$item_status_id = isset( $_POST[ 'status_id' ] ) ? $_POST[ 'status_id' ] : NULL; 
+						
+						$visitor->enforce_single_active_item_rule( $event_key );
+						
+						$after_enforce_item_status = $item->get_item_status();
+						if ( isset( $after_enforce_item_status )  && $item_status_id !== $after_enforce_item_status->get_id() ) {
+	
+								// After enforcing the rule above, the item status is not what the user assigned so show a message
+							$msg =  __( 'The status was reassigned because the visitor may have 1 item in progress per event.', 'reg-man-rc' );
+	
+							$user_id = get_current_user_id();
+							$seconds = 60; // save the transient for 1 minute
+							set_transient( "reg-man-rc-invalid-status-{$post_id}-{$user_id}", $msg, $seconds );
+	
+						} // endif
+
+						// Also, apply the rule to the visitor and event before the update was made (if they have changed)
+						// This may cause a Standby item to be changed to "In Progress" if the item was moved to a different
+						//  visitor or a different event
+						if ( ! empty( $visitor_before_update ) && ! empty( $event_key_before_update ) ) {
+							$visitor_before_update->enforce_single_active_item_rule( $event_key_before_update );
+						} // endif
+						
+					} // endif
+					
+				} // endif
+				
+				
 			} // endif
 
 		} // endif
-
+		
 	} // function
 
 	/**
@@ -176,17 +262,25 @@ class Item_Admin_Controller {
 	 * @since v0.1.0
 	 *
 	 */
-	public static function show_required_field_error_msg( $post ) {
+	public static function show_edit_form_error_msgs( $post ) {
+		
 		if ( Item::POST_TYPE === get_post_type( $post ) && 'auto-draft' !== get_post_status( $post ) ) {
 
 			$item = Item::get_item_by_id( $post->ID );
 
 			if ( ! empty( $item ) ) {
 
-				$error_format = '<div class="error below-h2"><p>%s</p></div>';
+				$error_format = '<div class="notice notice-error below-h2"><p>%s</p></div>';
+				$warning_format = '<div class="notice notice-warming is-dismissible below-h2"><p>%s</p></div>';
+				
+				$user_id = get_current_user_id();
+				$status_msg = get_transient( "reg-man-rc-invalid-status-{$post->ID}-{$user_id}" );
+				if ( ! empty( $status_msg ) ) {
+					printf( $warning_format, esc_html__( $status_msg ) );
+				} // endif
 
-				if ( empty( $item->get_event_key() ) ) {
-					printf( $error_format, esc_html__( __( 'Event is required.', 'reg-man-rc' ) ) );
+				if ( empty( $item->get_event_key_string() ) ) {
+					printf( $warning_format, esc_html__( __( 'Event is required.', 'reg-man-rc' ) ) );
 				} // endif
 
 				$visitor = $item->get_visitor();
@@ -253,101 +347,26 @@ class Item_Admin_Controller {
 			$type_tax_name = Item_Type::TAXONOMY_NAME;
 			$selected_slug = isset( $_REQUEST[ $type_tax_name ] ) ? $_REQUEST[ $type_tax_name ] : 0;
 			if ( ! empty( $selected_slug ) ) {
-				/* FIXME = Option for NONE is not working
-				// -1 is the option for none
-				if ( $selected_slug == '-1' ) {
-					$tax_query_array[] =
-							array(
-									'taxonomy'	=> $type_tax_name,
-									'operator'	=> 'NOT EXISTS',
-							);
-				} else {
-				*/
-					$tax_query_array[] =
-							array(
-									'taxonomy'	=> $type_tax_name,
-									'field'		=> 'slug',
-									'terms'		=> array( $selected_slug )
-							);
-//				} // endif
+				$tax_query_array[] =
+						array(
+								'taxonomy'	=> $type_tax_name,
+								'field'		=> 'slug',
+								'terms'		=> array( $selected_slug )
+						);
 			} // endif
 
 			// Filter by Fixer Station
 			$station_tax_name = Fixer_Station::TAXONOMY_NAME;
 			$selected_slug = isset( $_REQUEST[ $station_tax_name ] ) ? $_REQUEST[ $station_tax_name ] : 0;
 			if ( ! empty( $selected_slug ) ) {
-				/* FIXME = Option for NONE is not working
-				// -1 is the option for none
-				if ( $selected_slug == '-1' ) {
-					$tax_query_array[] =
-							array(
-									'taxonomy'	=> $station_tax_name,
-									'operator'	=> 'NOT EXISTS'
-							);
-				} else {
-				*/
-					$tax_query_array[] =
-							array(
-									'taxonomy'	=> $station_tax_name,
-									'field'		=> 'slug',
-									'terms'		=> array( $selected_slug )
-							);
-//				} // endif
+				$tax_query_array[] =
+						array(
+								'taxonomy'	=> $station_tax_name,
+								'field'		=> 'slug',
+								'terms'		=> array( $selected_slug )
+						);
 			} // endif
 
-
-			// FIXME!!!! The fixer station is always assigned or it just missing - the following is OLD
-/*
-			// Filter by Fixer Station which is more complicated because it's not always assigned
-			//  Sometimes the fixer station is explicitly assigned but mostly we use the default for the item type
-			$station_tax_name = Fixer_Station::TAXONOMY_NAME;
-			$selected_slug = isset( $_REQUEST[ $station_tax_name ] ) ? $_REQUEST[ $station_tax_name ] : 0;
-			if ( ! empty( $selected_slug ) ) {
-				// I need to find items where the assigned fixer station is the one selected OR
-				//  ( there is no assigned station AND item type IN any type whose default station is the one selected )
-
-				$station = Fixer_Station::get_fixer_station_by_slug( $selected_slug );
-				if ( ! empty( $station ) ) {
-					$item_types = Item_Type::get_item_types_by_default_fixer_station( $station->get_id() );
-				} else {
-					$item_types = array(); // No station so no item types
-				} // endif
-				$item_type_ids = array();
-				foreach ( $item_types as $type ) {
-					$item_type_ids[] = $type->get_id();
-				} // endfor
-
-//				Error_Log::var_dump( $selected_slug, $station->get_id(), $item_type_ids );
-
-				$tax_query_array[] = array(
-						'relation' => 'OR',
-
-								array(
-										'taxonomy'	=> $station_tax_name,
-										'field'		=> 'id',
-										'terms'		=> array( $station->get_id() )
-								),
-
-								array(
-										'relation' => 'AND',
-										array(
-												'taxonomy'	=> $station_tax_name,
-												'field'		=> 'id',
-												'operator'	=> 'NOT EXISTS'
-										),
-										array(
-												'taxonomy'	=> $type_tax_name,
-												'field'		=> 'id',
-												'terms'		=> $item_type_ids
-										),
-								)
-					);
-				// By default Wordpress will ALWAYS filter showing only posts where fixer station is the one requested
-				//   AND whatever I have added above.
-				// To undo that and search using ONLY what I have, I need to turn off the query var for the station taxonomy
-				$query->query_vars[ $station_tax_name ] = '0'; // Tell the query not to require the specified station
-			} // endif
-*/
 
 //			Error_Log::var_dump( $tax_query_array );
 //			Error_Log::var_dump( $query );

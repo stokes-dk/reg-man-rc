@@ -22,9 +22,9 @@ use Reg_Man_RC\Model\Item_Type;
  */
 class Supplemental_Event_Data_Admin_Controller {
 
-	const UPDATE_ITEM_DATA_AJAX_ACTION = 'reg-man-rc-update-item-sup-data-ajax-action';
-	const UPDATE_VISITOR_DATA_AJAX_ACTION = 'reg-man-rc-update-visitor-sup-data-ajax-action';
-	const UPDATE_VOLUNTEER_DATA_AJAX_ACTION = 'reg-man-rc-update-volunteer-sup-data-ajax-action';
+	const UPDATE_ITEM_DATA_AJAX_ACTION		= 'reg-man-rc-update-item-sup-data-ajax-action';
+	const UPDATE_VISITOR_DATA_AJAX_ACTION	= 'reg-man-rc-update-visitor-sup-data-ajax-action';
+	const UPDATE_VOLUNTEER_DATA_AJAX_ACTION	= 'reg-man-rc-update-volunteer-sup-data-ajax-action';
 	
 	public static function register() {
 
@@ -54,22 +54,27 @@ class Supplemental_Event_Data_Admin_Controller {
 	 *
 	 */
 	public static function handle_ajax_update_item_data() {
+		
 		// The form data is serialized and put into the formData post argument that Wordpress will pass to me
 		// I need to deserialze it into a regular associative array
 		$serialized_form_data = isset( $_POST[ 'formData' ] ) ? $_POST[ 'formData' ] : NULL;
 		$form_data = array();
 		parse_str( $serialized_form_data, $form_data );
+		
 		// The nonce is a hidden field in the form so check it first
 		$form_response = Ajax_Form_Response::create();
 		$nonce = isset( $form_data[ '_wpnonce' ] ) ? $form_data[ '_wpnonce' ] : NULL;
+		
 		if ( wp_verify_nonce( $nonce, self::UPDATE_ITEM_DATA_AJAX_ACTION ) ) {
 			self::handle_update_item_data( $form_data, $form_response );
 		} else {
 			$err_msg = __( 'Your security token has expired.  Please refresh the page and try again.', 'reg-man-rc' );
 			$form_response->add_error( '_wpnonce', '', $err_msg );
 		} // endif
+
 		echo json_encode( $form_response->jsonSerialize() );
 		wp_die(); // THIS IS REQUIRED!
+		
 	} // function
 
 	/**
@@ -80,22 +85,29 @@ class Supplemental_Event_Data_Admin_Controller {
 	 *
 	 */
 	public static function handle_ajax_update_visitor_data() {
+		
 		// The form data is serialized and put into the formData post argument that Wordpress will pass to me
 		// I need to deserialze it into a regular associative array
 		$serialized_form_data = isset( $_POST[ 'formData' ] ) ? $_POST[ 'formData' ] : NULL;
 		$form_data = array();
 		parse_str( $serialized_form_data, $form_data );
-		// The nonce is a hidden field in the form so check it first
+		
 		$form_response = Ajax_Form_Response::create();
+
+		// The nonce is a hidden field in the form so check it first
 		$nonce = isset( $form_data[ '_wpnonce' ] ) ? $form_data[ '_wpnonce' ] : NULL;
+		
 		if ( wp_verify_nonce( $nonce, self::UPDATE_VISITOR_DATA_AJAX_ACTION ) ) {
 			self::handle_update_visitor_data( $form_data, $form_response );
 		} else {
 			$err_msg = __( 'Your security token has expired.  Please refresh the page and try again.', 'reg-man-rc' );
 			$form_response->add_error( '_wpnonce', '', $err_msg );
 		} // endif
+		
 		echo json_encode( $form_response->jsonSerialize() );
+
 		wp_die(); // THIS IS REQUIRED!
+
 	} // function
 
 	/**
@@ -111,17 +123,23 @@ class Supplemental_Event_Data_Admin_Controller {
 		$serialized_form_data = isset( $_POST[ 'formData' ] ) ? $_POST[ 'formData' ] : NULL;
 		$form_data = array();
 		parse_str( $serialized_form_data, $form_data );
-		// The nonce is a hidden field in the form so check it first
+		
 		$form_response = Ajax_Form_Response::create();
+
+		// The nonce is a hidden field in the form so check it first
 		$nonce = isset( $form_data[ '_wpnonce' ] ) ? $form_data[ '_wpnonce' ] : NULL;
+
 		if ( wp_verify_nonce( $nonce, self::UPDATE_VOLUNTEER_DATA_AJAX_ACTION ) ) {
 			self::handle_update_volunteer_data( $form_data, $form_response );
 		} else {
 			$err_msg = __( 'Your security token has expired.  Please refresh the page and try again.', 'reg-man-rc' );
 			$form_response->add_error( '_wpnonce', '', $err_msg );
 		} // endif
+		
 		echo json_encode( $form_response->jsonSerialize() );
+		
 		wp_die(); // THIS IS REQUIRED!
+		
 	} // function
 
 	/**
@@ -134,19 +152,19 @@ class Supplemental_Event_Data_Admin_Controller {
 	 *
 	 */
 	private static function handle_update_visitor_data( $form_data, $form_response = NULL ) {
+		
 		$event_key = isset( $form_data[ 'sup_data_visitor_event_key' ] ) ? wp_unslash( $form_data[ 'sup_data_visitor_event_key' ] ) : NULL;
-		$event = ! empty( $event_key ) ? Event::get_event_by_key( $event_key ) : NULL;
-		if ( empty( $event ) && isset( $form_response ) ) {
-			$form_response->add_error( '', '', __( 'The event was not found.', 'reg-man-rc'));
-		} else {
-			$first_time = isset( $form_data[ 'first_time_visitors' ] ) ? $form_data[ 'first_time_visitors' ] : 0;
-			$returning = isset( $form_data[ 'returning_visitors' ] ) ? $form_data[ 'returning_visitors' ] : 0;
-			$unknown = isset( $form_data[ 'unknown_visitors' ] ) ? $form_data[ 'unknown_visitors' ] : 0;
-			$result = Supplemental_Visitor_Registration::set_supplemental_visitor_reg_counts( $event_key, $first_time, $returning, $unknown );
-			if ( ( $result === FALSE ) && ( isset( $form_response ) ) ) {
-				$form_response->add_error( '', '', __( 'The data could not be updated.', 'reg-man-rc'));
-			} // endif
+
+		// Note that we do not require the Event to be found because there may be supplemental data for deleted events
+
+		$first_time = isset( $form_data[ 'first_time_visitors' ] ) ? $form_data[ 'first_time_visitors' ] : 0;
+		$returning = isset( $form_data[ 'returning_visitors' ] ) ? $form_data[ 'returning_visitors' ] : 0;
+		$unknown = isset( $form_data[ 'unknown_visitors' ] ) ? $form_data[ 'unknown_visitors' ] : 0;
+		$result = Supplemental_Visitor_Registration::set_supplemental_visitor_reg_counts( $event_key, $first_time, $returning, $unknown );
+		if ( ( $result === FALSE ) && ( isset( $form_response ) ) ) {
+			$form_response->add_error( '', '', __( 'The data could not be updated.', 'reg-man-rc'));
 		} // endif
+
 	} // function
 
 	/**
@@ -160,36 +178,69 @@ class Supplemental_Event_Data_Admin_Controller {
 	 *
 	 */
 	private static function handle_update_item_data( $form_data, $form_response = NULL ) {
-		$event_key = isset( $form_data['sup_data_item_event_key'] ) ? wp_unslash( $form_data['sup_data_item_event_key'] ) : NULL;
+		
+		$event_key				= isset( $form_data[ 'sup_data_item_event_key' ] ) ? wp_unslash( $form_data[ 'sup_data_item_event_key' ] ) : NULL;
+		$fixed_count_array		= isset( $form_data[ 'fixed_count'] )		? $form_data[ 'fixed_count']		: array();
+		$repairable_count_array	= isset( $form_data[ 'repairable_count'] )	? $form_data[ 'repairable_count']	: array();
+		$eol_count_array		= isset( $form_data[ 'eol_count'] )			? $form_data[ 'eol_count']			: array();
+		$unknown_count_array	= isset( $form_data[ 'unknown_count'] )		? $form_data[ 'unknown_count']		: array();
+		
 		$event = ! empty( $event_key ) ? Event::get_event_by_key( $event_key ) : NULL;
-//		Error_Log::var_dump( $form_data[ 'fixed_count' ][ 21 ] );
-		if ( ! empty( $event ) ) {
-			$fixed_count_array		= isset( $form_data[ 'fixed_count'] )		? $form_data[ 'fixed_count']		: array();
-			$repairable_count_array	= isset( $form_data[ 'repairable_count'] )	? $form_data[ 'repairable_count']	: array();
-			$eol_count_array		= isset( $form_data[ 'eol_count'] )			? $form_data[ 'eol_count']			: array();
-			$unknown_count_array	= isset( $form_data[ 'unknown_count'] )		? $form_data[ 'unknown_count']		: array();
+		if ( empty( $event ) && ! empty( $event_key ) ) {
 
+			// There is no event for this key so create the placeholder event
+			$event = Event::create_placeholder_event( $event_key );
+			
+		} // endif
+		
+		// The nonce is checked by the Ajax receiver, I need to check the user
+		$can_register = isset( $event ) ? $event->get_is_current_user_able_to_register_items() : FALSE;
+		
+		if ( empty( $event ) || ! $can_register ) {
+
+			// When there is a form response, we'll add error messages to it
+			if ( ! empty( $form_response ) ) {
+
+				if ( empty( $event ) ) {
+
+					$form_response->add_error( '', '', __( 'The event was not found.', 'reg-man-rc' ) );
+
+				} elseif( ! $can_register ) {
+					
+					$form_response->add_error( '', '', __( 'You are not authorized to register items for this event.', 'reg-man-rc' ) );
+
+				} // endif
+
+			} // endif
+
+		} else {
+
+			// Get all fixer stations including unspecified
 			$all_station_ids = array_keys( Fixer_Station::get_all_fixer_stations() );
 			$all_station_ids[] = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID; // Add unspecified
+			
+			// Get all item types including unspecified
 			$all_type_ids = array_keys( Item_Type::get_all_item_types() );
 			$all_type_ids[] = Item_Type::UNSPECIFIED_ITEM_TYPE_ID; // Add unspecified
+
 //			Error_Log::var_dump( $all_station_ids, $all_type_ids );
 			
 			foreach( $all_station_ids as $station_id ) {
+				
 				// Update this station for all types
 				foreach( $all_type_ids as $type_id ) {
-					$fixed_count = isset( $fixed_count_array[ $station_id ][ $type_id ] ) ? $fixed_count_array[ $station_id ][ $type_id ] : 0;
-					$repairable_count = isset( $repairable_count_array[ $station_id ][ $type_id ] ) ? $repairable_count_array[ $station_id ][ $type_id ] : 0;
-					$eol_count = isset( $eol_count_array[ $station_id ][ $type_id ] ) ? $eol_count_array[ $station_id ][ $type_id ] : 0;
-					$unknown_count = isset( $unknown_count_array[ $station_id ][ $type_id ] ) ? $unknown_count_array[ $station_id ][ $type_id ] : 0;
+					$fixed_count		= isset( $fixed_count_array[ $station_id ][ $type_id ] )		? $fixed_count_array[ $station_id ][ $type_id ] : 0;
+					$repairable_count	= isset( $repairable_count_array[ $station_id ][ $type_id ] )	? $repairable_count_array[ $station_id ][ $type_id ] : 0;
+					$eol_count			= isset( $eol_count_array[ $station_id ][ $type_id ] )			? $eol_count_array[ $station_id ][ $type_id ] : 0;
+					$unknown_count		= isset( $unknown_count_array[ $station_id ][ $type_id ] )		? $unknown_count_array[ $station_id ][ $type_id ] : 0;
 					Supplemental_Item::set_supplemental_item_counts( $event_key, $type_id, $station_id, $fixed_count, $repairable_count, $eol_count, $unknown_count );
 				} // endfor
 				
 			} // endfor
-			
 
 		} // endif
-	} // function
+
+} // function
 
 	/**
 	 * Handle update for supplemental volunteer data.
@@ -202,17 +253,43 @@ class Supplemental_Event_Data_Admin_Controller {
 	 *
 	 */
 	private static function handle_update_volunteer_data( $form_data, $form_response = NULL ) {
-		$event_key = isset( $form_data['sup_data_volunteer_event_key'] ) ? wp_unslash( $form_data['sup_data_volunteer_event_key'] ) : NULL;
-		$event = ! empty( $event_key ) ? Event::get_event_by_key( $event_key ) : NULL;
-//		Error_Log::var_dump( $form_data );
-		if ( ! empty( $event ) ) {
+		$event_key			= isset( $form_data['sup_data_volunteer_event_key'] )	? wp_unslash( $form_data['sup_data_volunteer_event_key'] ) : NULL;
+		$fixer_count_array	= isset( $form_data[ 'fixer_head_count' ] )				? $form_data[ 'fixer_head_count' ] : array();
+		$appr_count_array	= isset( $form_data[ 'apprentice_head_count' ] )		? $form_data[ 'apprentice_head_count' ] : array();
 		
-			// Update Fixers
+		$event = ! empty( $event_key ) ? Event::get_event_by_key( $event_key ) : NULL;
+		if ( empty( $event ) && ! empty( $event_key ) ) {
+
+			// There is no event for this key so create the placeholder event
+			$event = Event::create_placeholder_event( $event_key );
+			
+		} // endif
+		
+		// The nonce is checked by the Ajax receiver, I need to check the user
+		$can_register = isset( $event ) ? $event->get_is_current_user_able_to_register_volunteers() : FALSE;
+		
+		if ( empty( $event ) || ! $can_register ) {
+
+			// When there is a form response, we'll add error messages to it
+			if ( ! empty( $form_response ) ) {
+
+				if ( empty( $event ) ) {
+
+					$form_response->add_error( '', '', __( 'The event was not found.', 'reg-man-rc' ) );
+
+				} elseif( ! $can_register ) {
+					
+					$form_response->add_error( '', '', __( 'You are not authorized to register volunteers for this event.', 'reg-man-rc' ) );
+
+				} // endif
+
+			} // endif
+
+		} else {
+
+			// Update Fixers for all stations (including unspecified)
 			$all_station_ids = array_keys( Fixer_Station::get_all_fixer_stations() );
 			$all_station_ids[] = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID; // Add unspecified station
-			
-			$fixer_count_array = isset( $form_data[ 'fixer_head_count' ] ) ? $form_data[ 'fixer_head_count' ] : array();
-			$appr_count_array = isset( $form_data[ 'apprentice_head_count' ] ) ? $form_data[ 'apprentice_head_count' ] : array();
 
 			// Update each fixer station
 			foreach ( $all_station_ids as $station_id ) {
@@ -234,6 +311,7 @@ class Supplemental_Event_Data_Admin_Controller {
 			} // endfor
 
 		} // endif
+		
 	} // function
 
 	/**
@@ -246,9 +324,12 @@ class Supplemental_Event_Data_Admin_Controller {
 	 *
 	 */
 	public static function handle_post_save( $post_id ) {
+		
 		if ( ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) ) {
+			
 			// Don't do anything during an autosave
 			return;
+			
 		} else {
 
 			// Update the supplemental visitor data if it was supplied

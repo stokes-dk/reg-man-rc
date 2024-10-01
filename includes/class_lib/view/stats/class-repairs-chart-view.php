@@ -4,6 +4,7 @@ namespace Reg_Man_RC\View\Stats;
 use Reg_Man_RC\Control\Scripts_And_Styles;
 use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Stats\Repairs_Chart_Model;
+use Reg_Man_RC\Model\Events_Collection;
 
 /**
  * An instance of this class provides a view showing a simple chart of the number of items diverted from landfill.
@@ -58,7 +59,9 @@ class Repairs_Chart_View {
 	 */
 	private function get_chart_model() {
 		if ( ! isset( $this->chart_model ) ) {
-			$this->chart_model = Repairs_Chart_Model::create_simplified_bar_chart( NULL ); // NULL is all events
+			$is_include_placeholder_events = TRUE;
+			$events_collection = Events_Collection::create_for_all_events( $is_include_placeholder_events );
+			$this->chart_model = Repairs_Chart_Model::create_simplified_bar_chart_for_events_collection( $events_collection );
 		} // endif
 		return $this->chart_model;
 	} // function
@@ -95,6 +98,9 @@ class Repairs_Chart_View {
 	 */
 	public static function get_items_fixed_shortcode_content( $attributes ) {
 
+		// If the shortcode is used in a widget then my scripts and styles may not be enqueued, so make sure here
+		Scripts_And_Styles::enqueue_stats_view_script_and_styles();
+		
 		$view = self::create();
 		
 		// TODO: animation duration, easing style, easing direction

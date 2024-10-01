@@ -7,6 +7,7 @@ use Reg_Man_RC\Model\Volunteer_Role;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\View\Admin\Volunteer_Import_Admin_View;
 use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Control\User_Role_Controller;
 
 /**
  * The administrative controller for importing Volunteers
@@ -23,7 +24,7 @@ class Volunteer_Import_Admin_Controller {
 	private static $CLEANUP_ACTION = 'reg_man_rc_volunteer_importer_scheduled_cleanup';
 
 	private static $REQUIRED_CSV_COLUMNS = array(
-			'First Name', 'Last Name', 'Email', 'Preferred Volunteer Roles', 'Preferred Fixer Station'
+			'First Name', 'Last Name', 'Email', 'Preferred Volunteer Roles', 'Preferred Fixer Station', 'Apprentice'
 	);
 
 
@@ -37,15 +38,38 @@ class Volunteer_Import_Admin_Controller {
 	 */
 	public static function register() {
 
-		if ( current_user_can( 'edit_posts' ) && current_user_can( 'import' ) ) {
+		if ( self::current_user_can_import_volunteers() ) {
 			add_action( 'wp_ajax_' . self::AJAX_ACTION, array( __CLASS__, 'do_ajax_import' ) );
 		} // endif
 
-		// Register the action to clean up my imported files
-		add_action( self::$CLEANUP_ACTION, array( __CLASS__, 'importer_scheduled_cleanup' ) );
-
 	} // function
 
+	/**
+	 * Get a boolean indicating whether the current user has authorization to perform this action
+	 * @return boolean
+	 */
+	public static function current_user_can_import_volunteers() {
+		// Only users who are able to read private emails should be able to do this
+		//  because when we import we need to look them up by email address
+		
+		$result =
+			current_user_can( 'import' ) &&
+			current_user_can( 'create_'			. User_Role_Controller::VOLUNTEER_CAPABILITY_TYPE_PLURAL ) &&
+			current_user_can( 'read_private_'	. User_Role_Controller::VOLUNTEER_CAPABILITY_TYPE_PLURAL );
+		return $result;
+	} // function
+	
+	/**
+	 * Register the action for my cron job.
+	 * Note that this must be done before 'init' so it's separate from the usual register() function above
+	 */
+	public static function register_action_handlers() {
+
+		// Register the action to clean up my imported files
+		add_action( self::$CLEANUP_ACTION, array( __CLASS__, 'importer_scheduled_cleanup' ) );
+		
+	} // function
+	
 	/**
 	 * Handle an AJAX import form post.
 	 *
@@ -61,8 +85,15 @@ class Volunteer_Import_Admin_Controller {
 		$nonce = isset( $_REQUEST[ '_wpnonce' ] ) ? $_REQUEST[ '_wpnonce' ] : '';
 		$is_valid_nonce = wp_verify_nonce( $nonce, self::AJAX_ACTION );
 		if ( ! $is_valid_nonce ) {
+
 			$err_msg = __( 'Your security token has expired.  Please refresh the page and try again.', 'reg-man-rc' );
 			$form_response->add_error( '_wpnonce', '', $err_msg );
+			
+		} elseif ( ! self::current_user_can_import_volunteers() ) {
+
+			$err_msg = __( 'You are not authorized to perform this action.', 'reg-man-rc' );
+			$form_response->add_error( '', '', $err_msg );
+			
 		} else {
 			$attachment_id = isset( $_REQUEST[ 'volunteer-import-attachment-id' ] ) ? $_REQUEST[ 'volunteer-import-attachment-id' ] : NULL;
 			if ( isset( $attachment_id ) ) {
@@ -81,26 +112,18 @@ class Volunteer_Import_Admin_Controller {
 						$form_response->add_error( 'volunteer-import-file-name', '', $err_msg );
 						$result = FALSE;
 					} else {
-						$file_type = $file_upload_desc[ 'type' ];
-						$valid_types = array( 'text/csv', 'text/plain' );
-						if ( ! in_array( $file_type, $valid_types ) ) {
-							$err_msg = __( 'The file is not a CSV file.', 'reg-man-rc' );
-							$form_response->add_error( 'volunteer-import-file-name', '', $err_msg );
-							$result = FALSE;
-						} else {
-							$file_name = $file_upload_desc[ 'tmp_name' ];
-							$is_valid_file = self::get_is_valid_csv_file( $file_name, $form_response );
-							if ( $is_valid_file !== FALSE ) {
-								$file_move_result = self::move_file_to_uploads( $file_upload_desc, $form_response );
-								if ( $file_move_result !== FALSE ) {
-									$attachment_id = $file_move_result;
-									$view = Volunteer_Import_Admin_View::create();
-									$view->set_import_file_attachment_id( $attachment_id );
-									ob_start();
-										$view->render_form_contents();
-									$content = ob_get_clean();
-									$form_response->set_html_data( $content );
-								} // endif
+						$file_name = $file_upload_desc[ 'tmp_name' ];
+						$is_valid_file = self::get_is_valid_csv_file( $file_name, $form_response );
+						if ( $is_valid_file !== FALSE ) {
+							$file_move_result = self::move_file_to_uploads( $file_upload_desc, $form_response );
+							if ( $file_move_result !== FALSE ) {
+								$attachment_id = $file_move_result;
+								$view = Volunteer_Import_Admin_View::create();
+								$view->set_import_file_attachment_id( $attachment_id );
+								ob_start();
+									$view->render_form_contents();
+								$content = ob_get_clean();
+								$form_response->set_html_data( $content );
 							} // endif
 						} // endif
 					} // endif
@@ -241,7 +264,8 @@ class Volunteer_Import_Admin_Controller {
 				$email_index = array_search( strtolower( 'Email' ), $header_array );
 				$roles_index = array_search( strtolower( 'Preferred Volunteer Roles' ), $header_array );
 				$station_index = array_search( strtolower( 'Preferred Fixer Station' ), $header_array );
-
+				$apprentice_index = array_search( strtolower( 'Apprentice' ), $header_array );
+				
 				if ( $result === TRUE ) {
 					$record_count = 0;
 					$skipped_count = 0;
@@ -254,44 +278,60 @@ class Volunteer_Import_Admin_Controller {
 						$last_name = trim( $data_array[ $last_name_index ] );
 						$roles_text = trim( $data_array[ $roles_index ] );
 						$station_text = trim( $data_array[ $station_index ] );
-
+						$apprentice_text = trim( $data_array[ $apprentice_index ] );
+						
 						// Full name (from first and last name)
 						// TODO: The strategy for combining first and last name could be a setting on the page
 						$full_name = trim( "$first_name $last_name" );
 
-						// Public name or post title for their profile
+						// Public name 
 						// Could be just first name or first name and last initial
 						// TODO: The strategy for creating the public name could be a setting on the page
 //						$last_initial = ! empty( $last_name ) ? substr( $last_name, 0, 1 ) : '';
 //						$public_name = trim( "$first_name $last_initial." );
 						$public_name = $first_name;
 
-						// Try to find the visitor record with the specified email address
-						$volunteer = ! empty( $email ) ? Volunteer::get_volunteer_by_email( $email ) : NULL;
-						if ( !isset( $volunteer ) ) {
-							// We could not find the volunteer using their email address. try full name
+						// Try to find the volunteer with the specified email address or full name if no email is provided
+						if ( ! empty( $email ) ) {
+							$volunteer = Volunteer::get_volunteer_by_email( $email );
+						} else {
 							$volunteer = ! empty( $full_name ) ? Volunteer::get_volunteer_by_full_name( $full_name ) : NULL;
 						} // endif
 
-						if ( isset( $volunteer ) ) {
+						if ( isset( $volunteer ) || empty( $full_name ) ) {
 							// In this case we already have a record for the volunteer, we'll just bypass this record
+							// Or we have a record with no full name, so we can't use it
 							// TODO: We could have a setting allowing the user to update existing volunteer records
 							$skipped_count++;
 						} else {
+
 							// There is no email address or we don't have an existing record for this volunteer
-							// Create the new record
+							// Create the new record, provided we have at least a full name
 							$volunteer = Volunteer::create_new_volunteer( $public_name, $full_name, $email );
+
 							if ( ! isset( $volunteer ) ) {
+								
 								/* translators: %s is a line number in a file */
-								$err_msg = sprintf( __( 'Unable to import volunteer record for line number %s.', 'reg-man-rc' ), $file_path );
+								$err_msg = sprintf( __( 'Unable to import volunteer record for line number %s.', 'reg-man-rc' ), $line_number );
 								$form_response->add_error( "volunteer-import-attachment-id[$line_number]" , '', $err_msg );
+								
 							} else {
+								
 								$record_count++;
+								
 								// Assign the fixer station
-								$station = Fixer_Station::get_fixer_station_by_name( $station_text );
+								// $station = Fixer_Station::get_fixer_station_by_name( $station_text );
+								// We want to allow the import file to have multiple station names, we'll use the first one as preferred
+								$station_array = explode( '|', $station_text );
+								$station_name = isset( $station_array[ 0 ] ) ? trim( $station_array[ 0 ] ) : NULL;
+								$station = Fixer_Station::get_fixer_station_by_name( $station_name );
 								// Note that if $station is empty then setting it as preferred fixer station will delete any current setting
 								$volunteer->set_preferred_fixer_station( $station );
 
+								// Assign apprentice
+								$is_apprentice = filter_var( $apprentice_text, FILTER_VALIDATE_BOOLEAN );
+								$volunteer->set_is_fixer_apprentice( $is_apprentice );
+								
 								// Assign the array of preferred volunteer roles
 								$role_name_array = explode( '|', $roles_text );
 								$roles_array = array();

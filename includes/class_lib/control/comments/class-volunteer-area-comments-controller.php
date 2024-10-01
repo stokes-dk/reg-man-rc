@@ -6,6 +6,7 @@ use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Event_Key;
 use Reg_Man_RC\View\Pub\Volunteer_Area;
 use Reg_Man_RC\Model\Settings;
+use Reg_Man_RC\Model\Event;
 
 /**
  * This class handles contoller function for comments int the volunteer area.
@@ -58,6 +59,86 @@ class Volunteer_Area_Comments_Controller {
 		// Filter where the browser is redirected after a comment post so we can get back to the right page
 		add_filter( 'comment_post_redirect', array( __CLASS__, 'filter_comment_post_redirect' ), 10, 2 );
 
+		// Add a column to the admin UI for the comment list
+		$type = 'edit-comments'; // don't ask me why this call requires 'edit-' prefix and the other does not but it works this way
+		add_filter( 'manage_' . $type . '_columns', array( __CLASS__, 'filter_admin_UI_columns' ) );
+		
+		// Modify the values in the columns in the comments list for my page
+		$type = 'comments';
+		add_action( 'manage_' . $type . '_custom_column', array( __CLASS__, 'render_admin_UI_column_values' ), 10, 2 );
+		
+	} // function
+
+	/**
+	 * Set up the columns to show in the main admin list for comments
+	 * @param	string[]	$columns	The default associative array of IDs (key) and titles (value) for the columns
+	 * @return	string[]				The same associative array updated with the specific columns and titles to use for this type
+	 * @since	v0.1.0
+	 */
+	public static function filter_admin_UI_columns( $columns ) {
+		
+		$is_allow_vol_area_comments = Settings::get_is_allow_volunteer_area_comments();
+		
+		if ( $is_allow_vol_area_comments ) {
+			
+			// In this case I need to add a column to indicate the event page under the volunteer area
+			// But I do not want to undo another plugin's updates to the columns so I will insert mine and leave the rest
+			$result = array();
+			foreach( $columns as $name => $title ) {
+				$result[ $name ] = $title;
+				if ( $name == 'response' ) {
+					// I will add my column after the response column
+					$result[ 'reg-man-rc-vol-subpage' ] = __( 'Volunteer Area Event Page', 'reg-man-rc' );
+				} // endif
+			} // endfor
+			
+		} else {
+			
+			$result = $columns;
+			
+		} // endif
+		
+		return $result;
+		
+	} // function
+	
+	/**
+	 * Render the column values in the main admin list for comments
+	 * @param	string[]	$column_name	The ID of the column whose value is to be shown
+	 * @param	int|string	$comment_id		The ID of the comment whose column value is to be shown
+	 * @return	string		The column value to be shown
+	 * @since	v0.1.0
+	 */
+	public static function render_admin_UI_column_values( $column_name, $comment_id ) {
+//		Error_Log::var_dump( $column_name, $comment_id );
+
+		$result = __( '—', 'reg-man-rc' ); // use em-dash as result by default
+		
+		$comment = \WP_Comment::get_instance( $comment_id );
+		$comment_post_id = $comment->comment_post_ID;
+		$volunteer_area_page = Volunteer_Area::get_post_id();
+
+		if ( $comment_post_id == $volunteer_area_page ) {
+
+			$event_key = get_comment_meta( $comment_id, self::COMMENT_META_EVENT_KEY, $single = TRUE );
+
+			$event = ! empty( $event_key ) ? Event::get_event_by_key( $event_key ) : NULL;
+
+			if ( ! empty( $event ) ) {
+
+				$href = Volunteer_Area::get_href_for_event_page( $event );
+				$title = esc_html( $event->get_label() );
+				
+				$link = "<a href=\"$href\">$title</a>";
+				
+				$result = $link;
+				
+			} // endif
+
+		} // endif
+		
+		echo $result;
+
 	} // function
 	
 	/**
@@ -88,7 +169,7 @@ class Volunteer_Area_Comments_Controller {
 
 					$result = FALSE; // comments disallowed by admin
 					
-				} elseif ( empty( Volunteer::get_current_volunteer() ) ) {
+				} elseif ( empty( Volunteer::get_volunteer_for_current_request() ) ) {
 					
 					$result = FALSE; // No volunteer or comments not allowed, no comments
 					
@@ -198,20 +279,23 @@ class Volunteer_Area_Comments_Controller {
 	private static function get_comment_form_fields( $volunteer ) {
 		
 		$public_name = $volunteer->get_public_name();
-		$email = Volunteer::get_volunteer_email_cookie();
 		
 		$hidden_field_format = '<input id="%1$s" name="%1$s" type="hidden" value="%2$s">';
 
-		$author_field = sprintf( $hidden_field_format, 'author', $public_name );
+		$email = Volunteer::get_volunteer_email_for_current_request();
 		
-		$email_field = sprintf( $hidden_field_format, 'email', $email );
+//		Error_Log::var_dump( $volunteer );
 
-		$result = array(
-				'author'		=> $author_field,
-				'email'			=> $email_field,
-				'cookies'		=> '', // There's no need for the cookie acceptance in our case
-		);
+		// The email address is always included (regardless of settings) so that we know which volunteer made the comment
+		$author_field = sprintf( $hidden_field_format, 'author', $public_name );
+		$email_field = sprintf( $hidden_field_format, 'email', $email );
 		
+		$result = array(
+				'author'	=> $author_field,
+				'email'		=> $email_field,
+				'cookies'	=> '', // There's no need for the cookie acceptance in our case
+		);
+
 		return $result;
 		
 	} // function
@@ -234,7 +318,7 @@ class Volunteer_Area_Comments_Controller {
 		
 		if ( $post_id == $vol_area_post_id ) {
 			
-			$volunteer = Volunteer::get_current_volunteer();
+			$volunteer = Volunteer::get_volunteer_for_current_request();
 			
 			if ( ! empty( $volunteer ) ) {
 				
@@ -261,6 +345,24 @@ class Volunteer_Area_Comments_Controller {
 				// The must log in note is only shown when the discussion settings say that users need to log in to comment
 				$must_login_note = __( 'Volunteers must log in with a user ID and password to post comments.', 'reg-man-rc' );
 				$result[ 'must_log_in' ] = $must_login_note;
+				
+				// Note comment approval requirements if any
+				$is_comment_moderation =	boolval( get_option( 'comment_moderation' ) );
+				$is_comment_prev_appr =		boolval( get_option( 'comment_previously_approved' ) );
+				
+//				Error_Log::var_dump( $is_comment_moderation, $is_comment_prev_appr );
+				
+				if ( $is_comment_moderation || $is_comment_prev_appr ) {
+
+					if ( $is_comment_moderation ) {
+						$note = __( 'All comments must be approved before being shown.', 'reg-man-rc' );
+					} else {
+						$note = __( 'Comments from new users must be approved before being shown.', 'reg-man-rc' );
+					} // endif
+
+					$result[ 'comment_notes_after' ] = $note;
+					
+				} // endif
 				
 			} // endif
 			
@@ -401,12 +503,9 @@ class Volunteer_Area_Comments_Controller {
 			
 			if ( is_user_logged_in() ) {
 				
-				// For a logged in user, the comment should include their public name as it is in their profile
-				//  and not their full user name as it is in the User ID
+				// For a logged in user, the comment should include their public name and not their full user name as it is in the User ID
 				
-				$user = wp_get_current_user();
-				$email = $user->user_email;
-				$volunteer = Volunteer::get_volunteer_by_email( $email );
+				$volunteer = Volunteer::get_volunteer_for_current_wp_user();
 				
 				if ( isset( $volunteer ) ) {
 					$args = array(

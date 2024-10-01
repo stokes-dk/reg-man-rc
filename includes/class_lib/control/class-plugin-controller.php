@@ -5,6 +5,7 @@ use Reg_Man_RC\Model\Calendar;
 use Reg_Man_RC\View\Pub\Visitor_Reg_Manager;
 use Reg_Man_RC\View\Pub\Volunteer_Area;
 use const Reg_Man_RC\PLUGIN_BOOTSTRAP_FILENAME;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * Sets up the action and filter hooks for the plugin like plugin activation, deactivation, init hook and so on
@@ -40,18 +41,36 @@ class Plugin_Controller {
 
 		register_deactivation_hook( $plugin_bootstrap_filename, array( __CLASS__, 'handle_plugin_deactivation' ) );
 
+		// Register our action handlers for things like cron jobs
+		self::register_action_handlers();
+		
 		// Register our template controller
 		\Reg_Man_RC\Control\Template_Controller::register();
+		
+		// Register our search controller
+		\Reg_Man_RC\Control\Search_Controller::register();
 
+		// Most things are done during init
 		add_action( 'init', array( __CLASS__, 'handle_init' ) );
 
 		add_filter( 'display_post_states', array( __CLASS__, 'filter_display_post_states' ), 10, 2 );
 		
 		add_filter( 'add_meta_boxes', array( __CLASS__, 'remove_unwanted_metaboxes' ), 10, 2 );
 
-		// FIXME - avoid doing this in the testing environment by mistake
-//		register_uninstall_hook( $plugin_bootstrap_filename,  array( __CLASS__, 'handle_plugin_uninstall' ) );
+		register_uninstall_hook( $plugin_bootstrap_filename,  array( __CLASS__, 'handle_plugin_uninstall' ) );
+		
+	} // function
 
+	/**
+	 * Register the actions for our cron jobs
+	 */
+	private static function register_action_handlers() {
+		
+		\Reg_Man_RC\Control\Admin\Item_Import_Admin_Controller::register_action_handlers();
+		\Reg_Man_RC\Control\Admin\Visitor_Import_Admin_Controller::register_action_handlers();
+		\Reg_Man_RC\Control\Admin\Venue_Import_Admin_Controller::register_action_handlers();
+		\Reg_Man_RC\Control\Admin\Volunteer_Import_Admin_Controller::register_action_handlers();
+		
 	} // function
 
 	/**
@@ -79,6 +98,7 @@ class Plugin_Controller {
 		} elseif ( $post->ID == $volunteer_reg_calendar_id ) {
 			$post_states[] = __( 'Volunteer Registration Calendar', 'reg-man-rc' );
 		} // endif
+//		Error_Log::var_dump( $post_states );
 		return $post_states;
 	} // function
 
@@ -92,16 +112,16 @@ class Plugin_Controller {
 	 * @since	v0.1.0
 	 */
 	public static function handle_plugin_activation() {
-		// Model elements
-		\Reg_Man_RC\Model\Visitor::handle_plugin_activation();
-		\Reg_Man_RC\Model\Volunteer::handle_plugin_activation();
+
 		// View elements
 		\Reg_Man_RC\View\Pub\Volunteer_Area::handle_plugin_activation();
+
 		// Control elements
 		\Reg_Man_RC\Control\User_Role_Controller::handle_plugin_activation();
 		\Reg_Man_RC\Model\Stats\Supplemental_Item::handle_plugin_activation();
 		\Reg_Man_RC\Model\Stats\Supplemental_Visitor_Registration::handle_plugin_activation();
 		\Reg_Man_RC\Model\Stats\Supplemental_Volunteer_Registration::handle_plugin_activation();
+		
 	} // function
 
 	/**
@@ -133,14 +153,14 @@ class Plugin_Controller {
 		
 		// Taxonomies
 		\Reg_Man_RC\Model\Event_Category::register();
-		\Reg_Man_RC\Model\Item_Type::register();
 		\Reg_Man_RC\Model\Fixer_Station::register();
 		\Reg_Man_RC\Model\Volunteer_Role::register();
-
+		\Reg_Man_RC\Model\Item_Type::register();
+		
 		// Create required elements if they don't already exist
 		\Reg_Man_RC\Model\Calendar::get_visitor_registration_calendar();
 		\Reg_Man_RC\Model\Calendar::get_volunteer_registration_calendar();
-
+		
 		// Misc
 		\Reg_Man_RC\Model\Event_Key::register();
 
@@ -149,25 +169,36 @@ class Plugin_Controller {
 		\Reg_Man_RC\View\Event_Descriptor_View::register();
 		\Reg_Man_RC\View\Venue_View::register();
 		
-		// Register the calendar controller which includes a REST API registration
-		\Reg_Man_RC\Control\Calendar_Controller::register();
+		// Register the REST API controller
+		\Reg_Man_RC\Control\REST_API_Controller::register();
+
+		// Register the ICalendar Feed controller
+		\Reg_Man_RC\Control\ICalendar_Feed_Controller::register();
+
+		// Register the ORDS Feed controller
+		\Reg_Man_RC\Control\ORDS_Feed_Controller::register();
 
 		// Register the controllers which may be used on both front and back end
+		\Reg_Man_RC\Control\Calendar_Controller::register();
 		\Reg_Man_RC\Control\Internal_Event_Descriptor_Controller::register();
 		\Reg_Man_RC\Control\Ajax_Chart_View_Controller::register();
 		\Reg_Man_RC\Control\Map_Controller::register();
 		\Reg_Man_RC\Control\Term_Order_Controller::register();
-		\Reg_Man_RC\Control\Visitor_Controller::register();
 		\Reg_Man_RC\Control\Volunteer_Controller::register();
 		\Reg_Man_RC\Control\Volunteer_Registration_Controller::register();
 		\Reg_Man_RC\Control\Comments\Comments_Controller::register();
 		\Reg_Man_RC\Control\Comments\Volunteer_Area_Comments_Controller::register();
 		\Reg_Man_RC\Control\Visitor_Registration_Controller::register();
+		\Reg_Man_RC\Control\Admin_Bar_Controller::register();
 		
 		// Initialize the parts used only on back end or front end, depending on what's being rendered right now
-		if ( is_admin() ) { // is_admin() ONLY checks if the dashboard is being rendered, not if user is admin
+		if ( is_admin() ) { // is_admin() ONLY checks if the backend admin UI is being rendered, not if user is admin
 
+			// Register the controller for handling plugin updates
+			\Reg_Man_RC\Control\Plugin_Update\Plugin_Update_Controller::register();
+			
 			// Register the controllers used on the admin side
+			\Reg_Man_RC\Control\Admin\Admin_Help_Controller::register();
 			\Reg_Man_RC\Control\Admin\Permalink_Settings_Admin_Controller::register();
 			\Reg_Man_RC\Control\Admin\Venue_Admin_Controller::register();
 			\Reg_Man_RC\Control\Admin\Item_Admin_Controller::register();
@@ -181,16 +212,15 @@ class Plugin_Controller {
 			\Reg_Man_RC\Control\Admin\Volunteer_Registration_Admin_Controller::register();
 			\Reg_Man_RC\Control\Admin\Supplemental_Event_Data_Admin_Controller::register();
 			\Reg_Man_RC\Control\Admin\Volunteer_Role_Admin_Controller::register();
-			// TODO: Is Item Import necessary?
-//			\Reg_Man_RC\Control\Admin\Item_Import_Admin_Controller::register();
+			\Reg_Man_RC\Control\Admin\Item_Import_Admin_Controller::register();
 			\Reg_Man_RC\Control\Admin\Visitor_Import_Admin_Controller::register();
+			\Reg_Man_RC\Control\Admin\Venue_Import_Admin_Controller::register();
 			\Reg_Man_RC\Control\Admin\Volunteer_Import_Admin_Controller::register();
 			\Reg_Man_RC\Control\Admin\Table_View_Admin_Controller::register();
 
 			// Register the views
 			\Reg_Man_RC\View\Admin\Admin_Menu_Page::register();
-			\Reg_Man_RC\View\Admin\Admin_Dashboard_Page::register();
-			\Reg_Man_RC\View\Admin\Admin_Help_View::register();
+			\Reg_Man_RC\View\Admin\Admin_Event_Calendar_Page::register();
 			\Reg_Man_RC\View\Admin\Admin_Stats_View::register();
 			\Reg_Man_RC\View\Admin\Calendar_Admin_View::register();
 			\Reg_Man_RC\View\Admin\Internal_Event_Descriptor_Admin_View::register();
@@ -202,24 +232,25 @@ class Plugin_Controller {
 			\Reg_Man_RC\View\Admin\Fixer_Station_Admin_View::register();
 			\Reg_Man_RC\View\Admin\Visitor_Admin_View::register();
 			\Reg_Man_RC\View\Admin\Volunteer_Admin_View::register();
+//			\Reg_Man_RC\View\Admin\Volunteer_Merge_Admin_Page::register();
 			\Reg_Man_RC\View\Admin\Volunteer_Role_Admin_View::register();
 			\Reg_Man_RC\View\Admin\Volunteer_Registration_Admin_View::register();
 			\Reg_Man_RC\View\Admin\Supplemental_Event_Data_Admin_View::register();
-			// TODO: Is Item Import necessary?
-//			\Reg_Man_RC\View\Admin\Item_Import_Admin_View::register();
+			\Reg_Man_RC\View\Admin\Venue_Import_Admin_View::register();
+			\Reg_Man_RC\View\Admin\Item_Import_Admin_View::register();
 			\Reg_Man_RC\View\Admin\Visitor_Import_Admin_View::register();
 			\Reg_Man_RC\View\Admin\Volunteer_Import_Admin_View::register();
 			\Reg_Man_RC\View\Admin\Term_Order_Admin_View::register();
 
 			\Reg_Man_RC\View\Admin\Settings_Admin_Page::register();
-
+			
 		} else {
 
 			// Register the views used on the public side
 //			\Reg_Man_RC\View\Pub\Virtual_Page_View::register();
 			\Reg_Man_RC\View\Pub\Visitor_Reg_Manager::register(); // The UI is on the public side but user must be logged in to use it
 //			\Reg_Man_RC\View\Pub\Internal_Event_Descriptor_View::register();
-			\Reg_Man_RC\View\Pub\Volunteer_View::register();
+//			\Reg_Man_RC\View\Pub\Volunteer_View::register();
 			\Reg_Man_RC\View\Pub\Volunteer_Area::register();
 			\Reg_Man_RC\View\Stats\Repairs_Chart_View::register();
 			
@@ -287,17 +318,46 @@ class Plugin_Controller {
 	 * @since v0.1.0
 	 */
 	public static function handle_plugin_uninstall() {
-		\Reg_Man_RC\Model\Event_Category::handle_plugin_uninstall();
-		\Reg_Man_RC\Model\Fixer_Station::handle_plugin_uninstall();
+
+		$env_type = wp_get_environment_type();
+		Error_Log::log_msg( $env_type );
+		switch ( $env_type ) {
+			
+			case 'production':
+			case 'staging':
+				self::perform_uninstall();
+				break;
+				
+			case 'local':
+			case 'development':
+			default:
+				// do nothing
+				break;
+				
+		} // endswitch
+		
+	} // function
+	
+	private static function perform_uninstall() {
+		
 		\Reg_Man_RC\Model\Internal_Event_Descriptor::handle_plugin_uninstall();
 		\Reg_Man_RC\Model\Item::handle_plugin_uninstall();
+		\Reg_Man_RC\Model\Volunteer_Registration::handle_plugin_uninstall();
 		\Reg_Man_RC\Model\Venue::handle_plugin_uninstall();
+		\Reg_Man_RC\Model\Calendar::handle_plugin_uninstall();
 		\Reg_Man_RC\Model\Visitor::handle_plugin_uninstall();
 		\Reg_Man_RC\Model\Volunteer::handle_plugin_uninstall();
+		\Reg_Man_RC\Model\Item_Suggestion::handle_plugin_uninstall();
+		
+		\Reg_Man_RC\Model\Event_Category::handle_plugin_uninstall();
+		\Reg_Man_RC\Model\Fixer_Station::handle_plugin_uninstall();
+		\Reg_Man_RC\Model\Volunteer_Role::handle_plugin_uninstall();
+		\Reg_Man_RC\Model\Item_Type::handle_plugin_uninstall();
+
 		\Reg_Man_RC\Model\Stats\Supplemental_Item::handle_plugin_uninstall();
 		\Reg_Man_RC\Model\Stats\Supplemental_Visitor_Registration::handle_plugin_uninstall();
 		\Reg_Man_RC\Model\Stats\Supplemental_Volunteer_Registration::handle_plugin_uninstall();
-	} // function
 
+	} // function
 
 } // class

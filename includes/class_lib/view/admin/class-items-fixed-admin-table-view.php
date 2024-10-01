@@ -7,6 +7,7 @@ use Reg_Man_RC\Model\Stats\Item_Stats;
 use Reg_Man_RC\Model\Stats\Item_Stats_Collection;
 use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Fixer_Station;
+use Reg_Man_RC\Model\Event;
 
 /**
  * The administrative view for an item stats table
@@ -16,13 +17,60 @@ use Reg_Man_RC\Model\Fixer_Station;
  */
 class Items_Fixed_Admin_Table_View {
 
+	private $single_event; // The event object when showing data for a single event
 	private $group_by;
 
 	private function __construct() { }
 
-	public static function create( $group_by = Item_Stats_Collection::GROUP_BY_FIXER_STATION ) {
+	/**
+	 * Create an instance of this class
+	 * @param	Event	$single_event
+	 * @return Items_Fixed_Admin_Table_View
+	 */
+	public static function create( $single_event = NULL ) {
 		$result = new self();
-		$result->group_by = $group_by;
+		if ( ! empty( $single_event ) && $single_event instanceof Event ) {
+			$result->single_event = $single_event;
+		} // endif
+		$result->group_by = Item_Stats_Collection::GROUP_BY_FIXER_STATION;
+		return $result;
+	} // function
+
+	/**
+	 * Get the Event object when this table is showing data for a single event
+	 * @return Event
+	 */
+	private function get_single_event() {
+		return $this->single_event;
+	} // function
+	
+	private function get_single_event_key() {
+		$single_event = $this->get_single_event();
+		return ! empty( $single_event ) ? $single_event->get_key_string() : '';
+	} // function
+	
+	private function get_print_page_title() {
+		$event = $this->get_single_event();
+		if ( ! empty( $event ) ) {
+			$label = $event->get_label();
+			/* Translators: %1$s is a label for an event used in the title of a page */
+			$result = __( sprintf( 'Repairs - %1$s', $label ), 'reg-man-rc' );
+		} else {
+			$result = __( 'Repairs', 'reg-man-rc' );
+		} // endif
+		return $result;
+	} // function
+
+	private function get_export_file_name() {
+		$event = $this->get_single_event();
+		if ( ! empty( $event ) ) {
+			$label = $event->get_label();
+			/* Translators: %1$s is a label for an event used in the title of a page */
+			$result = __( sprintf( 'Repairs - %1$s', $label ), 'reg-man-rc' );
+		} else {
+			$result = __( 'Repairs', 'reg-man-rc' );
+		} // endif
+		$result = sanitize_file_name( $result );
 		return $result;
 	} // function
 
@@ -31,13 +79,17 @@ class Items_Fixed_Admin_Table_View {
 
 		$ajax_url = esc_url( admin_url( 'admin-ajax.php' ) );
 		$ajax_action = Table_View_Admin_Controller::AJAX_GET_DATA_ACTION;
+		$ajax_nonce = wp_create_nonce( $ajax_action );
 		$object_type = Table_View_Admin_Controller::TABLE_TYPE_ITEMS_FIXED;
 		$group_by = $this->group_by;
 		$dom_setting = '';
-
+		$single_event = $this->get_single_event();
+		$print_page_title = $this->get_print_page_title();
+		$export_file_name = $this->get_export_file_name();
+		
 		$title = __( 'Repairs', 'reg-man-rc' );
 
-		$group_by_title = __( 'Group repairs by', 'reg-man-rc' );
+		$group_by_title = __( 'Group by', 'reg-man-rc' );
 		$conf_level = Settings::get_confidence_level_for_interval_estimate();
 		echo '<div class="reg-man-rc-stats-table-view items-fixed-table event-filter-change-listener">';
 			echo '<div class="reg-man-rc-table-loading-indicator spinner"></div>';
@@ -85,12 +137,37 @@ class Items_Fixed_Admin_Table_View {
 					$conf_level );
 
 			echo '<div class="datatable-container admin-stats-table-container">';
+			
+				$data_array = array();
+				$data_array[] = "data-ajax-url=\"$ajax_url\"";
+				$data_array[] = "data-ajax-action=\"$ajax_action\"";
+				$data_array[] = "data-ajax-nonce=\"$ajax_nonce\"";
+				$data_array[] = "data-table-type=\"$object_type\"";
+				$data_array[] = "data-group-by=\"$group_by\"";
+				if ( ! empty( $single_event ) ) {
+					$single_event_key = $this->get_single_event_key();
+					$data_array[] = "data-event-key=\"$single_event_key\"";
+					// Add Supplemental button if user is authorized to register items
+					$event = $this->get_single_event();
+					if ( $event->get_is_current_user_able_to_register_items() ) {
+						$data_array[] = 'data-supplemental-data-button-class="supplemental-items-button"';
+					} // endif
+				} // endif
+				$data_array[] = "data-print-page-title=\"$print_page_title\"";
+				$data_array[] = "data-export-file-name=\"$export_file_name\"";
+				$data_array[] = "data-scope=\"\"";
+				$data_array[] = "data-dom-setting=\"$dom_setting\"";
+				$data = implode( ' ', $data_array );
+				
 				// Using inline style width 100% allows Datatables to calculate the proper width, css doesn't work
+				echo "<table class=\"datatable admin-stats-table items-fixed-admin-table\" style=\"width:100%\" $data>";
+/*
 				echo '<table class="datatable admin-stats-table items-fixed-admin-table" style="width:100%"' .
 					" data-ajax-url=\"$ajax_url\" data-ajax-action=\"$ajax_action\" " .
 					" data-table-type=\"$object_type\" data-group-by=\"$group_by\" " .
 					" data-scope=\"\"" .
 					" data-dom-setting=\"$dom_setting\">";
+*/
 					echo '<thead>';
 
 						printf( $heading_format, 'desc',	esc_html__( 'Item Description', 'reg-man-rc' ), '' );
@@ -108,8 +185,8 @@ class Items_Fixed_Admin_Table_View {
 								esc_html__( 'End of Life', 'reg-man-rc' ),
 								esc_attr__( 'Count of items reported as not repairable', 'reg-man-rc' ) );
 						printf( $heading_format, 'sampled_percent text-align-right col-hidden',
-								esc_html__( '% Repair Status Reported', 'reg-man-rc' ),
-								esc_attr__( 'Percentage of items whose repair status was reported', 'reg-man-rc' ) );
+								esc_html__( '% Repair Outcome Reported', 'reg-man-rc' ),
+								esc_attr__( 'Percentage of items whose repair outcome was reported', 'reg-man-rc' ) );
 						printf( $heading_format, 'diverted-percent text-align-right num-with-empty-placeholder',
 								esc_html__( 'Est. % Diverted From Landfill', 'reg-man-rc' ),
 								esc_attr__( 'Estimated percentage of items diverted from landfill based on items reported as fixed or repairable', 'reg-man-rc' ) );

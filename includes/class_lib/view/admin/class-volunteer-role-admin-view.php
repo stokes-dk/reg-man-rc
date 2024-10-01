@@ -133,7 +133,13 @@ class Volunteer_Role_Admin_View {
 		//  versus the case where no checkboxes were presented at all like in quick edit mode
 		echo '<input type="hidden" name="volunteer_role_selection_flag" value="TRUE">';
 
-		$format = '<div><label title="%1$s"><input type="checkbox" name="' . $input_name . '[]" value="%2$s" %3$s><span>%4$s</span></label></div>';
+		$format =
+			'<div>' . 
+				'<label title="%1$s" class="reg-man-rc-metabox-radio-label">' . 
+					'<input type="checkbox" name="' . $input_name . '[]" value="%2$s" %3$s>' . 
+					'<span>%4$s</span>' . 
+				'</label>' .
+			'</div>';
 		foreach ( $all_roles as $role ) {
 			$id = $role->get_id();
 			$name = $role->get_name();
@@ -200,7 +206,7 @@ class Volunteer_Role_Admin_View {
 				'</tr>';
 
 			echo '<p>';
-				$label = __( 'The following are typical volunteer roles you may choose to create to help get you started quickly', 'reg-man-rc' );
+				$label = __( 'The following are typical volunteer roles', 'reg-man-rc' );
 				echo '<b>' . esc_html( $label ) . '</b>';
 			echo '</p>';
 
@@ -385,4 +391,63 @@ class Volunteer_Role_Admin_View {
 		return $content;
 	} // function
 
+	/**
+	 * Get the set of tabs to be shown in the help for this taxonomy
+	 * @return array
+	 */
+	public static function get_help_tabs() {
+		$result = array(
+			array(
+				'id'		=> 'reg-man-rc-about',
+				'title'		=> __( 'About', 'reg-man-rc' ),
+				'content'	=> self::get_about_content(),
+			),
+		);
+		return $result;
+	} // function
+
+	/**
+	 * Get the html content shown to the administrator in the "About" help for this taxonomy
+	 * @return string
+	 */
+	private static function get_about_content() {
+		ob_start();
+			$heading = __( 'About volunteer roles', 'reg-man-rc' );
+			echo "<h2>$heading</h2>";
+			echo '<p>';
+				$msg = __(
+					'A volunteer role is a task or set of tasks for a volunteer at an event;' .
+					' for example, Setup & Cleanup, Registration, or Photographer.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'When a volunteer registers for an event they will specify which roles (if any) they prefer to perform.' .
+					'  A volunteer may perform more than one role at an event; for example, Setup & Cleanup and Photographer.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'A fixer may register for a volunteer role like Setup & Cleanup (which is performed before and after the event)' .
+					' and also register to repair items at a fixer station during the event.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'Volunteer roles are colour coded for display in statistical charts.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			$result = ob_get_clean();
+		return $result;
+	} // function
+
+	
 } // class

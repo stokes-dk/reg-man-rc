@@ -11,6 +11,9 @@ use Reg_Man_RC\View\Form_Input_List;
 use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\View\Event_View;
 use Reg_Man_RC\Model\Calendar;
+use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Model\Event;
+use Reg_Man_RC\Control\User_Role_Controller;
 
 /**
  * The administrative view for Item
@@ -68,7 +71,7 @@ class Item_Admin_View {
 					__( 'Event', 'reg-man-rc' ),	// Box title
 					$render_fn,						// Content callback, must be of type callable
 					Item::POST_TYPE, 				// Post type for this meta box
-					'side', 						// Meta box position
+					'normal', 						// Meta box position
 					'high'							// Meta box priority
 			);
 
@@ -79,8 +82,21 @@ class Item_Admin_View {
 					__( 'Visitor', 'reg-man-rc' ),	// Box title
 					$render_fn,						// Content callback, must be of type callable
 					Item::POST_TYPE, 				// Post type for this meta box
-					'side', 						// Meta box position
+					'normal', 						// Meta box position
 					'high'							// Meta box priority
+			);
+
+			// Fixer Station
+			$view = Fixer_Station_Admin_View::create();
+			$new_id = Item::POST_TYPE . '-fixer-station-metabox';
+			$render_fn = array( $view, 'render_post_metabox' );
+			add_meta_box(
+					$new_id,								// Unique ID for the element
+					__( 'Fixer Station', 'reg-man-rc' ),	// Box title
+					$render_fn,								// Content callback, must be of type callable
+					Item::POST_TYPE, 						// Post type for this meta box
+					'side',									// Meta box position
+					'high'									// Meta box priority
 			);
 
 			// Item Type metabox - if item types are defined
@@ -98,27 +114,15 @@ class Item_Admin_View {
 				);
 			} // endif
 
-			$view = Fixer_Station_Admin_View::create();
-			$new_id = Item::POST_TYPE . '-fixer-station-metabox';
-			$render_fn = array( $view, 'render_post_metabox' );
+			$new_id = Item::POST_TYPE . '-status-metabox';
+			$render_fn = array( __CLASS__, 'render_status_meta_box' );
 			add_meta_box(
 					$new_id,								// Unique ID for the element
-					__( 'Fixer Station', 'reg-man-rc' ),	// Box title
+					__( 'Repair Outcome', 'reg-man-rc' ),	// Box title
 					$render_fn,								// Content callback, must be of type callable
 					Item::POST_TYPE, 						// Post type for this meta box
 					'side',									// Meta box position
 					'high'									// Meta box priority
-			);
-
-			$new_id = Item::POST_TYPE . '-status-metabox';
-			$render_fn = array( __CLASS__, 'render_status_meta_box' );
-			add_meta_box(
-					$new_id,							// Unique ID for the element
-					__( 'Item Status', 'reg-man-rc' ),	// Box title
-					$render_fn,							// Content callback, must be of type callable
-					Item::POST_TYPE, 					// Post type for this meta box
-					'side',								// Meta box position
-					'high'								// Meta box priority
 			);
 		} // endif
 	} // function
@@ -132,7 +136,8 @@ class Item_Admin_View {
 	public static function render_event_meta_box( $post ) {
 
 		$item = Item::get_item_by_id( $post->ID );
-		$selected_key = isset( $item ) ? $item->get_event_key() : NULL;
+		$selected_event = isset( $item ) ? $item->get_event() : NULL;
+		$selected_key = isset( $selected_event ) ? $selected_event->get_key_string() : NULL;
 		$input_name = 'item_event';
 
 		// We need a flag to distinguish the case where no user input is provided
@@ -145,7 +150,8 @@ class Item_Admin_View {
 		$selected = ( empty( $selected_key ) ) ? 'selected="selected"' : '';
 		$first_option = "<option value=\"\" disabled=\"disabled\" $selected>$name</option>";
 		$is_required = TRUE;
-		Event_View::render_event_select( $input_name, $classes, $calendar, $selected_key, $first_option, $is_required );
+		$events_array = Event::get_events_array_current_user_can_register_items();
+		Event_View::render_event_select( $input_name, $classes, $calendar, $selected_key, $events_array, $first_option, $is_required );
 
 	} // function
 
@@ -165,121 +171,143 @@ class Item_Admin_View {
 		$visitor = isset( $item ) ? $item->get_visitor() : NULL;
 		$visitor_id = isset( $visitor ) ? $visitor->get_id() : NULL;
 
+		$visitor_id_input_name = 'item_visitor';
+		$visitor_id_input_id = 'item_visitor_input_id';
+		
 		echo '<div class="reg-man-rc-item visitor-metabox reg-man-rc-metabox">';
 
-			$input_list = Form_Input_List::create();
+			// Users who are allowed to read private visitors can see a full list of visitors and select one
+			if ( current_user_can( 'read_private_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ) {
 
-			$name = 'item_visitor_select';
-			$id = 'item_visitor_select_id';
-			ob_start();
-				self::render_visitor_select( $name, $id, $visitor_id );
-			$select_html = ob_get_clean();
-			$label = '';
-			$hint = '';
-			$classes = '';
-			$is_required = FALSE;
-			$input_list->add_custom_html_input( $label, $name, $select_html, $hint, $classes, $is_required, $id );
+				self::render_visitor_select( $visitor_id_input_name, $visitor_id_input_id, $visitor_id );
+				
+			} elseif ( current_user_can( 'edit_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL ) ) {
+				
+				// Otherwise the metabox should contain only the visitor represented by the current WP User
+				// If there is no visitor assigned to this record then it may be a newly created one
+				// So let's make sure we use the current visitor
+				if ( empty( $visitor ) ) {
 
-			$visitor_details_list = Form_Input_List::create();
-			$visitor_details_list->set_required_inputs_flagged( TRUE );
+					$is_create_new_visitor = TRUE;
+					$visitor = Visitor::get_visitor_for_current_wp_user( $is_create_new_visitor );
+					$visitor_id = isset( $visitor ) ? $visitor->get_id() : NULL;
+					
+				} // endif
 
-				$label = __( 'Public name', 'reg-man-rc' );
-				$name = 'visitor_public_name';
-				$val = '';
-				$hint = __( 'The name used to refer to the visitor publicly at an event, e.g. first name or first name and last initial', 'reg-man-rc' );
-				$classes = '';
-				$is_required = TRUE;
-				$visitor_details_list->add_text_input( $label, $name, $val, $hint, $classes, $is_required );
+				if ( ! empty( $visitor ) ) {
+					
+					// Pass the volunteer ID as a hidden input
+					echo "<input type=\"hidden\" name=\"$visitor_id_input_name\" value=\"$visitor_id\">";
+	
+					// Include a flag to indicate that the details should be updated
+					echo '<input type="hidden" name="item_visitor_details_update_flag" value="TRUE">';
+	
+					self::render_visitor_details_inputs( '', $visitor );
+				
+				} // endif
 
-				$info_html = __( 'The following personal information is collected for internal records only and is never shown on the public website.', 'reg-man-rc' );
-				$visitor_details_list->add_information( '', $info_html );
-
-				$label = __( 'Is this the visitor\'s first event?', 'reg-man-rc' );
-				$name = 'is_visitor_first_event';
-				$val = 'YES';
-				$checked = FALSE;
-				$visitor_details_list->add_checkbox_input( $label, $name, $val, $checked );
-
-				$label = __( 'Full Name', 'reg-man-rc' );
-				$name = 'visitor_full_name';
-				$val = '';
-				$hint = '';
-				$classes = '';
-				$visitor_details_list->add_text_input( $label, $name, $val, $hint, $classes );
-
-				$label = __( 'Email', 'reg-man-rc' );
-				$name = 'visitor_email';
-				$val = '';
-				$hint = '';
-				$classes = '';
-				$visitor_details_list->add_text_input( $label, $name, $val, $hint, $classes );
-
-				$label = __( 'Join mailing list?', 'reg-man-rc' );
-				$name = 'visitor_join_mail_list';
-				$val = 'YES';
-				$checked = FALSE;
-				$hint = '';
-				$classes = '';
-				$visitor_details_list->add_checkbox_input( $label, $name, $val, $checked );
-
-			$label = __( 'Visitor details', 'reg-man-rc' );
-			$is_open = TRUE;
-			$hint = '';
-			$classes = 'visitor-details-container';
-			$is_required = FALSE;
-
-			$input_list->add_fieldset( $label, $visitor_details_list, $hint, $classes, $is_required );
-
-			$input_list->render();
+			} // endif
 
 		echo '</div>';
 
 	} // function
 
+	/**
+	 * Render the inputs for the visitor details like full name and email
+	 * @param string	$classes
+	 * @param Visitor	$visitor
+	 */
+	private static function render_visitor_details_inputs( $list_classes, $visitor = NULL ) {
+		
+		$input_list = Form_Input_List::create();
+		$input_list->set_required_inputs_flagged( TRUE );
+		$input_list->add_list_classes( $list_classes );
 
+		$label = __( 'Public name', 'reg-man-rc' );
+		$name = 'visitor_public_name';
+		$val = isset( $visitor ) ? $visitor->get_public_name() : '';
+		$hint = __( 'The name used to refer to the visitor publicly at an event, e.g. first name or first name and last initial', 'reg-man-rc' );
+		$classes = '';
+		$is_required = TRUE;
+		$input_list->add_text_input( $label, $name, $val, $hint, $classes, $is_required );
+		
+		$info_html = __( 'The following personal information is collected for internal records only and is never shown on the public website.', 'reg-man-rc' );
+		$input_list->add_information( '', $info_html );
+		
+		// If these inputs are for an existing visitor update rather than a new visitor
+		// then we have no good way to allow the user to indicate which event is this visitor's first, so just don't show it
+		if ( ! isset( $visitor ) ) {
+			$label = __( 'Is this the visitor\'s first event?', 'reg-man-rc' );
+			$name = 'is_visitor_first_event';
+			$val = 'YES';
+			$checked = FALSE;
+			$input_list->add_checkbox_input( $label, $name, $val, $checked );
+		} // endif
+
+		$label = __( 'Full Name', 'reg-man-rc' );
+		$name = 'visitor_full_name';
+		$val = isset( $visitor ) ? $visitor->get_full_name() : '';
+		$hint = '';
+		$classes = '';
+		$input_list->add_text_input( $label, $name, $val, $hint, $classes );
+
+		$label = __( 'Email', 'reg-man-rc' );
+		$name = 'visitor_email';
+		$val = isset( $visitor ) ? $visitor->get_email() : '';
+		$hint = '';
+		$classes = '';
+		$is_required = isset( $visitor ); // It can't be a required input when it is normally hidden from view;
+		$addn_attrs = isset( $visitor ) ? 'readonly="readonly"' : '';
+		$input_list->add_text_input( $label, $name, $val, $hint, $classes, $is_required, $addn_attrs );
+
+		$label = __( 'Join mailing list?', 'reg-man-rc' );
+		$name = 'visitor_join_mail_list';
+		$val = 'YES';
+		$checked = isset( $visitor ) ? $visitor->get_is_join_mail_list() : FALSE;
+		$hint = '';
+		$classes = '';
+		$input_list->add_checkbox_input( $label, $name, $val, $checked );
+			
+		$input_list->set_required_inputs_flagged( FALSE );
+		$input_list->render();
+				
+	} // function
+	
 	private static function render_visitor_select( $input_name, $input_id, $selected_id = NULL ) {
 
 		// Disabled to start with until it is initialized on the client side
 		echo "<select required=\"required\" class=\"combobox\" name=\"$input_name\" id=\"$input_id\" autocomplete=\"off\"  disabled=\"disabled\" >";
 
-//			$label = __( 'No visitor', 'reg-man-rc' );
-//			$label_attr = esc_attr( $label );
-//			echo "<optgroup label=\"$label_attr\">";
-//				$label = __( 'No visitor selected', 'reg-man-rc' );
-				$label = __( '-- Please select --', 'reg-man-rc' );
-				$html_name = esc_html( $label );
-				$selected = ( empty( $selected_id ) ) ? 'selected="selected"' : '';
-				echo "<option value=\"\" disabled=\"disabled\" $selected>$html_name</option>";
-//			echo '</optgroup>';
+			$label = __( '-- Please select --', 'reg-man-rc' );
+			$html_name = esc_html( $label );
+			$selected = ( empty( $selected_id ) ) ? 'selected="selected"' : '';
+			echo "<option value=\"\" disabled=\"disabled\" $selected>$html_name</option>";
 
 			$visitor_array = Visitor::get_all_visitors();
 //		Error_Log::var_dump( $visitor_array );
 
 			if ( ! empty( $visitor_array ) ) {
-//				$label = __( 'Select returning visitor', 'reg-man-rc' );
-//				$label_attr = esc_attr( $label );
-//				echo "<optgroup label=\"$label_attr\">";
-					foreach ( $visitor_array as $visitor ) {
-						$id = $visitor->get_id();
-						$label = $visitor->get_label();
-						$html_label = esc_html( $label );
-						$selected = selected( $id, $selected_id, $echo = FALSE );
-						$id_attr = esc_attr( $id );
-						echo "<option value=\"$id_attr\" $selected>$html_label</option>";
-					} // endfor
-//				echo '</optgroup>';
+				foreach ( $visitor_array as $visitor ) {
+					$id = $visitor->get_id();
+					$label = $visitor->get_display_name();
+					$html_label = esc_html( $label );
+					$selected = selected( $id, $selected_id, $echo = FALSE );
+					$id_attr = esc_attr( $id );
+					echo "<option value=\"$id_attr\" $selected>$html_label</option>";
+				} // endfor
 			} // endif
 
-//			$label = __( 'Add visitor', 'reg-man-rc' );
-//			$label_attr = esc_attr( $label );
-//			echo "<optgroup label=\"$label_attr\">";
-				$label = __( 'Add a new visitor', 'reg-man-rc' );
-				$html_name = esc_html( $label );
-				$selected = '';
-				echo "<option value=\"-1\" class=\"select_option_add\" $selected>$html_name</option>";
-//			echo '</optgroup>';
+			$label = __( 'Add a new visitor', 'reg-man-rc' );
+			$html_name = esc_html( $label );
+			$selected = '';
+			echo "<option value=\"-1\" class=\"select_option_add\" $selected>$html_name</option>";
 
 		echo '</select>';
+		
+		// The select includes an option to add a new visitor
+		// The following renders those inputs
+		self::render_visitor_details_inputs( 'add-visitor-input-list' );
+		
 	} // function
 
 
@@ -297,21 +325,29 @@ class Item_Admin_View {
 		echo '<input type="hidden" name="item_status_input_flag" value="TRUE">';
 
 		$item = Item::get_item_by_id( $post->ID );
-		$curr_item_status = ( ! empty( $item ) ) ? $item->get_status() : Item_Status::get_default_item_status();
+		$curr_item_status = ( ! empty( $item ) ) ? $item->get_item_status() : Item_Status::get_default_item_status();
 		$curr_status_id = $curr_item_status->get_id();
 
 		$options = Item_Status::get_all_item_statuses();
 		$input_name = 'status_id';
 		$input_id = Item::POST_TYPE . '-status-input';
 
-		$format = '<div><label title="%1$s"><input type="radio" name="' . $input_name . '" value="%2$s" %3$s><span>%4$s</span></label></div>';
+		$format =
+			'<div>' . 
+				'<label title="%3$s" class="reg-man-rc-metabox-radio-label">' .
+					'<input type="radio" name="' . $input_name . '" value="%2$s" %4$s required="required">' . 
+					'<span>%5$s</span>' . 
+				'</label>' . 
+			'</div>';
+
 		foreach ( $options as $status ) {
 			$id = $status->get_id();
 			$name = $status->get_name();
+			$desc = $status->get_description();
 			$html_name = esc_html( $name );
 			$attr_name = esc_attr( $name );
 			$checked = checked( $id, $curr_status_id, $echo = FALSE );
-			printf( $format, $attr_name, $id, $checked, $html_name );
+			printf( $format, $attr_name, $id, $desc, $checked, $html_name );
 		} // endfor
 
 	} // function
@@ -386,10 +422,10 @@ class Item_Admin_View {
 			'title'				=> __( 'Description', 'reg-man-rc' ),
 			'event'				=> __( 'Event', 'reg-man-rc' ),
 			'visitor'			=> __( 'Visitor', 'reg-man-rc' ),
-			'item_type'			=> __( 'Item Type', 'reg-man-rc' ),
 			'fixer_station'		=> __( 'Fixer Station', 'reg-man-rc' ),
-			'item_status'		=> __( 'Status', 'reg-man-rc' ),
-			'comments'			=>	$columns[ 'comments' ],
+			'item_type'			=> __( 'Item Type', 'reg-man-rc' ),
+			'item_status'		=> __( 'Status / Outcome', 'reg-man-rc' ),
+//			'comments'			=>	$columns[ 'comments' ],
 			'date'				=> __( 'Last Update', 'reg-man-rc' ),
 			'author'			=> __( 'Author', 'reg-man-rc' ),
 		);
@@ -409,42 +445,40 @@ class Item_Admin_View {
 		$item = Item::get_item_by_id( $post_id );
 		if ( $item !== NULL ) {
 			switch ( $column_name ) {
+				
 				case 'event':
 					$event = $item->get_event();
 					if ( $event !== NULL ) {
-						$filter_array = array( Item::EVENT_META_KEY			=> $event->get_key() );
+						$filter_array = array( Item::EVENT_META_KEY			=> $event->get_key_string() );
 						$href = self::get_admin_view_href( $filter_array );
 						$label = esc_html( $event->get_label() );
 						$link_format = '<div class="cpt-filter-link"><a href="%1$s">%2$s</a></div>';
 						$result = sprintf( $link_format, $href, $label );
 					} else {
-						$result = $em_dash;
+						$key_string = $item->get_event_key_string();
+						if ( empty( $key_string ) )  {
+							$result = $em_dash;
+						} else {
+							$event = Event::create_placeholder_event( $key_string );
+							$filter_array = array( Item::EVENT_META_KEY => $event->get_key_string() );
+							$href = self::get_admin_view_href( $filter_array );
+							$label = esc_html( $event->get_label() );
+							$link_format = '<div class="cpt-filter-link"><a href="%1$s">%2$s</a></div>';
+							$result = sprintf( $link_format, $href, $label );
+						} // endif
 					} // endif
 					break;
+					
 				case 'visitor':
-					$visitor = $item->get_visitor();
-					if ( $visitor !== NULL ) {
-						$filter_array = array( Item::VISITOR_META_KEY		=> $visitor->get_id() );
-						$href = self::get_admin_view_href( $filter_array );
-						$label = esc_html( $visitor->get_label() );
-						$link_format = '<div class="cpt-filter-link"><a href="%1$s">%2$s</a></div>';
-						$result = sprintf( $link_format, $href, $label );
+					$visitor_name = $item->get_visitor_display_name();
+					if ( ! empty( $visitor_name ) ) {
+						$label = esc_html( $visitor_name );
+						$result = $label;
 					} else {
 						$result = $em_dash;
 					} // endif
 					break;
-				case 'item_type':
-					$item_type = $item->get_item_type();
-					if ( isset( $item_type) ) {
-						$filter_array = array( Item_Type::TAXONOMY_NAME		=> $item_type->get_slug() );
-						$href = self::get_admin_view_href( $filter_array );
-						$label = esc_html( $item_type->get_name() );
-						$link_format = '<div class="cpt-filter-link"><a href="%1$s">%2$s</a></div>';
-						$result = sprintf( $link_format, $href, $label );
-					} else {
-						$result = $em_dash;
-					} // endif
-					break;
+					
 				case 'fixer_station':
 					$fixer_station = $item->get_fixer_station();
 					if ( isset( $fixer_station) ) {
@@ -457,17 +491,34 @@ class Item_Admin_View {
 						$result = $em_dash;
 					} // endif
 					break;
+					
+				case 'item_type':
+					$item_type = $item->get_item_type();
+					if ( isset( $item_type) ) {
+						$filter_array = array( Item_Type::TAXONOMY_NAME => $item_type->get_slug() );
+						$href = self::get_admin_view_href( $filter_array );
+						$label = esc_html( $item_type->get_name() );
+						$link_format = '<div class="cpt-filter-link"><a href="%1$s">%2$s</a></div>';
+						$result = sprintf( $link_format, $href, $label );
+					} else {
+						$result = $em_dash;
+					} // endif
+					break;
+					
 				case 'item_status':
-					$status = $item->get_status();
-					if ( ( $status !== NULL ) && ( $status->get_id() !== Item_Status::REGISTERED ) ) {
+					$status = $item->get_item_status();
+//					if ( ( $status !== NULL ) && ( $status->get_id() !== Item_Status::get_default_item_status_id() ) ) {
+					if ( $status !== NULL ) {
 						$result = esc_html( $status->get_name() );
 					} else {
 						$result = $em_dash;
 					} // endif
 					break;
+					
 				default:
 					$result = $em_dash;
 					break;
+					
 			} // endswitch
 		} // endif
 		echo $result;
@@ -509,7 +560,8 @@ class Item_Admin_View {
 				$selected = selected( $curr_event, 0, FALSE );
 				$first_option = "<option value=\"0\" $selected>$name</option>";
 				$is_required = TRUE;
-				Event_View::render_event_select( $filter_name, $classes, $calendar, $curr_event, $first_option, $is_required );
+				$events_array = Event::get_events_array_current_user_can_register_items();
+				Event_View::render_event_select( $filter_name, $classes, $calendar, $curr_event, $events_array, $first_option, $is_required );
 			echo '</span>';
 
 			// Add a filter for visitors
@@ -526,7 +578,8 @@ class Item_Admin_View {
 					echo "<option value=\"0\" $selected>$name</option>";
 
 					foreach ( $all_visitors as $visitor ) {
-						$name = esc_html( $visitor->get_full_name() );
+						$name = $visitor->get_display_name();
+						$name = esc_html( $name );
 						$id = $visitor->get_id();
 						$id_attr = esc_attr( $id );
 						$selected = selected( $curr_visitor, $id, FALSE );
@@ -537,7 +590,7 @@ class Item_Admin_View {
 			echo '</span>';
 
 			// Add a filter for each of these taxonomies
-			// FIXME - I would like to provide Uncategorized option but the query does not work properly
+			// TODO - I would like to provide Uncategorized option but the query does not work properly
 			//  Most likely I will have to intervene and alter the query to make this work
 			$tax_name_array = array(
 					Item_Type::TAXONOMY_NAME		=> __( '[No item type]', 'reg-man-rc' ),
@@ -583,4 +636,82 @@ class Item_Admin_View {
 		return $result;
 	} // function
 
+	/**
+	 * Get the set of tabs to be shown in the help for this type
+	 * @return array
+	 */
+	public static function get_help_tabs() {
+		$result = array(
+			array(
+				'id'		=> 'reg-man-rc-about',
+				'title'		=> __( 'About', 'reg-man-rc' ),
+				'content'	=> self::get_about_content(),
+			),
+		);
+		return $result;
+	} // function
+	
+	/**
+	 * Get the html content shown to the administrator in the "About" help for this post type
+	 * @return string
+	 */
+	private static function get_about_content() {
+		ob_start();
+			$heading = __( 'About Items', 'reg-man-rc' );
+			
+			echo "<h2>$heading</h2>";
+			echo '<p>';
+				$msg = __(
+					'An item contains the details of a single item registered for repair at an event by a visitor.' .
+					'  It includes the following:',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+
+				$item_format = '<dt>%1$s</dt><dd>%2$s</dd>';
+				echo '<dl>';
+
+					$title = esc_html__( 'Description', 'reg-man-rc' );
+					$msg = esc_html__(
+							'A short description of the item, e.g. "Toaster".' .
+							'  This will be used to identify the item in a list.',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Event', 'reg-man-rc' );
+					$msg = esc_html__( 'The event the item was registered for.', 'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Visitor', 'reg-man-rc' );
+					$msg = esc_html__( 'The visitor who registered the item.', 'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					$title = esc_html__( 'Fixer Station', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The fixer station that the item is sent to for repair, e.g. "Appliances & Housewares".',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+					if ( Settings::get_is_show_item_type_in_visitor_registration_list() ) {
+						$title = esc_html__( 'Item Type', 'reg-man-rc' );
+						$msg = esc_html__(
+								'The type of item, e.g. "Electrical / Electronic".',
+								'reg-man-rc' );
+						printf( $item_format, $title, $msg );
+					} // endif
+					
+					$title = esc_html__( 'Status / Outcome', 'reg-man-rc' );
+					$msg = esc_html__(
+							'The status or outcome of the item repair attempt, e.g. "Awaiting Fixer", or "Fixed".',
+							'reg-man-rc' );
+					printf( $item_format, $title, $msg );
+					
+				echo '</dl>';
+			echo '</p>';
+
+		$result = ob_get_clean();
+		return $result;
+	} // function
+	
+	
 } // class

@@ -27,7 +27,7 @@ class Volunteer_Registration_Item_Provider implements List_Item_Provider {
 	public static function create( $event, $object_view ) {
 		$result = new self();
 		$result->event = $event;
-		$result->volunteer_registration = $event->get_volunteer_registration();
+		$result->volunteer_registration = $event->get_volunteer_registration_for_current_request();
 		$result->object_view = $object_view;
 		return $result;
 	} // function

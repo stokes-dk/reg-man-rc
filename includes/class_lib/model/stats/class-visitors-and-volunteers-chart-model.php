@@ -3,33 +3,35 @@
 namespace Reg_Man_RC\Model\Stats;
 
 
+use Reg_Man_RC\Model\Events_Collection;
+
 class Visitors_And_Volunteers_Chart_Model implements Chart_Model {
 	
 	const CHART_TYPE = 'visitors-and-volunteers';
 	
-	private $event_keys_array;
+	private $events_collection;
 	
 	private function __construct() {}
 	
 	/**
 	 * Create an instance of this class showing visitor stats for the specified events in a bar chart
 	 *
-	 * @param	string[]	$event_keys_array	The collection of keys for events whose stats are to be shown in the chart
+	 * @param	Events_Collection	$events_collection	The collection of events whose stats are to be shown in the chart
 	 * @return	Items_Chart_Model
 	 * @since	v0.4.0
 	 */
-	public static function create_bar_chart( $event_keys_array ) {
+	public static function create_bar_chart_for_events_collection( $events_collection ) {
 		$result = new self();
-		$result->event_keys_array = $event_keys_array;
+		$result->events_collection = $events_collection;
 		return $result;
 	} // function
 	
 	/**
-	 * Get the array of event keys for this chart
-	 * @return string[]
+	 * Get the collection of events for this chart
+	 * @return Events_Collection
 	 */
-	private function get_event_keys_array() {
-		return $this->event_keys_array;
+	private function get_events_collection() {
+		return $this->events_collection;
 	} // function
 	
 	/**
@@ -48,20 +50,21 @@ class Visitors_And_Volunteers_Chart_Model implements Chart_Model {
 	private function get_people_summary_chart_config() {
 
 		$chart_config = Chart_Config::create_bar_chart();
+		
+		$events_collection = $this->get_events_collection();
 
-		$event_keys_array = $this->get_event_keys_array();
-		$event_count = is_array( $event_keys_array ) ? count( $event_keys_array ) : Event_Stats_Collection::get_all_known_events_count();
+		$event_count = $events_collection->get_event_count();
 		
 		// Get visitor stats
-		$visitor_total_stats = Visitor_Stats::get_total_visitor_stats_for_event_keys_array( $event_keys_array );
+		$visitor_total_stats = Visitor_Stats::get_total_visitor_stats_for_events_collection( $events_collection );
 		$visitor_count = $visitor_total_stats->get_visitor_count();
 
 		// Get fixer stats
-		$fixer_total_stats = Volunteer_Stats::get_total_fixer_stats_for_event_keys_array( $event_keys_array );
+		$fixer_total_stats = Volunteer_Stats::get_total_fixer_stats_for_events_collection( $events_collection );
 		$fixer_count = $fixer_total_stats->get_head_count();
 
 		// Get non-fixer stats
-		$non_fixer_total_stats = Volunteer_Stats::get_total_non_fixer_stats_for_event_keys_array( $event_keys_array );
+		$non_fixer_total_stats = Volunteer_Stats::get_total_non_fixer_stats_for_events_collection( $events_collection );
 		$non_fixer_count = $non_fixer_total_stats->get_head_count();
 
 		$avg_visitors = ( $event_count != 0 ) ? round( ( $visitor_count / $event_count ), 2 ) : 0;

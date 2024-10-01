@@ -4,13 +4,13 @@ namespace Reg_Man_RC\Model\Stats;
 
 use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Fixer_Station;
+use Reg_Man_RC\Model\Events_Collection;
 
 class Items_Chart_Model implements Chart_Model {
 	
 	const CHART_TYPE_ITEMS_BY_FIXER_STATION		= 'items-by-station';
 	const CHART_TYPE_ITEMS_BY_ITEM_TYPE			= 'items-by-type';
 	
-	private $event_keys_array;
 	private $chart_type;
 	private $item_stats_col;
 	
@@ -19,24 +19,32 @@ class Items_Chart_Model implements Chart_Model {
 	/**
 	 * Create an instance of this class showing repair stats for the specified events in a detailed bar chart
 	 *
-	 * @param	string[]	$event_keys_array	The collection of keys for events whose stats are to be shown in the chart
-	 * @param	string		$chart_type			The type of chart, one of the CHAT_TYPE_* constants in this class
+	 * @param	Events_Collection	$events_collection	The collection of events whose stats are to be shown in the chart
+	 * @param	string				$chart_type			The type of chart, one of the CHAT_TYPE_* constants in this class
 	 * @return	Items_Chart_Model
 	 * @since	v0.4.0
 	 */
-	public static function create_bar_chart( $event_keys_array, $chart_type ) {
+	public static function create_bar_chart_for_events_collection( $events_collection, $chart_type ) {
 		$result = new self();
-		$result->event_keys_array = $event_keys_array;
+		
+		switch( $chart_type ) {
+			
+			case self::CHART_TYPE_ITEMS_BY_ITEM_TYPE:
+				$group_by = Item_Stats_Collection::GROUP_BY_ITEM_TYPE;
+				break;
+			
+			case self::CHART_TYPE_ITEMS_BY_FIXER_STATION:
+			default:
+				$group_by = Item_Stats_Collection::GROUP_BY_FIXER_STATION;
+				break;
+				
+		} // endswitch
+		
+		$result->item_stats_col = Item_Stats_Collection::create_for_events_collection( $events_collection, $group_by );
 		$result->chart_type = $chart_type;
+		
 		return $result;
-	} // function
-	
-	/**
-	 * Get the array of event keys for this chart
-	 * @return string[]
-	 */
-	private function get_event_keys_array() {
-		return $this->event_keys_array;
+		
 	} // function
 	
 	/**
@@ -52,24 +60,6 @@ class Items_Chart_Model implements Chart_Model {
 	 * @return Item_Stats_Collection
 	 */
 	private function get_item_stats_collection() {
-		if ( ! isset( $this->item_stats_col ) ) {
-			
-			switch( $this->get_chart_type() ) {
-				
-				case self::CHART_TYPE_ITEMS_BY_ITEM_TYPE:
-					$group_by = Item_Stats_Collection::GROUP_BY_ITEM_TYPE;
-					break;
-				
-				case self::CHART_TYPE_ITEMS_BY_FIXER_STATION:
-				default:
-					$group_by = Item_Stats_Collection::GROUP_BY_FIXER_STATION;
-					break;
-			} // endswitch
-
-			$event_keys_array = $this->get_event_keys_array();
-			$this->item_stats_col = Item_Stats_Collection::create_for_event_key_array( $event_keys_array, $group_by );
-
-		} // function
 		return $this->item_stats_col;
 	} // funciton
 	

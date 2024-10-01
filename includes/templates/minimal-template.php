@@ -5,6 +5,7 @@
 namespace Reg_Man_RC;
 
 use Reg_Man_RC\Model\Settings;
+use Reg_Man_RC\Model\Error_Log;
 
 /*
  * Template Name: Minimal Template - Registration Manager for Repair Café
@@ -38,43 +39,8 @@ ob_start();
 	$page_contents = ob_get_contents();
 ob_end_clean();
 
-if ( FALSE ) {
-?>
-<!DOCTYPE html>
-<!--[if IE 6]>
-<html id="ie6" <?php language_attributes(); ?>>
-<![endif]-->
-<!--[if IE 7]>
-<html id="ie7" <?php language_attributes(); ?>>
-<![endif]-->
-<!--[if IE 8]>
-<html id="ie8" <?php language_attributes(); ?>>
-<![endif]-->
-<!--[if !(IE 6) & !(IE 7) & !(IE 8)]><!-->
-<html <?php language_attributes(); ?>>
-<!--<![endif]-->
-<head>
-<meta charset="<?php bloginfo( 'charset' ); ?>" />
-<meta name="viewport" content="width=device-width" />
-<title>
-	<?php
-	?>
-</title>
-<link rel="profile" href="http://gmpg.org/xfn/11" />
+echo '<!DOCTYPE html>';
 
-<?php
-// Include the theme's stylesheet by uncommenting the following
-//echo '<link rel="stylesheet" type="text/css" media="all" href="' . get_bloginfo( 'stylesheet_url' ). '" />';
-?>
-
-<!--[if lt IE 9]>
-<script src="<?php echo get_template_directory_uri(); ?>/js/html5.js" type="text/javascript"></script>
-<![endif]-->
-<?php wp_head(); ?>
-</head>
-
-<?php
-} // endif
 wp_head();
 ?>
 <body class='minimal-template'>

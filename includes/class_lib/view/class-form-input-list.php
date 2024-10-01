@@ -107,6 +107,7 @@ class Form_Input_List {
 		} // endif
 		return $this->required_inputs_flagged;
 	} // function
+	
 	public function set_required_inputs_flagged( $is_required_inputs_flagged ) {
 		$this->required_inputs_flagged = boolval( $is_required_inputs_flagged );
 	} // function
@@ -156,12 +157,15 @@ class Form_Input_List {
 				} // endif
 				printf( $format, $label, $input, $classes, $hint, $error );
 			} // endfor
-			echo '<li class="input-item required-note">Indicates required field</li>';
+			if ( $this->get_required_inputs_flagged() ) {
+				echo '<li class="input-item required-note">Indicates required field</li>';
+			} // endif
 		echo '</ul>';
 
 		$button_array = $this->get_button_array();
 		if ( ! empty( $button_array ) ) {
 			$container_classes = $this->get_button_container_classes();
+			$container_classes = "form-input-list-button-container $container_classes";
 			echo "<div class=\"$container_classes\">";
 				foreach( $button_array as $button ) {
 					echo $button;
@@ -231,6 +235,13 @@ class Form_Input_List {
 				$label = '';
 				break;
 
+			case 'radio':
+				$input_html = "<label for=\"$id\">" .
+								"<input name=\"$name\" type=\"$type\" id=\"$id\" value=\"$val\" $addn_attrs/>" .
+								"<span>$label</span></label>";
+				$label = '';
+				break;
+
 			default:
 				$input_html = "<input name=\"$name\" type=\"$type\" id=\"$id\" value=\"$val\" $addn_attrs/>";
 				break;
@@ -279,6 +290,12 @@ class Form_Input_List {
 		$this->add_input( $label, $name, 'checkbox', $val, $hint, $classes, $is_required, $addn_attrs );
 	} // function
 
+	public function add_radio_button_input( $label, $name, $val = '', $is_checked = FALSE, $hint = '', $classes = '', $is_required = FALSE, $addn_attrs = '' ) {
+		$addn_attrs .= ( $is_checked ) ? ' checked="checked"' : '';
+		$classes .= ' checkbox';
+		$this->add_input( $label, $name, 'radio', $val, $hint, $classes, $is_required, $addn_attrs );
+	} // function
+
 	public function add_text_area_input( $label, $name, $rows, $val = '', $hint = '', $classes = '', $is_required = FALSE, $addn_attrs = '' ) {
 		$rows = "rows=\"$rows\"";
 		$addn_attrs ="$addn_attrs $rows";
@@ -306,7 +323,7 @@ class Form_Input_List {
 		$name = self::get_input_id('fieldset-');
 		$classes .= ' fieldset';
 		ob_start();
-			echo "<fieldset><legend>$label</legend>";
+			echo "<fieldset class=\"form-input-list-fieldset\"><legend class=\"form-input-list-legend\">$label</legend>";
 				$form_input_list->render();
 			echo '</fieldset>';
 		$fieldset_html = ob_get_clean();
@@ -335,26 +352,38 @@ class Form_Input_List {
 	 * @param	string[][]	$options	An associative array of options keyed by option text, i.e. option text => option value.
 	 * To create an option group specify the option value as another associative array of labels and values.
 	 * @param	string	$selected	(optional) The value of the option to be selected
-	 * @param	string	$hint		(optional) The html content to be inserted inside the form
-	 * @param	string	$classes	(optional) The html content to be inserted inside the form
+	 * @param	string	$hint		(optional) Hint text to be displayed with the input
+	 * @param	string	$classes	(optional) A list of class names for the element
+	 * @param	boolean	$is_required A flag to indicate whether the input is required
+	 * @param	string	$addn_attrs	Additional attributes to be applied to the element
 	 * @return	void
 	 */
-	public function add_select_input( $label, $name, $options, $selected = NULL, $hint = '', $classes = '', $is_required = FALSE ) {
+	public function add_select_input( $label, $name, $options, $selected = NULL, $hint = '', $classes = '', $is_required = FALSE, $addn_attrs = '' ) {
 		$id = self::get_input_id( $name ); // gen an input id using the name
 		$req_attr = $is_required ? 'required="required"' : '';
-		$input_html = "<select name=\"$name\" id=\"$id\" autocomplete=\"off\" $req_attr>";
+		$input_html = "<select name=\"$name\" id=\"$id\" autocomplete=\"off\" $req_attr $addn_attrs>";
 		foreach ( $options as $option_text => $option_value ) {
 			if ( is_array( $option_value ) ) {
 				$input_html .= "<optgroup label=\"$option_text\">";
 					foreach( $option_value as $sub_option_text => $sub_option_value ) {
-						$sel = ( $sub_option_value === $selected ) ? 'selected="selected"' : '';
+						// If this is "multiple" then selected is an array
+						if ( is_array( $selected ) ) {
+							$sel = in_array( $sub_option_value, $selected ) ? 'selected="selected"' : '';
+						} else {
+							$sel = ( $sub_option_value === $selected ) ? 'selected="selected"' : '';
+						} // endif
 						$text = esc_html( $sub_option_text );
 						$val = esc_attr( $sub_option_value );
 						$input_html .= "<option value=\"$val\" $sel>$text</option>";
 					} // endfor
 				$input_html .= '</optgroup>';
 			} else {
-				$sel = ( $option_value === $selected ) ? 'selected="selected"' : '';
+				// If this is "multiple" then selected is an array
+				if ( is_array( $selected ) ) {
+					$sel = in_array( $option_value, $selected ) ? 'selected="selected"' : '';
+				} else {
+					$sel = ( $option_value === $selected ) ? 'selected="selected"' : '';
+				} // endif
 				$text = esc_html( $option_text );
 				$val = esc_attr( $option_value );
 				$input_html .= "<option value=\"$val\" $sel>$text</option>";
@@ -421,6 +450,13 @@ class Form_Input_List {
 		$this->add_custom_html_input('', $name, $input_html, $hint, $classes, $is_required );
 	} // function
 
+	/**
+	 * Add a button to the form input list
+	 * @param string $label
+	 * @param string $type
+	 * @param string $classes
+	 * @param string $addn_attrs
+	 */
 	public function add_form_button( $label, $type = 'button', $classes = '', $addn_attrs = '' ) {
 		$class_attr = ! empty( $classes ) ? "class=\"$classes\"" : '';
 		$format = '<button type="%2$s" %3$s %4$s>%1$s</button>';
@@ -431,6 +467,11 @@ class Form_Input_List {
 	private function get_button_container_classes() {
 		return $this->button_container_classes;
 	} // function
+	
+	/**
+	 * Add classes to the button container
+	 * @param string $classes
+	 */
 	public function set_button_container_classes( $classes ) {
 		$this->button_container_classes = $classes;
 	} // function

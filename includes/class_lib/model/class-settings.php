@@ -4,6 +4,8 @@ namespace Reg_Man_RC\Model;
 use Reg_Man_RC\View\Event_Descriptor_View;
 use Reg_Man_RC\Model\Stats\Wilson_Confidence_Interval;
 use Reg_Man_RC\View\Pub\Volunteer_Area;
+use Reg_Man_RC\Control\Admin_Bar_Controller;
+use Reg_Man_RC\Model\Stats\ORDS_Feed_Writer;
 
 /**
  * This class contains static methods used to access and set the settings for the plugin
@@ -19,7 +21,6 @@ class Settings {
 
 	// Options for visitor registration
 	const HOUSE_RULES_POST_ID_OPTION_KEY				= 'reg-man-rc-house-rules-post-id';
-//	const HOUSE_RULES_DEFAULT_PAGE_PATH					= 'house-rules-and-safety-procedures';
 	const IS_SHOW_ITEM_TYPE_IN_VISITOR_REG_OPTION_KEY	= 'reg-man-rc-is-show-item-type-in-vis-reg';
 	
 	// Settings for events
@@ -46,19 +47,31 @@ class Settings {
 	const LOCATION_GROUP_COMPARE_PRECISION_DEFAULT		= 4;
 
 	// Settings for volunteer area
+	const ALLOW_VOLUNTEER_REG_FOR_TENTATIVE_EVENTS_OPTION_KEY	= 'reg-man-rc-vol-area-allow-reg-tentative-events';
+	
 	// Note that allow volunteer area comments is stored in the post as comment_status = 'open'
 	const REQUIRE_VOLUNTEER_AREA_REGISTERED_USER_OPTION_KEY	= 'reg-man-rc-vol-area-require-reg-user';
+	
+	const IS_CREATE_VOLUNTEER_CALENDAR_FEED_OPTION_KEY	= 'reg-man-rc-vol-reg-ical-feed';
 	
 	// Options for satellite registration systems
 //	const SATELLITE_REGISTRATION_HUB_URL_KEY			= 'reg-man-rc-satellite-hub-url';
 	
 	// Permalink slugs for our custom post types
 	const EVENTS_SLUG_OPTION_KEY						= 'reg-man-rc-events-slug';
-	const ITEMS_SLUG_OPTION_KEY							= 'reg-man-rc-items-slug';
-	const VOLUNTEERS_SLUG_OPTION_KEY					= 'reg-man-rc-volunteers-slug';
 	const CALENDARS_SLUG_OPTION_KEY						= 'reg-man-rc-calendars-slug';
-	const VENUES_SLUG_OPTION_KEY						= 'reg-man-rc-venues-slug';
+//	const ITEMS_SLUG_OPTION_KEY							= 'reg-man-rc-items-slug';
+//	const VENUES_SLUG_OPTION_KEY						= 'reg-man-rc-venues-slug';
+	
+	// Settings related to roles and capabilities
+	const HIDE_ADMIN_BAR_ROLES_OPTION_KEY				= 'reg-man-rc-hide-admin-bar-roles';
 
+	// Settings related to Open Repair Data
+	const IS_CREATE_ORDS_FEED_OPTION_KEY				= 'reg-man-rc-is-create-ords-feed';
+	const ORDS_FEED_NAME_OPTION_KEY						= 'reg-man-rc-ords-feed-name';
+	const ORDS_FEED_COUNTRY_CODE_OPTION_KEY				= 'reg-man-rc-ords-feed-country-code';
+	const ORDS_FEED_ITEM_TYPES_ARRAY_OPTION_KEY			= 'reg-man-rc-ords-feed-item-types';
+	
 	private static $maps_centre_geo; // Stores the Geographic Position object for the default map centre
 
 	/**
@@ -66,7 +79,9 @@ class Settings {
 	 * @return int
 	 */
 	public static function get_is_show_item_type_in_visitor_registration_list() {
-		$opt = get_option( self::IS_SHOW_ITEM_TYPE_IN_VISITOR_REG_OPTION_KEY );
+		$item_types = Item_Type::get_all_item_types();
+		$default = empty( $item_types ) ? 0 : 1;
+		$opt = get_option( self::IS_SHOW_ITEM_TYPE_IN_VISITOR_REG_OPTION_KEY, $default );
 		$result = ( $opt == '1' );
 		return $result;
 	} // function
@@ -76,7 +91,7 @@ class Settings {
 	 * @return boolean	TRUE when there exist external event providers or external data providers, otherwise FALSE
 	 */
 	public static function get_is_show_external_names() {
-		$external_event_providers = External_Event_Descriptor::get_all_external_event_providers();
+		$external_event_providers = Event_Provider_Factory::get_external_event_providers();
 		$external_data_providers = apply_filters( 'reg_man_rc_get_external_data_providers', array() );
 		$result = ( ! empty( $external_event_providers ) || ! empty( $external_data_providers ) );
 		return $result;
@@ -126,7 +141,7 @@ class Settings {
 	} // function
 	
 	/**
-	 * Get the default event end time based on the default event duration and the current default start time.
+	 * Get the default event end time based on the default event duration and the optional specified start time.
 	 * The result is in 24-hour clock notation with leading zeros so it can be used in a time input, e.g. "17:00"
 	 * @return string
 	 */
@@ -144,19 +159,15 @@ class Settings {
 		} // endtry
 
 		$start_time = self::get_default_event_start_time();
-		$dt = new \DateTime( $start_time ); // This will use today's date by default but it won't matter, we just need time
-		$dt->add( $date_interval ); // Add the duration
+		$result_dt = new \DateTime( $start_time ); // This will use today's date by default but it won't matter, we just need time
+		$result_dt->add( $date_interval ); // Add the duration
 		$result_format = 'H:i';   // The result is formated using 24-hour clock with leading zeros for use in time input
-		$result = $dt->format( $result_format );
+		$result = $result_dt->format( $result_format );
 		return $result;
 	} // function
 	
-	// TODO: create a setting for default event duration
-	// Sanitize the value for default end time, make sure it is greater than start time
-	// OR create a slider for duration in minutes with steps
-
 	public static function get_is_allow_recurring_events() {
-		$result = FALSE;
+		$result = TRUE;
 		return $result;
 	} // function
 
@@ -222,7 +233,7 @@ class Settings {
 			 // We will store the option as a map marker position string
 			 // This is actually handled by Javascript (inserting the value into a hidden input field in Settings)
 			 //  and the Wordpress settings API which will save registered settings automatically
-			self::$maps_centre_geo = Geographic_Position::create_from_google_map_marker_position_string( $val );
+			self::$maps_centre_geo = Geographic_Position::create_from_google_map_marker_position_json_string( $val );
 		} // endif
 		return self::$maps_centre_geo;
 	} // function
@@ -289,7 +300,7 @@ class Settings {
 			update_option( self::EVENTS_SLUG_OPTION_KEY, $val );
 		} // endif
 	} // function
-
+/*
 	public static function get_items_slug() {
 		$val = trim( strval( get_option( self::ITEMS_SLUG_OPTION_KEY ) ) );
 		$result = ( $val !== '' ) ? $val : Item::DEFAULT_PAGE_SLUG;
@@ -302,21 +313,6 @@ class Settings {
 			delete_option( self::ITEMS_SLUG_OPTION_KEY );
 		} else {
 			update_option( self::ITEMS_SLUG_OPTION_KEY, $val );
-		} // endif
-	} // function
-
-	public static function get_volunteers_slug() {
-		$val = trim( strval( get_option( self::VOLUNTEERS_SLUG_OPTION_KEY ) ) );
-		$result = ( $val !== '' ) ? $val : Volunteer::DEFAULT_PAGE_SLUG;
-		return $result;
-	} // function
-
-	public static function set_volunteers_slug( $slug ) {
-		$val = trim( strval( $slug ) );
-		if ( $val == '' ) {
-			delete_option( self::VOLUNTEERS_SLUG_OPTION_KEY );
-		} else {
-			update_option( self::VOLUNTEERS_SLUG_OPTION_KEY, $val );
 		} // endif
 	} // function
 
@@ -334,6 +330,7 @@ class Settings {
 			update_option( self::VENUES_SLUG_OPTION_KEY, $val );
 		} // endif
 	} // function
+*/
 
 	public static function get_calendars_slug() {
 		$val = trim( strval( get_option( self::CALENDARS_SLUG_OPTION_KEY ) ) );
@@ -366,10 +363,6 @@ class Settings {
 		} // endif
 	} // function
 
-	public static function get_is_visitor_registration_event_select_using_calendar() {
-		return TRUE;
-	} // function
-
 	public static function get_volunteer_registration_calendar_post_id() {
 		$result = get_option( self::VOLUNTEER_REG_CALENDAR_OPTION_KEY );
 		return $result;
@@ -382,6 +375,12 @@ class Settings {
 		} // endif
 	} // function
 
+	public static function get_is_allow_volunteer_registration_for_tentative_events() {
+		$opt = get_option( self::ALLOW_VOLUNTEER_REG_FOR_TENTATIVE_EVENTS_OPTION_KEY );
+		$result = ( $opt == '1' );
+		return $result;
+	} // function
+	
 	public static function get_is_require_volunteer_area_registered_user() {
 		$opt = get_option( self::REQUIRE_VOLUNTEER_AREA_REGISTERED_USER_OPTION_KEY );
 		$result = ( $opt == '1' );
@@ -406,10 +405,59 @@ class Settings {
 		} // endif
 	} // function
 	
+	public static function get_is_create_volunteer_calendar_feed() {
+		$opt = get_option( self::IS_CREATE_VOLUNTEER_CALENDAR_FEED_OPTION_KEY );
+		$result = ( $opt == '1' );
+		return $result;
+	} // function
+	
+	public static function get_volunteer_calendar_feed_name() {
+		$result = 'vol-reg-ical'; // Does this need to be configurable?
+		return $result;
+	} // function
+	
 	public static function get_is_allow_volunteer_registration_quick_signup() {
-		return FALSE;
-	} // endif
+		return FALSE; // TODO: Make this a setting
+	} // function
 
+	public static function get_is_create_ORDS_feed() {
+		$opt = get_option( self::IS_CREATE_ORDS_FEED_OPTION_KEY );
+		$result = ( $opt == '1' );
+		return $result;
+	} // function
+	
+	public static function get_ORDS_feed_name() {
+		$val = trim( strval( get_option( self::ORDS_FEED_NAME_OPTION_KEY ) ) );
+		$result = ( $val !== '' ) ? $val : ORDS_Feed_Writer::DEFAULT_FEED_NAME;
+		return $result;
+	} // function
+	
+	public static function get_ORDS_feed_country_code() {
+		$val = trim( strval( get_option( self::ORDS_FEED_COUNTRY_CODE_OPTION_KEY ) ) );
+		$result = ( $val !== '' ) ? $val : ORDS_Feed_Writer::DEFAULT_COUNTRY_CODE;
+		return $result;
+	} // function
+	
+	public static function get_ORDS_feed_item_type_ids_array() {
+		$val = get_option( self::ORDS_FEED_ITEM_TYPES_ARRAY_OPTION_KEY );
+		$result = ( $val !== '' ) ? $val : array();
+		return $val;
+	} // function
+	
+	
+	public static function get_hide_admin_bar_roles() {
+		$opt = get_option( self::HIDE_ADMIN_BAR_ROLES_OPTION_KEY );
+		$result = ( $opt !== FALSE ) ? $opt : Admin_Bar_Controller::get_default_hide_admin_bar_roles();
+		return $result;
+	} // function
+	
+	public static function get_is_hide_visitor_registration_page_from_search() {
+		return TRUE;
+	} // function
+	
+	public static function get_is_hide_volunteer_area_page_from_search() {
+		return TRUE;
+	} // function
 	
 	/**
 	 * Returns a flag indicating whether this install is a satellite registration system,

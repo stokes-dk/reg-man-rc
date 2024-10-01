@@ -2,6 +2,7 @@
 namespace Reg_Man_RC\Model\Stats;
 
 use Reg_Man_RC\Model\Settings;
+use Reg_Man_RC\Model\Error_Log;
 
 /**
  * An instance of this class calculates a Wilson Confidence Interval based on surveyed data
@@ -156,25 +157,6 @@ class Wilson_Confidence_Interval {
 		$p_prime = $this->get_adjusted_proportion();
 		$est_count = round( $p_prime * $this->population_size );
 		return $est_count;
-	} // function
-
-	public function get_confidence_interval_as_count_string() {
-		$lower_bound = $this->get_lower_bound();
-		$upper_bound = $this->get_upper_bound();
-		$population_count = $this->population_size;
-		// The lower count for the range should not be less than the actual observed occurrences
-		$lower_count = max( round( $lower_bound * $population_count ), $this->observed_occurrence_count );
-		$upper_count = round( $upper_bound * $population_count );
-		$lower_text = number_format_i18n( $lower_count );
-		$upper_text = number_format_i18n( $upper_count );
-		if ( $lower_bound == $upper_bound ) {
-			$result = $upper_text;
-		} else {
-			/* Translators: %1$s is the lower bound for a range, %2$s is the upper bound */
-			$format = _x( '%1$s–%2$s', 'Show a range of values like 8–10', 'reg-man-rc' );
-			$result = sprintf( $format, $lower_text, $upper_text );
-		} // endif
-		return $result;
 	} // function
 
 } // class

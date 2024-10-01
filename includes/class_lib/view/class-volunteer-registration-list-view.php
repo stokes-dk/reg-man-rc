@@ -70,14 +70,14 @@ class Volunteer_Registration_List_View {
 					$reg_array = $this->get_registration_descriptor_array();
 					$date_order_format = \DateTime::ISO8601;
 					foreach ( $reg_array as $registration ) {
-						$name = is_admin() ? $registration->get_volunteer_full_name() : $registration->get_volunteer_public_name();
-						$event_key = $registration->get_event_key();
+						$name = $registration->get_volunteer_display_name();
+						$event_key = $registration->get_event_key_string();
 						$event = Event::get_event_by_key( $event_key );
 						if ( ! empty( $event ) ) {
-							$event_date_text = $event->get_start_date();
+							$event_date_text = $event->get_start_date_string_in_display_format();
 							$event_text = $event->get_summary();
 							$event_date = $event->get_start_date_time_object();
-							$event_date_iso_8601 = isset( $event_date ) ? $event_date->format( \DateTime::ISO8601 ) : '';
+							$event_date_iso_8601 = isset( $event_date ) ? $event_date->format( $date_order_format ) : '';
 						} else {
 							$event_date_text = '';
 							/* Translators %1$s is a key for an event */

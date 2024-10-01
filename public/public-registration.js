@@ -17,36 +17,58 @@ jQuery(document).ready(function($) {
 		]
 	});
 	
-	// TOP
-	
 	$( '.visitor-reg-list-table' ).on( 'init-datatable', function( evt ) {
+		
 		var me = $( this );
 		var container = me.closest( '.visitor-reg-manager-container' );
 		var dom_setting = me.data( 'dom-setting' );
-		var my_data_table = me.DataTable({
+
+		var visitor_id_col_index = 6;
+		var is_outcome_reported_col_index = 7;
+		
+		var datatable = me.DataTable({
 			'ajax' : {
-				'url'  : me.data('ajax-url'),
-				'data' : {
-					'action'	: me.data( 'ajax-action' ),
-					'event_key'	: me.data( 'event-key' )					
+				'url'  : me.data( 'ajax-url' ),
+				// We'll use a function here so it gets executed on every reload
+				'data' : function( data ) {
+					data.action			= me.data( 'ajax-action' ),
+					data.event_key		= me.data( 'event-key' ),
+					data._wpnonce		= me.data( 'ajax-nonce' ),
+					data.fixer_station	= me.data( 'fixer-station' )
 				},
 			},
-			orderFixed: [ 0, 'asc' ],
-			rowGroup: {
-				dataSrc: 0 // The name column must be first!
+			responsive: {
+				details: {
+					type: 'column',
+					target: 0
+				}
+			},
+			rowGroup: { // rowGroup option MUST be included, it can't be enabled later otherwise
+				// We need to update the correct column during init, doing it here does not work properly
+				startRender: function ( rows, group ) {
+					/* Translators: %1$s is a row group heading, %2$s is a count of rows in that group */
+					var group_heading_format = __( '%1$s (%2$s)', 'reg-man-rc' );
+					return sprintf( group_heading_format, group, rows.count() );
+				} // endif
 			},
 			'autoWidth' : false,
 			'dom': dom_setting,
 			'paging' : false, // hide pagination and just show everything
-			'processing' : true,
+			'processing' : false, // hide processing indicator so we can use our own
 			'columnDefs'	: [
 				{
-					'targets'	: 'group-by',
-					'visible'	: false, // The original column is hidden, the data becomes grouping row
+					className: 'dtr-control',
+					orderable: false,
+					target: 0
 				},
 				{
 					'targets'	: 'col-hidden',
 					'searchable': false, // don't allow searching on hidden columns
+					'visible'	: false,
+				},
+				{
+					'targets'	: 'col-searchable-hidden',
+					'searchable': true, // allow searching on these special hidden columns used just for searching
 					'visible'	: false,
 				},
 				{
@@ -63,8 +85,8 @@ jQuery(document).ready(function($) {
 			    'thousands'			: _x(',', 'Thousands separator', 'reg-man-rc'),
 				/* translators: _MENU_ is a replacement variable for the count of table entries to show */
 			    'lengthMenu'		: __('Show _MENU_ entries', 'reg-man-rc'),
-				'loadingRecords'	: ' ',
-				'processing'		: __('Loading. Please wait...', 'reg-man-rc'),
+				'loadingRecords'	: __('Loading&hellip;', 'reg-man-rc'),
+				'processing'		: __('Updating', 'reg-man-rc'),
 			    'search'			: __('Search:', 'reg-man-rc'),
 			    'zeroRecords'		: __('No matching records found', 'reg-man-rc'),
 			    'paginate': {
@@ -74,19 +96,15 @@ jQuery(document).ready(function($) {
 			        'previous'		: __('Previous', 'reg-man-rc')
 			    },
 			},
+
 			createdRow: function( row, data, dataIndex ) {
 				var row = $( row );
-				var item_id = data[ 5 ];
-				var visitor_id = data[ 6 ];
-				var is_outcome_reported = data[ 7 ];
-				row.addClass( 'visitor-reg-list-item' ); // Allow me to launch dialog when row clicked
-				// We need to be able to access data in hidden columns like the item id
-				//  but datatables actually removes the column from the table when it's hidden
-				// So to make it accessible we need to store the data in a data attribute
-				row.attr( 'data-item-id', item_id ); // Store the item ids as a data attribute
-				row.attr( 'data-visitor-id', visitor_id ); // Store the visitor ID
+				var visitor_id = data[ visitor_id_col_index ];
+				row.attr( 'data-visitor-id', visitor_id ); // Store the visitor ID so we can count visitors
+				var is_outcome_reported = data[ is_outcome_reported_col_index ];
 				row.attr( 'data-is-outcome-reported', is_outcome_reported ); // Store the flag for outcome reported
 			},
+
 			'infoCallback' : function( settings, start, end, max, total, pre ) {
 				var result;
 				if (max === 0) {
@@ -102,14 +120,15 @@ jQuery(document).ready(function($) {
 				} else { // all items showing, give full details on the list
 					container.find('input[type=search]').removeClass('filter-on');
 					var item_count = max; // the item count is the total number of rows
-					var visitor_array = {}, visitors_count = 0, visitor_id;
+					var visitor_array = [], visitors_count = 0, visitor_id;
 					var is_outcome_reported, outcome_reported_count = 0, response_rate;
-					var rows = me.find( 'tbody tr' ), curr_row;
+					var curr_row;
+					var rows = datatable.rows().nodes().toJQuery();
 					rows.each( function( index, value ) {
 						curr_row = $(value);
 						is_outcome_reported = curr_row.data( 'is-outcome-reported' );
 						if ( is_outcome_reported ) outcome_reported_count++;
-						visitor_id = curr_row.data('visitor-id');
+						visitor_id = curr_row.data( 'visitor-id' );
 						if ( ! ( visitor_id in visitor_array ) ) {
 							visitor_array[ visitor_id ] = 1; // mark the visitor array so we can keep count
 							visitors_count++; // this visitor is new to the list so increment counter
@@ -123,7 +142,7 @@ jQuery(document).ready(function($) {
 					/* Translators: %s is a percentage of items whose repair outcome is reported divided by total items.
 						Note that %s%% will produce a number followed by a single percent sign
 					 */
-					var response_rate_text = sprintf( __( '%s%% response rate', response_rate, 'reg-man-rc' ), response_rate );
+					var response_rate_text = sprintf( __( '%s%% outcome reported', response_rate, 'reg-man-rc' ), response_rate );
 					/* translators: %1$s is visitor count text like "45 visitors"
 					  %2$s is the item count text like "50 items"
 					  %3$s is the response rate text like "28% response rate"
@@ -133,111 +152,276 @@ jQuery(document).ready(function($) {
 				} // endif
 				return result;
 			},
-			'initComplete': function(settings, json) {
+			'initComplete': function( settings, json ) {
 				// Executes after initialization
 				var me = $( this );
 				me.addClass( 'datatable-init-complete' );
 			},
-			'drawCallback': function( settings ) {
-				// Executes on every re-draw, e.g. data is loaded
-				var me = $( this );
-				var popup_editable = me.find( '.reg-man-rc-popup-editable-container' );
-				popup_editable.trigger( 'init-popup-editable' );
-			}
 		});
-		me.on('datatable-reload', function(evt) {
-			my_data_table.search('');
-			my_data_table.ajax.reload();
-		});
-		me.on('datatable-replace-data', function( evt, newData ) {
-			my_data_table.clear();
-			my_data_table.rows.add( newData );
-			my_data_table.draw();
-		});
-	});
-	$('.visitor-reg-list-table').trigger('init-datatable');
-	
-	
-	/// BOTTOM
 		
-	$( '.visitor-reg-list-table' ).on( 'edit-submit-end', '.reg-man-rc-editable-item-status', function( evt ) {
-		// When the item status has been updated, I need to trigger a table reload to update the response rate
+		me.data( 'datatable', datatable );
+	});
+	
+	$( '.visitor-reg-list-table' ).trigger( 'init-datatable' );
+	
+	$( '.visitor-reg-list-table' ).on( 'processing.dt', function( evt, settings, is_processing ) {
+		var me = $( this );
+		var datatable_container = me.closest( '.reg-manager-datatable-container' );
+		var busy_div = datatable_container.find( '.reg-man-rc-visitor-reg-busy' );
+		if ( is_processing ) {
+			busy_div.addClass( 'is-active' ); // shrowd the the table UI while we're busy, no clicks anywhere
+		} else {
+			busy_div.removeClass( 'is-active' );
+		} // endif
+	});
+
+	$( '.visitor-reg-list-table' ).on( 'datatable-reload', function(evt) {
+		var me = $( this );
+		var datatable = me.data( 'datatable' );
+		datatable.search( '' );
+		datatable.ajax.reload();
+	});
+	
+	$( '.reg-manager-refresh' ).click(function() {
+		var me = $(this);
+		var container = me.closest( '.visitor-reg-manager-container' );
+		var table = container.find( '.visitor-reg-manager-table' );
+		table.trigger( 'datatable-reload' );
+	});
+		
+	$( '.visitor-reg-list-table' ).on( 'in-place-edit-submit-start', function( evt ) {
+		$( '.reg-man-rc-application-busy' ).addClass( 'is-active' ); // shrowd the entire UI while we're busy, no clicks anywhere
+	});
+		
+	$( '.visitor-reg-list-table' ).on( 'in-place-edit-submit-end', function( evt ) {
+		// When the item status has been changed I need to trigger a table reload to update everything
+		// Note that even when the submit fails, like the visitor has too many active items,
+		//  I still need to reload the status for the item to display the current value
 		var me = $( this );
 		var table = me.closest( '.visitor-reg-list-table' );
 		table.trigger( 'datatable-reload' );
+		$( '.reg-man-rc-application-busy' ).removeClass( 'is-active' );
 	});
 
-		
-	$('.visitor-reg-manager-container').on('initialize', function(evt) {
+	$( '.reg-manager-show-station' ).change( function( evt ) {
 		var me = $(this);
-		var myTable = $(this).find('.visitor-reg-manager-table');
-		// Translators: %1$s is replaced button icon, e.g. a pencil, %2$s with button text, e.g. "Edit"
-		var buttonLabelFormat = _x('%1$s%2$s', 'Creating a label for a button with icon and text', 'reg-man-rc');
-		var refreshButtonIcon = '<span class="dashicons dashicons-update"></span>';
-		var refreshButtonText = '<span class="button-text">' + __('Refresh List', 'reg-man-rc') + '</span>';
-//		var surveyButtonIcon = '<span class="dashicons dashicons-clipboard"></span>';
-//		var surveyButtonText = '<span class="button-text">' + __('Visitor Feedback', 'reg-man-rc') + '</span>';
-		var addButtonIcon = '<span class="dashicons dashicons-plus-alt"></span>';
-		var addButtonText = '<span class="button-text">' + __('Add Visitor', 'reg-man-rc') + '</span>';
-		$('#visitor-list-table-toolbar').html(
-				'<button class="reg-man-rc-button reg-manager-button toolbar-button reg-manager-refresh">' +
-					sprintf(buttonLabelFormat, refreshButtonIcon, refreshButtonText) +
-				'</button>' +
-//				'<button class="reg-man-rc-button reg-manager-button toolbar-button reg-manager-survey">' +
-//				sprintf(buttonLabelFormat, surveyButtonIcon, surveyButtonText) +
-				'</button>' +
-				'<button class="reg-man-rc-button reg-manager-button toolbar-button reg-manager-add">' +
-				sprintf(buttonLabelFormat, addButtonIcon, addButtonText) +
-				'</button>'
-		).addClass('datatable-toolbar');
-		$('.reg-manager-refresh').click(function() {
-			myTable.trigger('datatable-reload');
-		});
-		$('.reg-manager-survey').click(function() {
-			var surveyDialog = $('.visitor-survey-dialog');
-			surveyDialog.find('.visitor-survey-thank-you-message').hide();
-			surveyDialog.find('.visitor-survey-form').trigger('form-reset'); // reset the form (remove errors etc.)
-			surveyDialog.dialog('open');
-		});
-		$('.reg-manager-add').click(function() {
-			var regDialog = $('.visitor-reg-dialog');
-			var regForm = regDialog.find('.visitor-reg-form');
-			regForm.trigger('form-reset'); // reset the form (remove errors etc.)
-			regForm.find('.item-list-item.input-item.clone').remove(); // remove all the clones (additional items)
-			var myAccordion = regDialog.find('.reg-man-rc-accordion-container');
-			myAccordion.accordion('option', 'animate', false); // we don't want the animation in progress when we open the dialog
-			myAccordion.accordion('option', 'active', 0);
-			myAccordion.accordion('option', 'animate', true);
-			// DKS - always enable rules ack, it's up to the user to scroll to the bottom
-			// regForm.find('.house-rules').addClass('verify-scroll-bottom');
-			// regForm.find('input[name="rules-ack"]').prop('disabled', true);
-			regDialog.dialog('open');
-			regDialog.find('input[name="item-desc[]"]').focus(); // Set focus on the first item input
-		});
+		var container = me.closest( '.reg-manager-datatable-container' );
+		container.trigger( 'update-show-fixer-station' );
 	});
-	$('.visitor-reg-manager-container').trigger('initialize'); // initialize if there's data already on the page
+
+	$( '.reg-manager-datatable-container' ).on( 'update-show-fixer-station', function( evt ) {
+		var me = $( this );
+		var station_select = me.find( '.reg-manager-show-station' );
+		var fixer_station_id = station_select.val();
+		var table = me.find( '.visitor-reg-manager-table' );
+		table.data( 'fixer-station',fixer_station_id ); // store the fixer station so it will be loaded
+		
+		var datatable = table.data( 'datatable' );
+		var station_col = datatable.column( '.item-fixer-station' );
+		var status_text_col = datatable.column( '.item-status-text' );
+		var status_order_col = datatable.column( '.item-status-order' );
+		var time_enqueued_col = datatable.column( '.item-date-time-enqueued' );
+		var is_show_all_stations = ( fixer_station_id == 0 );
+		
+		station_col.visible( is_show_all_stations );
+
+		if ( is_show_all_stations ) {
+			datatable.rowGroup().enable();
+			datatable.rowGroup().dataSrc( station_col.index() );
+			datatable.order( [ station_col.index(), 'asc' ], [ status_order_col.index(), 'asc' ], [ time_enqueued_col.index(), 'asc' ] );
+			station_col.visible( false );
+		} else {
+			datatable.rowGroup().enable();
+			datatable.rowGroup().dataSrc( status_text_col.index() );
+			datatable.order( [ status_order_col.index(), 'asc' ], [ time_enqueued_col.index(), 'asc' ] );
+			station_col.visible( false );
+		} // endif
+
+
+//		me.trigger( 'update-sort-by' ); // we may need to change the grouping etc.
+		table.trigger( 'datatable-reload' );
+	});
 	
-
-
-	$('.visitor-reg-manager-container').on('click', '.visitor-reg-add-visitor-item-button', function(evt) {
-		var target_row = $( evt.target ).closest( 'tr'); // Get the row that the click came from
-		var dialog = $( '.add-item-to-visitor-reg-dialog' );
-		var form = dialog.find( '.add-item-to-visitor-reg-form' );
-		form.trigger( 'form-reset' ); // reset the form (remove errors etc.)
-		form.find( '.input-item.clone' ).remove(); // remove any cloned items (previously added items)
-		var visitor_name = target_row.find( '.visitor-reg-list-visitor-short-name' ).text();
-		form.find( '.visitor-name' ).text( visitor_name ); // insert the visitor's name
-		var first_item_row = target_row.next('.visitor-reg-list-item');
-		var visitor_id = first_item_row.data( 'visitor-id' );
-		form.find( 'input[name="visitor-id"]' ).val( visitor_id ); // insert the visitor's ID
-		dialog.dialog('open');
+	// Initialize the displayed fixer station, provided there is a datatable container
+	$( '.reg-manager-datatable-container' ).trigger( 'update-show-fixer-station' ); // initialize it
+/*
+	$( '.reg-manager-sort-by' ).change( function( evt ) {
+		var me = $(this);
+		var container = me.closest( '.reg-manager-datatable-container' );
+		container.trigger( 'update-sort-by' );
 	});
+	
+	$( '.reg-manager-datatable-container' ).on( 'update-sort-by', function( evt ) {
+		var me = $( this );
+		var sort_by_select = me.find( '.reg-manager-sort-by' );
+		var station_select = me.find( '.reg-manager-show-station' );
+		var sort_by = sort_by_select.val();
+		var fixer_station_id = station_select.val();
+		var is_show_all_stations = ( fixer_station_id == 0 );
+		var table = me.find( '.visitor-reg-manager-table' );
+		var datatable = table.data( 'datatable' );
+		
+		var visitor_name_col = datatable.column( '.visitor-short-name' );
+		var item_id_col = datatable.column( '.item-id' );
+		var station_col = datatable.column( '.item-fixer-station' );
+		var status_text_col = datatable.column( '.item-status-text' );
+		var status_order_col = datatable.column( '.item-status-order' );
+		var time_enqueued_col = datatable.column( '.item-date-time-enqueued' );
+		
+		switch ( sort_by ) {
+			
+			case 'item-id':
+				// This means turn off grouping
+				datatable.rowGroup().disable();
+				datatable.order( [ item_id_col.index(), 'asc' ] );
+				visitor_name_col.visible( true );
+				station_col.visible( true );
+				break;
+
+			case 'visitor-short-name':
+				datatable.rowGroup().enable();
+				datatable.rowGroup().dataSrc( visitor_name_col.index() );
+				datatable.order( [ visitor_name_col.index(), 'asc' ], [ status_order_col.index(), 'asc' ], [ time_enqueued_col.index(), 'asc' ] );
+				visitor_name_col.visible( false );
+				station_col.visible( true );
+				break;
+*/
+/*
+			case 'item-fixer-station':
+				datatable.rowGroup().enable();
+				datatable.rowGroup().dataSrc( station_col.index() );
+				datatable.order( [ station_col.index(), 'asc' ], [ status_order_col.index(), 'asc' ], [ time_enqueued_col.index(), 'asc' ] );
+				visitor_name_col.visible( true );
+				station_col.visible( false );
+				break;
+*/
+/*
+			case 'item-status':
+				if ( is_show_all_stations ) {
+					datatable.rowGroup().enable();
+					datatable.rowGroup().dataSrc( station_col.index() );
+					datatable.order( [ station_col.index(), 'asc' ], [ status_order_col.index(), 'asc' ], [ time_enqueued_col.index(), 'asc' ] );
+					visitor_name_col.visible( true );
+					station_col.visible( false );
+				} else {
+					datatable.rowGroup().enable();
+					datatable.rowGroup().dataSrc( status_text_col.index() );
+					datatable.order( [ status_order_col.index(), 'asc' ], [ time_enqueued_col.index(), 'asc' ] );
+					visitor_name_col.visible( true );
+					station_col.visible( false );
+				} // endif
+				break;
+
+		} // endswitch
+		
+		datatable.draw();
+	});
+	
+	// Initialize the sort-by, provided there is a datatable container
+	$( '.reg-manager-datatable-container' ).trigger( 'update-sort-by' ); // initialize it
+*/
+
+/*		
+	$('.reg-manager-survey').click(function() {
+		var surveyDialog = $('.visitor-survey-dialog');
+		surveyDialog.find('.visitor-survey-thank-you-message').hide();
+		surveyDialog.find('.visitor-survey-form').trigger('form-reset'); // reset the form (remove errors etc.)
+		surveyDialog.dialog('open');
+	});
+*/
+	$( '.reg-manager-add' ).click( function( evt ) {
+		var me = $( this );
+		var container = me.closest( '.visitor-reg-manager-container' );
+		var reg_form = container.find( '.visitor-reg-form' );
+		reg_form.trigger( 'form-reset' );
+		container.trigger( 'show-swappable', [ '.reg-man-rc-visitor-add-visitor-container' ] );	
+		var house_rules = container.find( '.house-rules' );
+		house_rules.scrollTop( 0 ); // has to be showing to work properly
+	});
+	
+	$( '.visitor-reg-manager-container' ).on( 'show-swappable', function( evt, selector ) {
+		var me = $( this );
+		var swap_container = me.find( '.reg-man-rc-swappable-container' );
+		var swap_out = swap_container.find( '.reg-man-rc-swappable-element:visible' );
+		var swap_in = swap_container.find( selector );
+		swap_out.hide();
+		swap_in.show();
+		swap_in.trigger( 'swappable-shown' );
+		swap_container.scrollTop( 0 );
+	});
+	
+	$( '.reg-man-rc-visitor-reg-list-container' ).on( 'swappable-shown', function ( evt ) {
+		var me = $( this );
+		var table = me.find( '.visitor-reg-manager-table' );
+		var datatable = table.data( 'datatable' );
+		 // adjust the columns in case the table has been updated, otherwise responsive does not work properly
+		datatable.columns.adjust();
+	});
+
+	
+	$( '.visitor-reg-manager-container' ).on( 'click', '.visitor-reg-single-visitor-details-button', function( evt ) {
+		var me = $( this );
+		var visitor_id = me.val();
+		var cell = me.closest( 'td' );
+		var visitor_name = cell.find( '.visitor-reg-list-visitor-name' ).text();
+		var container = me.closest( '.visitor-reg-manager-container' );
+		var form_container = container.find( '.visitor-reg-update-visitor-form-container' );
+		form_container.trigger( 'load-visitor', [ visitor_id, visitor_name ] );
+		container.trigger( 'show-swappable', [ '.reg-man-rc-visitor-details-container' ] );
+	});
+ 	
+	$( '.visitor-reg-update-visitor-form-container' ).on( 'load-visitor', function( evt, visitor_id, visitor_name ) {
+		var me = $( this );
+		
+		var table = me.find( '.visitor-reg-visitor-items-table' );
+		table.data( 'visitor-id', visitor_id );
+		// The table contents must be loaded when it's shown to get responsive columns to work properly
+
+		var add_item_form = me.find( '.visitor-reg-add-item-to-visitor-form' );
+		add_item_form.trigger( 'form-reset' );
+		var visitor_name_container = me.find( '.visitor-details-name' );
+		visitor_name_container.text( visitor_name );
+		var visitor_input = add_item_form.find( 'input[ name="visitor-id" ]' );
+		visitor_input.val( visitor_id );
+		
+	});
+
+	$( '.visitor-reg-manager-container' ).on( 'click', '.visitor-reg-view-item-button', function( evt ) {
+		var me = $( this );
+		var item_id = me.val();
+//		var fixer_station = me.data( 'fixer-station' );
+//		var item_type = me.data( 'item-type' );
+//		var item_status = me.data( 'item-status' );
+//		var cell = me.closest( 'td' );
+//		var item_desc = cell.find( '.visitor-reg-list-item' ).text();
+		var container = me.closest( '.visitor-reg-manager-container' );
+		var form_container = container.find( '.reg-man-rc-item-details-container' );
+//		form_container.trigger( 'load-item', [ item_id, item_desc, fixer_station, item_type, item_status ] );
+		form_container.trigger( 'load-item', [ item_id ] );
+		container.trigger( 'show-swappable', [ '.reg-man-rc-item-details-container' ] );
+	});
+ 	
+	$( '.reg-man-rc-item-details-container' ).on( 'load-item', function( evt, item_id ) {
+		var me = $( this );
+		var inputs_container = me.find( '.visitor-reg-upate-item-inputs-container' );
+		inputs_container.html( '' ); // Clear the inputs before getting the item
+		var load_form = me.find( '.visitor-reg-get-item-update-content-form' );
+		var item_input = load_form.find( 'input[ name="item-id" ]' );
+		item_input.val( item_id );
+		load_form.trigger( 'ajax-submit' );
+	});
+	
+	$( '.reg-man-rc-item-details-container' ).on( 'submit-success', function( evt, response ) {
+		var me = $( this );
+		var inputs_container = me.find( '.visitor-reg-upate-item-inputs-container' );
+		inputs_container.html( response.html_data );
+	}); 
 
 	// Initialize the returning visitor data
 	var RC_REG_RETURNING_VISITOR_DATA;
-	$('.visitor-reg-form.reg-man-rc-ajax-form').on('initialize-returning-visitor-data', function () {
+	$( '.visitor-reg-add-visitor-form' ).on( 'initialize-returning-visitor-data', function () {
 		var me = $(this);
-		var data = me.find('.visitor-reg-returning-visitor-data').text();
+		var data = me.find( '.visitor-reg-returning-visitor-data' ).text();
 		// Wordpress (on the front end) will filter and replace html chars like '-' and replace with '&#8211;'
 		// In order to change them back to regular characters I need to create a textarea
 		//	insert the data into it then ask for the text back
@@ -245,25 +429,28 @@ jQuery(document).ready(function($) {
 		if (data.length === 0) data = '{}';
 		RC_REG_RETURNING_VISITOR_DATA = JSON.parse(data);		
 	});
-	$('.visitor-reg-form.reg-man-rc-ajax-form').trigger('initialize-returning-visitor-data');
+	$( '.visitor-reg-add-visitor-form' ).trigger( 'initialize-returning-visitor-data' );
 	
-	$('.visitor-reg-form.reg-man-rc-ajax-form input[name="email"]').blur(function () {
+	$('.visitor-reg-add-visitor-form input[name="email"]').blur(function () {
 		var me = $(this);
 		if (me.val() !== '') { // if they're changing the email input and it's not blank then uncheck "I have no email"
-			me.closest('.visitor-reg-form.reg-man-rc-ajax-form').find('input[name="no-email"]').prop('checked', false);
+			me.closest('.visitor-reg-add-visitor-form').find('input[name="no-email"]').prop('checked', false);
 		} // endif
 	});
 
-	$('.visitor-reg-form.reg-man-rc-ajax-form input[name="no-email"]').change(function () {
+	$( '.visitor-reg-add-visitor-form input[name="no-email"]' ).change( function () {
 		var me = $(this);
-		if (me.is(':checked')) {
-			me.closest('.visitor-reg-form.reg-man-rc-ajax-form').find('input[name="email"]').val('');
+		var email_input = me.closest( '.visitor-reg-add-visitor-form' ).find( 'input[name="email"]' );
+		if ( me.is( ':checked' ) ) {
+			email_input.val('');
+			email_input.prop( 'required', false );
+		} else {
+			email_input.prop( 'required', true );
 		} // endif
 	});
-
 
 	// Standalone Server
-	$('.visitor-reg-manager-container').on('refresh-event-select', function(evt) {
+	$('.visitor-reg-manager-container').on( 'refresh-event-select', function(evt) {
 		$( '.reg-man-rc-application-busy' ).addClass( 'is-active' ); // shrowd the entire UI while we're busy, no clicks anywhere
 		location.reload(); // the simplest way to refresh the select is to just reload the page so do that for now
 	})
@@ -284,24 +471,24 @@ jQuery(document).ready(function($) {
 			}
 		]
 	});
-	$('.standalone-download-events-dialog').on('set-button-enablement', function(evt) {
+	$( '.standalone-download-events-dialog' ).on( 'set-button-enablement', function( evt ) {
 		var me = $(this);
 		var eventInput = me.find('input[name="event[0][name]"]'); // do I have inputs to submit?
 		var disabled = (eventInput.length === 0); // If there are none then disable the done button
 		$('.standalone-download-events-dialog-done-button').prop('disabled', disabled);		
 	});
-	$('.standalone-download-events-dialog').on('submit-success', function(evt, response) {
+	$( '.standalone-download-events-dialog' ).on( 'submit-success', function( evt, response ) {
 		var htmlData = response.htmlData;
-		if ((typeof(htmlData) == 'undefined') && (htmlData == null)) {
+		if ( ( typeof( htmlData ) == 'undefined' ) && ( htmlData == null ) ) {
 			$(this).dialog('close'); // close my dialog, provided this isn't the result of getting the form contents
 			$('.visitor-reg-manager-container').trigger('refresh-event-select');
 		} // endif
 	});
-	$('.standalone-download-events-dialog').on('submit-success-html-update', function(evt) {
+	$( '.standalone-download-events-dialog' ).on( 'submit-success-html-update', function(evt) {
 		// This event occurrs after the html has been updated.  I need this so I can inspect the new html
 		$(this).trigger('set-button-enablement');
 	});
-	$('.standalone-download-events-dialog').on('submit-success-complete', function(evt) {
+	$( '.standalone-download-events-dialog' ).on( 'submit-success-complete', function(evt) {
 		$('.visitor-reg-manager-container').trigger('refresh-event-select'); // refresh the event select
 	});
 	$('.visitor-reg-manager-container .standalone-download-events').click(function(evt) {
@@ -317,7 +504,7 @@ jQuery(document).ready(function($) {
 	$('.standalone-download-events-dialog').on('standalone-download-events-form-submit', function() {
 		$(this).find('.standalone-download-events-form').trigger('ajax-submit'); // triggers my ajax form submission
 	});
-
+/*
 	$('.standalone-create-event-dialog').dialog({
 		autoOpen	: false,
 		modal		: true,
@@ -348,10 +535,40 @@ jQuery(document).ready(function($) {
 		$(this).dialog('close'); // close my dialog after successful submit
 		$('.visitor-reg-manager-container').trigger('refresh-event-select');
 	});
-	
+*/
 	
 	// Dialogs, Accordion, Autocomplete
-	$('.form-user-message-dialog').dialog({
+	$( '.visitor-reg-add-event-dialog' ).dialog({
+		autoOpen	: false,
+		modal		: true,
+		width		: 'auto',
+		height		: 'auto',
+	});
+	$( '.visitor-reg-add-event-dialog' ).on( 'visitor-reg-add-event-form-submit', function( event ) {
+		var me = $( this );
+		var form = me.find( '.visitor-reg-add-event-form' );
+		form.trigger( 'submit' );
+	});
+	$( '.visitor-reg-add-event-dialog' ).on( 'submit-success', function( event, response ) {
+		var me = $( this );
+		me.dialog( 'close' );
+		// Refresh the calendar!
+		$( '.reg-man-rc-calendar-view' ).trigger( 'refresh-calendar' );
+	});
+	$( '.visitor-reg-add-event' ).on( 'click', function( event ) {
+		var me = $( this );
+		var add_event_dialog = $( '.visitor-reg-add-event-dialog' );
+		var form = add_event_dialog.find( '.visitor-reg-add-event-form' );
+		form.trigger( 'reset' );
+		add_event_dialog.dialog( 'open' );
+	});
+	$( '.visitor-reg-add-event-dialog-cancel-button' ).on( 'click', function( event ) {
+		var me = $( this );
+		var add_event_dialog = $( '.visitor-reg-add-event-dialog' );
+		add_event_dialog.dialog( 'close' );
+	});
+
+	$( '.form-user-message-dialog' ).dialog({
 		autoOpen	: true,
 		modal		: true,
 		width		: 'auto',
@@ -365,158 +582,78 @@ jQuery(document).ready(function($) {
 		]
 	});
 	
-	$('.visitor-reg-manager-event-select-form').submit(function(evt) {
+	$( '.visitor-reg-manager-event-select-form' ).submit(function(evt) {
 		// add a busy indicator
 		$( '.reg-man-rc-application-busy' ).addClass( 'is-active' ); // shrowd the entire UI while we're busy, no clicks anywhere
 	});
 	
-	$('.reg-manager-message-dialog').dialog({
+	$( '.reg-manager-message-dialog' ).dialog({
 		autoOpen	: false,
 		modal		: true,
 		width		: 'auto',
 		height		: 'auto',
 		buttons : [
 			{ 
-				'text' : __('Close', 'reg-man-rc'),
+				'text' : __( 'Close', 'reg-man-rc' ),
 				'click': function() { $( this ).dialog( 'close' ); }
 			}
 		]
 	});
-	$('.visitor-reg-dialog').dialog({
-		autoOpen	: false,
-		modal		: true,
-		position	: { my: 'top', at: 'top+100' }, // Put it near the top to avoid going off bottom of screen
-		width		: 'auto',
-		height		: 'auto',
-		maxHeight	: '80vh'
-	});
-	$('.visitor-reg-dialog').on('visitor-reg-ajax-form-submit', function() {
-		$(this).find('.visitor-reg-form.reg-man-rc-ajax-form').trigger('ajax-submit'); // triggers my ajax form submission
+
+	// Draggable/sortable items
+	$( '.visitor-reg-form .visitor-reg-item-list' ).sortable({
+		placeholder: 'ui-state-highlight',
+		forcePlaceholderSize: true,
 	});
 
-	$('.visitor-reg-input-accordion').accordion({
-		'heightStyle' : 'content'
+	$( '.visitor-reg-form-cancel' ).click( function() {
+		var me = $( this );
+		var container = me.closest( '.visitor-reg-manager-container' );
+		container.trigger( 'show-swappable', [ '.reg-man-rc-visitor-reg-list-container' ] );	
 	});
-	$('.accordion-buttons button[name="back"]').click(function() {
-		var me = $(this);
-		var myAccordion = me.closest('.reg-man-rc-accordion-container');
-		var current = myAccordion.accordion('option', 'active');
-		if (current > 0) {
-			myAccordion.accordion('option', 'active', current - 1); // don't go past start
-		} // endif
-	});
-	$('.accordion-buttons button[name="next"]').click(function() {
-		var me = $(this);
-		var myAccordion = me.closest('.reg-man-rc-accordion-container');
-		var current = myAccordion.accordion('option', 'active');
-		var paneCount = myAccordion.find('h3').length;
-		if (current + 1 < paneCount) { // don't go past end
-			myAccordion.accordion('option', 'active', current + 1);
-		} // endif
-	});
-	$('.reg-man-rc-accordion-container').on('accordionbeforeactivate', function (evt, ui) {
-		var me = $(this);
-		var myAccordion = me.closest('.reg-man-rc-accordion-container');
-		var myPanels = myAccordion.children('div');
-		var oldPanel = ui.oldPanel;
-		var newPanel = ui.newPanel;
-		var oldPanelIndex = 0, newPanelIndex = 0;
-		myPanels.each(function(index) {
-			var currPanel = $(this);
-			if (currPanel.is(oldPanel)) oldPanelIndex = index;
-			if (currPanel.is(newPanel)) newPanelIndex = index;
-		});
-		if (oldPanelIndex < newPanelIndex) { // we're moving forward so validate intervening panels
-			var validateIndex = newPanelIndex - 1; // check the panel right before the target (newPanel)
-			var validatePanel = $(myPanels[validateIndex]);
-			var validateSection = (validatePanel.hasClass('reg-man-rc-js-validation')) ? validatePanel : ui.validatePanel.find('.reg-man-rc-js-validation');
-			var isValid = (validateSection.length !== 0) ? validateSection.triggerHandler('reg-man-rc-validate-form') : true;
-			if (!isValid) { // only move to the next section if validation succeeds
-				// If the panel before the target does not validate then target cancel this event and try targetting that panel instead
-				evt.preventDefault();
-				if (oldPanelIndex !== validateIndex) myAccordion.accordion('option', 'active', validateIndex);
-			} // endif			
-		} // endif
-	});
-	$('.reg-man-rc-accordion-container').on('accordionactivate', function (evt, ui) {
-		// HOUSE RULES IS NO LONGER IN SCROLLABLE DIV	ui.newPanel.find('.house-rules').scrollTop(0);
-		var firstInput = ui.newPanel.find('input').first();
-		// I want to automaticaly set the focus to the first input
-		// But if the first input is the house rules acknowledgement then I don't want to do this, I want the user to
-		//  scroll through the rules and then click the checkbox.  So in that case we will not auto-focus
-		if (firstInput.prop('name') !== 'rules-ack') {
-			firstInput.focus();
-		} // endif
-	});
-	$('.visitor-reg-done-button').click(function() {
-		$(this).trigger('visitor-reg-ajax-form-submit');
+
+	$( '.visitor-reg-form .visitor-item-add, .add-item-to-visitor-reg-form .visitor-item-add' ).click(function() {
+		var me = $( this );
+		var container = me.closest( '.visitor-reg-items-section' );
+		var list = container.find( '.visitor-reg-item-list' );
+		var cln = list.find( 'li:first' ).clone(); // copy the first element
+		cln.find( 'input' ).val( '' ); // unset the input data
+		cln.removeClass( 'error' ).find( '.error-container' ).html( '' ); // unset any error message
+		cln.find( 'select' ).removeAttr( 'selected' ); // remove selected options
+		cln.addClass( 'uninitialized' ); // mark it as uninitialized
+		cln.appendTo( list ); // append the new item to the list
+		cln.trigger( 'initialize-item-inputs' ); // initialize it
+		cln.find( 'input' ).first().focus();
 	});
 	
-	$('.visitor-reg-form .visitor-reg-item-list + .visitor-item-add, ' +
-			'.add-item-to-visitor-reg-form .add-item-to-visitor-reg-new-item-list + .visitor-item-add').click(function() {
-		var list = $(this).prev();
-		var cln = list.find('li:first').clone(); // copy the first element
-		cln.prepend('<div class="reg-item-remove-button reg-man-button"><span class="dashicons dashicons-dismiss"></span></div>');
-		cln.find('input').val(''); // unset the input data
-		cln.removeClass('error').find('.error-container').html(''); // unset any error message
-		cln.find('select').removeAttr('selected'); // remove selected options
-		cln.addClass('uninitialized clone'); // mark it as uninitialized and a clone
-		cln.appendTo(list); // append the new item to the list
-		cln.trigger('initialize-item-inputs'); // initialize it
-		cln.find('input').first().focus();
+	$( '.visitor-reg-item-list' ).on( 'click', '.reg-item-remove-button', function(evt) {
+		var me = $( this );
+		var target_item = me.closest( '.item-list-item-fieldset' );
+		target_item.remove();
 	});
-	$( '.visitor-reg-item-list' ).on('click', '.reg-item-remove-button .dashicons', function(evt) {
-		var targetItem = $(evt.target).closest('.item-list-item'); // Get the item that the click came from
-		targetItem.remove();
-	});
-	$('.visitor-reg-dialog').on('submit-success', function(event, response) {
-		var me = $(this);
-		me.dialog('close');
-		var thankYouDialog = $('.reg-man-rc-visitor-registration-thank-you-dialog');
-		thankYouDialog.dialog('open');		
-		$('.visitor-reg-manager-table').trigger('datatable-reload');
-	});
-	$('.visitor-reg-dialog').on('submit-error', function(event, response) {
-		// we had errors so find the input(s) with the error and make sure it's visible
-		var me = $(this);
-		var myAccordion = me.find('.reg-man-rc-accordion-container');
-		var myPanels = myAccordion.children('div');
-		myPanels.each(function(index) {
-			// if this panel has an error on it then make it the active and break the loop
-			var currPanel = $(this);
-			if (currPanel.find('.input-item.error').length !== 0) {
-				myAccordion.accordion('option', 'active', index); // if there's an error, go to that panel
-				return false;
-			} // endif
-		});
-		// If the user was adding multiple items there may have been some successes and some failures
-		// Refresh the table to show any updates
-		$('.visitor-reg-manager-table').trigger('datatable-reload');
+	
+	$( '.visitor-reg-add-visitor-form, .visitor-reg-update-item-form' ).on( 'submit-success', function( event, response ) {
+		var me = $( this );
+		var container = me.closest( '.visitor-reg-manager-container' );
+		container.trigger( 'show-swappable', [ '.reg-man-rc-visitor-reg-list-container' ] );	
+		$( '.visitor-reg-manager-table' ).trigger( 'datatable-reload' );
 	});
 
-	$('.add-item-to-visitor-reg-dialog').dialog({
-		autoOpen	: false,
-		modal		: true,
-		width		: 'auto',
-		height		: 'auto',
-		position	: { my: 'top', at: 'top+100' }, // Put it near the top to avoid going off bottom of screen
-		buttons : [
-			{ 
-				'text' : __('Cancel', 'reg-man-rc'),
-				'click': function() { $(this).dialog('close'); }
-			},
-			{
-				'text' : __('OK', 'reg-man-rc'),
-				'click' : function() { $(this).trigger('add-item-to-visitor-reg-form-submit') },
-				'class' : 'add-item-to-visitor-reg-dialog-button'
-			}
-		]
+	$( '.visitor-reg-add-item-to-visitor-form' ).on( 'submit-success', function( event, response ) {
+		var me = $( this );
+		var form_container = me.closest( '.visitor-reg-update-visitor-form-container' );
+		var table = form_container.find( '.visitor-reg-visitor-items-table' );
+		table.trigger( 'datatable-reload' );
+		$( '.visitor-reg-manager-table' ).trigger( 'datatable-reload' );
 	});
+
+/*
 	$('.add-item-to-visitor-reg-dialog').on('add-item-to-visitor-reg-form-submit', function() {
 		var me = $( this );
 		var my_form = me.find('.add-item-to-visitor-reg-form.reg-man-rc-ajax-form');
-		my_form.trigger('ajax-submit'); // triggers my ajax form submission
+		my_form.trigger( 'ajax-submit' ); // triggers my ajax form submission
 	});
+	
 	$('.add-item-to-visitor-reg-dialog').on('submit-success', function(event, response) {
 		var me = $(this);
 		me.dialog('close');
@@ -544,6 +681,7 @@ jQuery(document).ready(function($) {
 	$('.visitor-is-fixed-dialog').on('visitor-is-fixed-form-submit', function() {
 		$(this).find('.is-fixed-form.reg-man-rc-ajax-form').trigger('ajax-submit'); // triggers my ajax form submission
 	});
+	
 	$('.visitor-is-fixed-dialog').on('submit-success', function(event, response) {
 		var me = $(this);
 		me.dialog('close');
@@ -576,15 +714,16 @@ jQuery(document).ready(function($) {
 			}
 		]
 	});
-	$('.visitor-survey-dialog').on('visitor-survey-form-submit', function() {
+	$( '.visitor-survey-dialog').on('visitor-survey-form-submit', function() {
 		$(this).find('.visitor-survey-form.reg-man-rc-ajax-form').trigger('ajax-submit'); // triggers my ajax form submission
 	});
-	$('.visitor-survey-dialog').on('submit-success', function(event, response) {
+	$( '.visitor-survey-dialog').on('submit-success', function(event, response) {
 		var me = $(this);
 		me.dialog('close');
-		var thankYouDialog = $('.reg-man-rc-visitor-survey-thank-you-dialog');
+		var thankYouDialog = $( '.reg-man-rc-visitor-survey-thank-you-dialog' );
 		thankYouDialog.dialog('open');
 	});
+*/	
 /* This stuff was removed from the survey form
 	$('.visitor-survey-form .visitor-survey-item-list + .visitor-item-add').click(function() {
 		var list = $(this).prev();
@@ -600,15 +739,14 @@ jQuery(document).ready(function($) {
 	
 	$( '.autocomplete-item-desc-container' ).on( 'initialize-item-inputs', function( evt ) {
 		var me = $(this);
-		var input_containers = me.find('.item-list-item.uninitialized');
-//		var autocomplete_data = me.find('.visitor-reg-item-autocomplete-data').text();
+		var input_containers = me.find( '.item-list-item-fieldset.uninitialized' );
 		var autocomplete_data = $( 'body' ).find( '.visitor-reg-item-autocomplete-data' ).text();
 		// Wordpress (on the front end) will filter and replace html chars like '-' and replace with '&#8211;'
 		// In order to change them back to regular characters I need to create a textarea
 		//	insert the data into it then ask for the text back
-		autocomplete_data = $('<textarea />').html(autocomplete_data).text();
-		if (autocomplete_data.length === 0) autocomplete_data = '[]';
-		var autocomplete_data_array = JSON.parse(autocomplete_data);
+		autocomplete_data = $('<textarea />').html( autocomplete_data ).text();
+		if ( autocomplete_data.length === 0 ) autocomplete_data = '[]';
+		var autocomplete_data_array = JSON.parse( autocomplete_data );
 
 		// translators: %1$s is an item description, e.g. "Lamp", %2$s is a list of alternate descriptions, e.g. "Light, Desklight"
 		var with_alt_format = __( '%1$s (%2$s)', 'reg-man-rc' ); // used to construct autocomplete suggestion labels
@@ -617,9 +755,9 @@ jQuery(document).ready(function($) {
 			var container = $( this );
 			container.on( 'item-desc-autocomplete-select', function( evt, desc, type, station ) {
 				var me = $( this );
-				me.find('input[name="item-desc[]"]').val(desc);
-				me.find('select[name="item-type[]"]').val(type);
-				me.find('select[name="fixer-station[]"]').val(station);
+				me.find( 'input[name="item-desc[]"]' ).val( desc );
+				me.find( 'select[name="item-type[]"]' ).val( type );
+				me.find( 'select[name="fixer-station[]"]' ).val( station );
 			});
 			var item_desc_input = container.find('input[name="item-desc[]"]');
 			item_desc_input.autocomplete({
@@ -740,10 +878,22 @@ jQuery(document).ready(function($) {
 			},
 			minLength: 2,
 		}).data( 'ui-autocomplete' )._renderItem = function( ul, item ) {
-			// translators: %1$s is replaced with a full name, %2$s with a partially obscured email
-			var name = sprintf( __( '%1$s (%2$s)', 'reg-man-rc' ), item.full_name, item.obs_email );
+
+			var name;
+			if ( item.obs_email !== '' ) {
+				
+				// translators: %1$s is replaced with a full name, %2$s with a partially obscured email
+				name = sprintf( __( '%1$s (%2$s)', 'reg-man-rc' ), item.full_name, item.obs_email );
+				
+			} else {
+
+				// translators: %1$s is replaced with a full name
+				name = sprintf( __( '%1$s (no email)', 'reg-man-rc' ), item.full_name );
+				
+			} // endif
 //			console.log( name );
 			return $( '<li>' ).append( '<a>' + name + '</a>' ).appendTo( ul );
+
 		};
 	});
 	$( '.autocomplete-visitor-name-container' ).trigger( 'initialize-visitor-name-inputs' );
@@ -753,26 +903,29 @@ jQuery(document).ready(function($) {
 		container = me.closest( '.autocomplete-visitor-name-container' );
 		container.trigger( 'reset-name-fields' );
 	});
+	
 	$( '.autocomplete-visitor-name-container .visitor-name-reset' ).on( 'click', function( evt ) {
 		var me = $( this );
 		container = me.closest( '.autocomplete-visitor-name-container' );
 		container.trigger( 'reset-name-fields' );
 	});
+	
 	$( '.autocomplete-visitor-name-container' ).on( 'reset-name-fields', function( evt ) {
 		var me = $( this );
 		var id_input			= me.find( 'input[name="visitor-id"]' );
 		var full_name_input		= me.find( 'input[name="full-name"]' );
 		var is_name_disabled = full_name_input.prop( 'disabled' );
-//		var public_name_input	= me.find( 'input[name="public-name"]' );
 		var email_input			= me.find( 'input[name="email"]' );
 		var no_email_input		= me.find( 'input[name="no-email"]' );
 		var reset_button		= me.find( '.visitor-name-reset' );
 
 		id_input.val( '' );
 		full_name_input.prop( 'disabled', false ); // Note that we don't always want to remove the value
-//		public_name_input.val( '' ).prop( 'disabled', false );
-		email_input.val( '' ).prop( 'disabled', false );
-		no_email_input.prop( 'checked', false ).prop( 'disabled', false );
+		email_input.val( '' );
+		email_input.prop( 'disabled', false );
+		email_input.prop( 'required', true );
+		no_email_input.prop( 'checked', false );
+		no_email_input.prop( 'disabled', false );
 		reset_button.hide();
 		
 		if ( is_name_disabled ) {
@@ -781,14 +934,14 @@ jQuery(document).ready(function($) {
 
 	});
 	
-	$( '.visitor-reg-form' ).on( 'reset', function( evt ) {
+	$( '.visitor-reg-form' ).on( 'form-reset', function( evt ) {
 		var me = $( this );
+		me.find( '.item-list-item-fieldset' ).not( ':first' ).remove(); // remove all the additional items
 		var container = me.closest( '.autocomplete-visitor-name-container' );
 		container.trigger( 'reset-name-fields' );
 	});
-
 	
-	
+/*
 	// Validation
 	$('.fixer-reg-form').on('js-additional-verification', function(evt) {
 		// Additional validation for the visitor reg form
@@ -853,6 +1006,115 @@ jQuery(document).ready(function($) {
 			});
 		} // endif
 	});
+*/
 
+
+	$( '.visitor-reg-visitor-items-table' ).on( 'init-datatable', function( evt ) {
+		
+		var me = $( this );
+		var dom_setting = 'rt';
+
+		var status_type_col_index = 3;
+		var status_order_col_index = 4;
+		var status_type_order_col_index = 5;
+		
+		var datatable = me.DataTable({
+			'ajax' : {
+				'url'  : me.data( 'ajax-url' ),
+				// We'll use a function here so it gets executed on every reload
+				'data' : function( data ) {
+					data.action			= me.data( 'ajax-action' ),
+					data.event_key		= me.data( 'event-key' ),
+					data._wpnonce		= me.data( 'ajax-nonce' ),
+					data.visitor_id		= me.data( 'visitor-id' )
+				},
+			},
+			order : [
+				[ status_type_order_col_index, 'asc' ],
+				[ status_order_col_index, 'asc' ],
+			],
+			responsive: true,
+			rowGroup : { // rowGroup option MUST be included, it can't be enabled later otherwise
+				// We need to update the correct column during init, doing it here does not work properly
+				dataSrc: status_type_col_index,
+				startRender: function ( rows, group ) {
+					/* Translators: %1$s is a row group heading, %2$s is a count of rows in that group */
+					var group_heading_format = __( '%1$s (%2$s)', 'reg-man-rc' );
+					return sprintf( group_heading_format, group, rows.count() );
+				} // endif
+			},
+			'autoWidth' : false,
+			'dom': dom_setting,
+			'paging' : false, // hide pagination and just show everything
+			'processing' : false,
+			'columnDefs'	: [
+				{
+					'targets'	: 'col-hidden',
+					'searchable': false, // don't allow searching on hidden columns
+					'visible'	: false,
+				},
+				{
+					'targets'	: 'col-not-sortable',
+					'sortable'	: false,
+				},
+			],
+			'language' : {
+				'emptyTable'		: '', //__( 'No items registered', 'reg-man-rc' ),
+			    'zeroRecords'		: '', //__( '', 'reg-man-rc' ),
+			    'thousands'			: _x(',', 'Thousands separator', 'reg-man-rc' ),
+				'loadingRecords'	: ' ',
+				'processing'		: __( 'Loading&hellip;.', 'reg-man-rc' ),
+			},
+		});
+		
+		me.data( 'datatable', datatable );
+	});
 	
+	$( '.visitor-reg-visitor-items-table' ).on( 'processing.dt', function( evt, settings, is_processing ) {
+		var me = $( this );
+		var datatable_container = me.closest( '.visitor-reg-visitor-item-list-section' );
+		var busy_div = datatable_container.find( '.reg-man-rc-visitor-reg-busy' );
+		if ( is_processing ) {
+			busy_div.addClass( 'is-active' ); // shrowd the the table UI while we're busy, no clicks anywhere
+		} else {
+			busy_div.removeClass( 'is-active' );
+		} // endif
+	});
+
+
+	$( '.visitor-reg-visitor-items-table' ).trigger( 'init-datatable' );
+
+	$( '.visitor-reg-visitor-items-table' ).on( 'datatable-reload', function( evt ) {
+		var me = $( this );
+		var datatable = me.data( 'datatable' );
+		datatable.ajax.reload();
+	});
+
+	$( '.visitor-reg-visitor-items-table' ).on( 'in-place-edit-submit-start', function( evt ) {
+		$( '.reg-man-rc-application-busy' ).addClass( 'is-active' ); // shrowd the entire UI while we're busy, no clicks anywhere
+	});
+		
+	$( '.visitor-reg-visitor-items-table' ).on( 'in-place-edit-submit-end', function( evt ) {
+		// When the item status has been changed I need to trigger a table reload to update everything
+		// Note that even when the submit fails, like the visitor has too many active items,
+		//  I still need to reload the status for the item to display the current value
+		var me = $( this );
+		me.trigger( 'datatable-reload' );
+		$( '.reg-man-rc-application-busy' ).removeClass( 'is-active' );
+
+		// Also update the main visitor registration list table
+		var reg_list_table = $( '.visitor-reg-list-table' );
+		reg_list_table.trigger( 'datatable-reload' );
+	});
+
+	$( '.reg-man-rc-visitor-details-container' ).on( 'swappable-shown', function ( evt ) {
+		var me = $( this );
+		var table = me.find( '.visitor-reg-visitor-items-table' );
+		var datatable = table.data( 'datatable' );
+		
+		// To get responsive to work properly we must load the data AFTER the table is shown
+		datatable.clear().draw(); // blank out the table before we reload this visitor
+		table.trigger( 'datatable-reload' );
+	});
+
 });

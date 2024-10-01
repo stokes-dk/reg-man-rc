@@ -9,6 +9,7 @@ use Reg_Man_RC\Model\Event_Class;
 use Reg_Man_RC\Model\Event_Descriptor;
 use Reg_Man_RC\View\Event_View;
 use Reg_Man_RC\View\Map_View;
+use Reg_Man_RC\Control\User_Role_Controller;
 
 /**
  * An instance of this class provides List_Item instances for displaying the details of an event descriptor
@@ -247,12 +248,8 @@ class Event_Descriptor_Item_Provider implements List_item_Provider {
 					break;
 
 				case Event_Class::PRIVATE:
-					$text = __( 'This event is not visible to the public', 'reg-man-rc' );
-					$result = List_Item::create( $text, $icon, $icon_text, $classes );
-					break;
-
 				case Event_Class::CONFIDENTIAL:
-					$text = __( 'This event is password protected', 'reg-man-rc' );
+					$text = __( 'This event is not visible to the public or volunteers.', 'reg-man-rc' );
 					$result = List_Item::create( $text, $icon, $icon_text, $classes );
 					break;
 
@@ -385,7 +382,7 @@ class Event_Descriptor_Item_Provider implements List_item_Provider {
 					$date_group_title	= __( 'Event dates (tap/click for more details)', 'reg-man-rc' );
 					$icon = 'text-page';
 					$icon_title = __( 'Event dates', 'reg-man-rc' );
-					$link_type = Object_View::OBJECT_PAGE_TYPE_ADMIN_DASHBOARD_EVENT_DETAILS;
+					$link_type = Object_View::OBJECT_PAGE_TYPE_ADMIN_CALENDAR_EVENT_DETAILS;
 					$is_open = FALSE;
 					$date_class_array = array();
 					break;
@@ -467,27 +464,22 @@ class Event_Descriptor_Item_Provider implements List_item_Provider {
 			$title  = __( 'Fixing', 'reg-man-rc' );
 			$icon_title = $title;
 			$item_content = $title;
-			$with_icon_format =
-				'<li>' .
-					'<figure>' .
-						'<img src="%2$s" title="%3$s" alt="%3$s">' .
-						'<figcaption>%1$s</figcaption>' .
-					'</figure>' .
-				'</li>';
-			$no_icon_format =
-				'<li class="reg-man-rc-object-view-fixer-station-text">%1$s</li>';
-
+			$item_format = '<li class="%2$s">%1$s</li>';
 			ob_start();
 				echo '<ul class="object-view-details-fixer-station-list">';
 					foreach( $fixer_station_array as $station ) {
-						$icon_url = $station->get_icon_url();
-						$station_text = $station->get_name();
-						$name_attr = esc_attr( $station_text );
-						$name_html = esc_html( $station_text );
-						if ( ! empty( $icon_url ) ) {
-							printf( $with_icon_format, $name_html, $icon_url, $name_attr );
+						$image_attachment_array = $station->get_icon_image_attachment_array();
+						if ( empty( $image_attachment_array ) ) {
+							$name = $station->get_name();
+							printf( $item_format, $name, 'reg-man-rc-object-view-fixer-station-text' );
 						} else {
-							printf( $no_icon_format, $name_html );
+							// When there is only 1 icon, use the station name as the caption
+							// When there are multiple icons, we'll let the icon determine its caption
+							$caption = ( count( $image_attachment_array ) === 1 ) ? $station->get_name() : NULL;
+							foreach( $image_attachment_array as $image_attachment ) {
+								$figure = $image_attachment->get_thumbnail_figure_element( $caption );
+								printf( $item_format, $figure, '' );
+							} // endfor
 						} // endif
 					} // endfor
 				echo '</ul>';
@@ -571,9 +563,9 @@ class Event_Descriptor_Item_Provider implements List_item_Provider {
 		$event_descriptor = $this->get_event_descriptor();
 		$href = $event_descriptor->get_event_edit_url();
 		if ( ! empty( $href ) ) {
-			$link_text = __( 'Edit', 'reg-man-rc' );
+			$link_text = __( 'Edit event details', 'reg-man-rc' );
 			$icon = 'edit';
-			$icon_title = __( 'Edit event', 'reg-man-rc' );
+			$icon_title = __( 'Edit the details of this event', 'reg-man-rc' );
 			$result = Event_Item_Provider::create_admin_link_item( $href, $link_text, $icon, $icon_title );
 		} // endif
 		return $result;
@@ -589,9 +581,9 @@ class Event_Descriptor_Item_Provider implements List_item_Provider {
 		$result = array();
 		$events = $this->get_events_array();
 		foreach( $events as $event ) {
-			$vol_reg = $event->get_volunteer_registration();
-			if ( isset( $vol_reg ) ) {
-				$key = $event->get_key();
+			$vol_reg = $event->get_volunteer_registration_for_current_request();
+			if ( ! empty( $vol_reg ) ) {
+				$key = $event->get_key_string();
 				$result[ $key ] = 'vol-reg-registered';
 			} // endif
 		} // endif

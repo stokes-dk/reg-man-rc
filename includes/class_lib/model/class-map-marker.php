@@ -37,6 +37,7 @@ interface Map_Marker {
 	 * @return string|NULL	The marker location if it is known, otherwise NULL
 	 * @since v0.1.0
 	 */
+	// FIXME - why is this needed???  I can't see where it is used
 	public function get_map_marker_location( $map_type );
 
 	/**

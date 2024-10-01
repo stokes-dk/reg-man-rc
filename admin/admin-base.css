@@ -51,16 +51,16 @@
 	box-sizing: border-box;
 }
 
-.media-library-select-container .button {
-	margin: 0.1em;
+.media-library-select-container .button.media-library-launch {
+	margin: 0.5em 0;
 }
-
+/* FIXME - NOT USED
 .media-library-select-container .media-library-img-container:NOT(:EMPTY) ~ .media-library-select,
 .media-library-select-container .media-library-img-container:EMPTY ~ .media-library-change,
 .media-library-select-container .media-library-img-container:EMPTY ~ .media-library-remove {
 	display: none;
 }
-
+*/
 .media-library-select-container.reg-form-logo .media-library-img-container img {
 	max-height: 80px;
 	width: auto;
@@ -70,8 +70,17 @@
 	max-height: 50px;
 	width: auto;
 } 
+
+.media-library-select-container-clone-item {
+	display: none;
+}
+.fixer-station-icons-list li {
+	border: 1px solid #ccc;
+	padding: 0.5em;
+}
+
 /* These containers will be shown on the client side as needed */
-.visitor-details-container, .add-volunteer-input-list {
+.add-visitor-input-list, .add-volunteer-input-list {
 	display: none;
 }
 
@@ -82,6 +91,16 @@
 }
 .true-false-radio-container {
 	margin-bottom: 0.25em;
+}
+
+.user-role-cpt-capabilites-container {
+	margin-bottom: 1em;
+}
+.user-role-cpt-capabilites-container .user-role-cpt-capabilities-heading {
+	margin: 0.25em 0;
+}
+.user-role-cpt-capabilites-container .user-role-cpt-capabilites-input-container {
+	margin: 0.25em 0;
 }
 
 .column-taxonomy-reg-man-rc-fixer-station,
@@ -121,6 +140,9 @@
 }
 .reg-man-rc-input-group-table .reg-man-rc-sup-data-table-cell {
 	text-align: center;
+}
+.reg-man-rc-input-group-table .reg-man-rc-sup-data-table-cell input {
+	max-width: 100%;
 }
 .reg-man-rc-input-group-table.reg-man-rc-sup-item-table .reg-man-rc-sup-item-data-template {
 	display: none;
@@ -164,7 +186,7 @@
 	margin-top: 1em;
 }
 
-.reg-man-rc-metabox .form-input-list {
+.reg-man-rc-metabox > .form-input-list {
 	margin: 0
 }
 
@@ -222,25 +244,31 @@
 	font-weight: 600;
 }
 
-.reg-man-rc-dashboard-calendar-container,
-.reg-man-rc-dashboard-calendar-container .reg-man-rc-calendar-container {
+.reg-man-rc-admin-calendar-page-content {
+	margin-top: 1em;
+}
+
+.reg-man-rc-admin-calendar-container,
+.reg-man-rc-admin-calendar-container .reg-man-rc-calendar-container {
 	height: 100%;
 }
-.reg-man-rc-dashboard-calendar-container .reg-man-rc-calendar-view {
+.reg-man-rc-admin-calendar-container .reg-man-rc-calendar-view {
 	height: 80vh;
 }
 
-.reg-man-rc-info-window-container.admin-events-calendar .object-view-details-fixer-station-list img,
+.reg-man-rc-info-window-container.admin-calendar .object-view-details-fixer-station-list img,
+.reg-man-rc-admin-event-calendar-event-view-container .object-view-details-fixer-station-list img,
 .reg-man-rc-info-window-container.admin-cal-map .object-view-details-fixer-station-list img {
 	max-width: 3em;
 }
-.reg-man-rc-info-window-container.admin-events-calendar .object-view-details-fixer-station-list figcaption,
+.reg-man-rc-info-window-container.admin-calendar .object-view-details-fixer-station-list figcaption,
+.reg-man-rc-admin-event-calendar-event-view-container .object-view-details-fixer-station-list figcaption,
 .reg-man-rc-info-window-container.admin-cal-map .object-view-details-fixer-station-list figcaption {
 	display: none;
 }
 
 
-.reg-man-rc-admin-dashboard-header {
+.reg-man-rc-admin-calendar-page-header {
 	display: flex;
 	flex-wrap: wrap;
 	justify-content: space-between;
@@ -248,15 +276,15 @@
 	font-size: 1.4em;
 	font-weight: 400;
 }
-.reg-man-rc-admin-dashboard-header .admin-dashboard-title-back-link .admin-dashboard-title-back-link-icon,
-.reg-man-rc-admin-dashboard-header .admin-dashboard-title-back-link .admin-dashboard-title-back-link-text {
+.reg-man-rc-admin-calendar-page-header .admin-calendar-page-title-back-link .admin-calendar-page-title-back-link-icon,
+.reg-man-rc-admin-calendar-page-header .admin-calendar-page-title-back-link .admin-calendar-page-title-back-link-text {
 	vertical-align: middle;
 }
 
-.reg-man-rc-admin-dashboard-header a {
+.reg-man-rc-admin-calendar-page-header a {
 	text-decoration: none;
 }
-.reg-man-rc-admin-dashboard-header .reg-man-rc-admin-dashboard-header-part.admin-dashboard-title-text {
+.reg-man-rc-admin-calendar-page-header .reg-man-rc-admin-calendar-page-header-part.admin-calendar-page-title-text {
 	flex-grow: 1;
 	text-align: center;
 }
@@ -270,6 +298,49 @@
   font-weight: normal;
 }
 
-.postbox .form-input-list {
+.postbox > .form-input-list {
 	margin: 0;
+}
+
+#reg-man-rc-event-venue-metabox .reg-man-rc-venue-location-container > .form-input-list {
+	margin: 0;
+}
+
+.recurring-event-input-container {
+	display: none;
+}
+
+#poststuff .fc .fc-toolbar-title {
+  font-size: 1.75em;
+  margin: 0;
+}
+
+.form-input-list.compact .input-item.recur-rule-input.event-recur-flag {
+	flex-basis: 100%;
+}
+.recur-rule-input select.combobox {
+	width: 20em;
+}
+.event-cancel-dates-input-list select.combobox {
+	width: 20em;
+}
+
+.event-dates-times-metabox-container .event-dates-input-unlock-item label {
+	font-weight: bold;
+}
+
+.reg-man-rc-calendar-ical-feed-metabox-container .ical-feed-input-list.has-no-feed .label-container,
+.reg-man-rc-calendar-ical-feed-metabox-container .ical-feed-input-list.has-no-feed .hint-container {
+	opacity: 0.67;
+}
+
+.email-list-dialog .reg-man-rc-email-list {
+	padding: 1em;
+	border: 1px solid #ccc;
+	max-width: 60em;
+}
+.reg-man-rc-import-form {
+	padding: 1em;
+	border: 1px solid #ccc;
+	max-width: 80em;
 }

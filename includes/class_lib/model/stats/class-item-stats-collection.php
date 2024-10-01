@@ -9,6 +9,7 @@ use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Event_Filter;
 use Reg_Man_RC\Model\Error_Log;
 use Reg_Man_RC\Model\Event;
+use Reg_Man_RC\Model\Events_Collection;
 
 /**
  * An instance of this class provides sets of Item_Stats objects based on a set of event keys and a grouping.
@@ -30,7 +31,7 @@ class Item_Stats_Collection {
 	const GROUP_BY_EVENT			= 'event';				// group by event
 	const GROUP_BY_TOTAL			= 'total';				// group all items together so we can count the totals
 	
-	private $event_array_key;
+	private $event_keys_array;
 	private $group_by;
 	private $event_count;
 
@@ -43,50 +44,25 @@ class Item_Stats_Collection {
 	private function __construct() { }
 
 	/**
-	 * Create an Item_Stats_Collection for the specified events and grouped in the specified way
+	 * Create an Item_Stats_Collection for the specified event collection and grouped in the specified way
 	 *
-	 * @param	string[]|NULL	$event_key_array	An array of event key strings specifying which event's items are to be included
-	 *  or NULL to get all item stats (from all events)
-	 * @param	string			$group_by			A string specifying how the results should be grouped.
+	 * @param	Events_Collection	$events_collection	A collection specifying which event's items are to be included
+	 * @param	string				$group_by			A string specifying how the results should be grouped.
 	 * The value must be one of the GROUP_BY_* constants defined in this class.
 	 *
 	 * @return Item_Stats_Collection	An instance of this class which provides the item group stats and their related data.
 	 */
-	public static function create_for_event_key_array( $event_key_array, $group_by ) {
+	public static function create_for_events_collection( $events_collection, $group_by ) {
 		$result = new self();
-		$result->event_array_key = $event_key_array;
-		if ( is_array( $event_key_array ) ) {
-			$result->event_count = count( $event_key_array );
-		} else {
-			$result->event_count = Event_Stats_Collection::get_all_known_events_count();
-		} // endif
+		$result->event_count = $events_collection->get_event_count();
+		// We will store NULL for the event keys array if this collection is for ALL events
+		$result->event_keys_array = $events_collection->get_is_all_events() ? NULL : $events_collection->get_event_keys_array();
 		$result->group_by = $group_by;
 		return $result;
 	} // endif
 
-	/**
-	 * Create an Item_Stats_Collection for items registered to the set of events derived from the specified filter.
-	 *
-	 * If the event filter is NULL then the collection will be for all events.
-
-	 * @param	Event_Filter|NULL	$filter		An Event_Filter instance which limits the set of events whose
-	 *  items stats are to be returned, or NULL if all stats are to be returned.
-	 * @param	string				$group_by	One of the GROUP_BY_* constants defined in this class which specifies
-	 *  how the stats are to be grouped.
-	 *  If this argument is GROUP_BY_ITEM_TYPE, for example, then the result will contain one row for each item type
-	 *  and the stats will contain the data for that type.
-	 * @return Item_Stats_Collection	An instance of this class which provides the item group stats and their related data.
-	 *
-	 */
-	public static function create_item_stats_for_filter( $filter, $group_by ) {
-		// If the filter is NULL then I will pass an event key array of NULL to signify that we want everything
-		$keys_array = isset( $filter ) ? Event_Key::get_event_keys_for_filter( $filter ) : NULL;
-		$result = self::create_for_event_key_array( $keys_array, $group_by );
-		return $result;
-	} // function
-
-	private function get_event_key_array() {
-		return $this->event_array_key;
+	private function get_event_keys_array() {
+		return $this->event_keys_array;
 	} // function
 
 	private function get_group_by() {
@@ -290,13 +266,12 @@ class Item_Stats_Collection {
 	 */
 	public function get_supplemental_stats_array() {
 		if ( ! isset( $this->supplemental_stats_array ) ) {
-			$event_key_array = $this->get_event_key_array();
+			$event_keys_array = $this->get_event_keys_array();
 			$group_by = $this->get_group_by();
-			$this->supplemental_stats_array = Supplemental_Item::get_supplemental_group_stats_array( $event_key_array, $group_by );
+			$this->supplemental_stats_array = Supplemental_Item::get_supplemental_group_stats_array( $event_keys_array, $group_by );
 		} // endif
 		return $this->supplemental_stats_array;
 	} // function
-
 
 	/**
 	 * Get the internal items stats (stats for items registered using this plugin)
@@ -304,14 +279,21 @@ class Item_Stats_Collection {
 	 * @return Item_Stats[]	An array of instances of Item_Stats describing the items and their related data.
 	 */
 	public function get_internal_registered_stats_array() {
+		
 		if ( ! isset( $this->internal_stats_array ) ) {
 
-			$event_key_array = $this->get_event_key_array();
+			$event_keys_array = $this->get_event_keys_array();
 			$group_by = $this->get_group_by();
+//			Error_Log::var_dump( $event_keys_array, $group_by );
 
-			if ( is_array( $event_key_array) && ( count( $event_key_array ) == 0 ) ) {
+			if ( is_array( $event_keys_array ) && ( count( $event_keys_array ) == 0 ) ) {
+				
 				$this->internal_stats_array = array(); // The request is for an empty set of events so return an empty set
+
 			} else {
+
+				// Otherwise, the request is for ALL events (event keys array is NULL) or some subset
+
 				global $wpdb;
 
 				$posts_table = $wpdb->posts;
@@ -392,39 +374,51 @@ class Item_Stats_Collection {
 		  				" LEFT JOIN $terms_table AS type_terms ON type_terms.term_id = type_tt.term_id ";
 				} // endif
 
-				if ( ( $group_by == self::GROUP_BY_EVENT ) || ( ! empty( $event_key_array ) ) ) {
+				if ( ( $group_by == self::GROUP_BY_EVENT ) || ( ! empty( $event_keys_array ) ) ) {
 					// We need to join the meta table for the event key to group by event or get data for certain events
 					$from .= " LEFT JOIN $meta_table AS event_meta ON p.ID = event_meta.post_id ";
 					$where .= " AND event_meta.meta_key = '$event_meta_key' ";
 				} // endif
 
-				if ( empty( $event_key_array ) ) {
+				if ( empty( $event_keys_array ) ) {
 					$query = "$select $from $where $group_clause";
 					$data_array = $wpdb->get_results( $query, ARRAY_A );
 				} else {
-					$placeholder_array = array_fill( 0, count( $event_key_array ), '%s' );
+					$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
 					$placeholders = implode( ',', $placeholder_array );
 					$where .= " AND event_meta.meta_value IN ( $placeholders )";
 					$query = "$select $from $where $group_clause";
-					$stmt = $wpdb->prepare( $query, $event_key_array );
+					$stmt = $wpdb->prepare( $query, $event_keys_array );
 					$data_array = $wpdb->get_results( $stmt, ARRAY_A );
 				} // endif
 
 // Error_Log::var_dump( $query );
-//Error_Log::var_dump( $event_key_array );
+//Error_Log::var_dump( $event_keys_array );
 //Error_Log::var_dump( $data_array );
 
 				$this->internal_stats_array = array();
+				
 				// When grouping by station or type and there is no station / item type assigned then name should be 0
-				if ( $group_by == self::GROUP_BY_FIXER_STATION ) {
-					$no_name = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
-				} elseif ( $group_by == self::GROUP_BY_ITEM_TYPE ) {
-					$no_name = Item_Type::UNSPECIFIED_ITEM_TYPE_ID;
-				} elseif ( $group_by == self::GROUP_BY_STATION_AND_TYPE ) {
-					$no_name = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID . '|' . Item_Type::UNSPECIFIED_ITEM_TYPE_ID ;
-				} else {
-					$no_name = '';
-				} // endif
+				switch( $group_by ) {
+					
+					case self::GROUP_BY_FIXER_STATION:
+						$no_name = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
+						break;
+						
+					case self::GROUP_BY_ITEM_TYPE:
+						$no_name = Item_Type::UNSPECIFIED_ITEM_TYPE_ID;
+						break;
+						
+					case self::GROUP_BY_STATION_AND_TYPE:
+						$no_name = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID . '|' . Item_Type::UNSPECIFIED_ITEM_TYPE_ID ;
+						break;
+					
+					default:
+						$no_name = '';
+						break;
+
+				} // endswitch
+				
 				if ( is_array( $data_array ) ) {
 					foreach ( $data_array as $data ) {
 						$name		= isset( $data[ 'name' ] )				? $data[ 'name' ]				: $no_name;
@@ -450,54 +444,81 @@ class Item_Stats_Collection {
 		if ( ! isset( $this->external_stats_array ) ) {
 			$this->external_stats_array = array();
 
-			$event_key_array = $this->get_event_key_array();
+			$event_keys_array = $this->get_event_keys_array();
 			$group_by = $this->group_by;
 
-			if ( $event_key_array === NULL ) {
+			if ( $event_keys_array === NULL ) {
 				$key_data_array = NULL;
 			} else {
 				// Convert the Event_Key objects into associative arrays that can be understood by external sources
 				$key_data_array = array();
-				foreach( $event_key_array as $event_key ) {
+				foreach( $event_keys_array as $event_key ) {
 					$key_obj = Event_Key::create_from_string( $event_key );
 					$key_data_array[] = $key_obj->get_as_associative_array();
 				} // endfor
 			} // endif
 
+//			Error_Log::var_dump( $key_data_array );
 			$ext_data = apply_filters( 'reg_man_rc_get_item_stats', array(), $key_data_array, $group_by );
 			// The above returns an array of data arrays.  I will convert those into my internal objects
 //			Error_Log::var_dump( $ext_data );
 
-			if ( $group_by == self::GROUP_BY_ITEM_TYPE ) {
-				$no_name = Item_Type::UNSPECIFIED_ITEM_TYPE_ID;
-			} elseif( $group_by == self::GROUP_BY_FIXER_STATION ) {
-				$no_name = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
-			} elseif ( $group_by == self::GROUP_BY_STATION_AND_TYPE ) {
-				$no_name = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID . '|' . Item_Type::UNSPECIFIED_ITEM_TYPE_ID ;
-			} else {
-				$no_name = ''; // In other cases missing name data is replaced by empty string
-			} // endif
 //			Error_Log::var_dump( $group_by );
+			switch( $group_by ) {
+				
+				case self::GROUP_BY_ITEM_TYPE:
+					$no_name = Item_Type::UNSPECIFIED_ITEM_TYPE_ID;
+					break;
+					
+				case self::GROUP_BY_FIXER_STATION:
+					$no_name = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
+					break;
+					
+				case self::GROUP_BY_STATION_AND_TYPE:
+					$no_name = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID . '|' . Item_Type::UNSPECIFIED_ITEM_TYPE_ID ;
+					break;
+					
+				default:
+					$no_name = ''; // In other cases missing name data is replaced by empty string
+					break;
+					
+			} // endswitch
 
 			foreach( $ext_data as $ext_data_row ) {
 //				$is_unspecified = FALSE;
 				$name = isset( $ext_data_row[ 'name' ] ) ? $ext_data_row[ 'name' ] : $no_name;
+				
 				// If items were grouped by type or station then external systems may use other names
 				// We need to use the internal names so try to find the right one
-				if ( $group_by == self::GROUP_BY_FIXER_STATION ) {
-					$station = Fixer_Station::get_fixer_station_by_name( $name );
-					$name = isset( $station ) ? $station->get_id() : $no_name;
-				} elseif ( $group_by == self::GROUP_BY_ITEM_TYPE ) {
-					$item_type = Item_Type::get_item_type_by_name( $name );
-					$name = isset( $item_type ) ? $item_type->get_id() : $no_name;
-				} elseif ( $group_by == self::GROUP_BY_STATION_AND_TYPE ) {
-					$parts = explode( '|', $name );
-					$station = isset( $parts[ 0 ] ) ? Fixer_Station::get_fixer_station_by_name( $parts[ 0 ] ) : NULL;
-					$type = isset( $parts[ 1 ] ) ? Item_Type::get_item_type_by_name( $parts[ 1 ] ) : NULL;
-					$station_id = isset( $station ) ? $station->get_id() : Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
-					$type_id = isset( $type ) ? $type->get_id() : Item_Type::UNSPECIFIED_ITEM_TYPE_ID;
-					$name = "$station_id|$type_id";
-				} // endif
+				// When grouping by event then we need to find the right internal event key
+				switch( $group_by ) {
+					
+					case self::GROUP_BY_FIXER_STATION:
+						$station = Fixer_Station::get_fixer_station_by_name( $name );
+						$name = isset( $station ) ? $station->get_id() : $no_name;
+						break;
+						
+					case self::GROUP_BY_ITEM_TYPE:
+						$item_type = Item_Type::get_item_type_by_name( $name );
+						$name = isset( $item_type ) ? $item_type->get_id() : $no_name;
+						break;
+						
+					case self::GROUP_BY_STATION_AND_TYPE:
+						$parts = explode( '|', $name );
+						$station = isset( $parts[ 0 ] ) ? Fixer_Station::get_fixer_station_by_name( $parts[ 0 ] ) : NULL;
+						$type = isset( $parts[ 1 ] ) ? Item_Type::get_item_type_by_name( $parts[ 1 ] ) : NULL;
+						$station_id = isset( $station ) ? $station->get_id() : Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
+						$type_id = isset( $type ) ? $type->get_id() : Item_Type::UNSPECIFIED_ITEM_TYPE_ID;
+						$name = "$station_id|$type_id";
+						break;
+
+					case self::GROUP_BY_EVENT:
+						$key_obj = Event_Key::create_from_string( $name );
+						$name = ! empty( $key_obj ) ? $key_obj->get_as_string() : $name;
+//						Error_Log::var_dump( $name );
+						break;
+						
+				} // endswitch
 				
 				$item_count	= isset( $ext_data_row[ 'item_count' ] )		? intval( $ext_data_row[ 'item_count' ] ) 		: 0;
 				$fixed		= isset( $ext_data_row[ 'fixed_count' ] )		? intval( $ext_data_row[ 'fixed_count' ] ) 		: 0;

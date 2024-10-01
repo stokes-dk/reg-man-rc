@@ -19,7 +19,6 @@ use Reg_Man_RC\View\Form_Input_List;
 class Item_Type_Admin_View {
 
 	const INPUT_NAME = 'item_type';
-	const INPUT_ID = 'item-type-input';
 
 	private function __construct() {
 	} // function
@@ -169,7 +168,7 @@ class Item_Type_Admin_View {
 				'</tr>';
 
 			echo '<p>';
-				$label = __( 'The following are typical item types you may choose to create to help get you started quickly', 'reg-man-rc' );
+				$label = __( 'The following are typical item types', 'reg-man-rc' );
 				echo '<b>' . esc_html( $label ) . '</b>';
 			echo '</p>';
 
@@ -249,60 +248,27 @@ class Item_Type_Admin_View {
 		echo '<input type="hidden" name="item_type_input_flag" value="TRUE">';
 
 		echo '<div class="reg-man-rc-item item-type-metabox reg-man-rc-metabox">';
-			if ( count( Item_Type::get_all_item_types() ) <= 3 ) {
-				$this->render_radio( $selected_id );
-			} else {
-				$no_select_name = _x( '-- Please Select --', 'An option label to indicate that no selection has been made', 'reg-man-rc' );
-				$no_select_value = '-1';
-				$this->render_select( $selected_id, $no_select_name, $no_select_value );
-			} // endif
+			$this->render_radio( $selected_id );
 		echo '</div>';
 	} // endif
 
 	private function render_radio( $selected_id  ) {
 		$options = Item_Type::get_all_item_types();
 		$input_name = esc_attr( self::INPUT_NAME );
-		$input_id = esc_attr( self::INPUT_ID );
-
-		$input_list = Form_Input_List::create();
 
 		$format =
 			'<label class="reg-man-rc-metabox-radio-label">' .
-				'<input type="radio" data-fixer-station="" name="%3$s" value="%2$s" class="radio" %4$s required="required" autocomplete="off"><span>%1$s</span>' .
+				'<input type="radio" name="%3$s" value="%2$s" class="radio" %4$s required="required" autocomplete="off"><span>%1$s</span>' .
 			'</label>';
 
 		foreach ( $options as $option ) {
 			$name = $option->get_name();
 			$id = $option->get_id();
-			$station = $option->get_fixer_station();
-			$station_id = isset( $station ) ? $station->get_id() : '-1';
 			$html_name = esc_html( $name );
 			$checked = checked( $id, $selected_id, $echo = FALSE );
-			printf( $format, $name, $id, $input_name, $checked );
+			printf( $format, $html_name, $id, $input_name, $checked );
 		} // endfor
 
-	} // function
-
-	private function render_select( $selected_id, $no_select_name = NULL, $no_select_value = NULL  ) {
-		$options = Item_Type::get_all_item_types();
-		$input_name = esc_attr( self::INPUT_NAME );
-		$input_id = esc_attr( self::INPUT_ID );
-		echo "<select id=\"$input_id\" name=\"$input_name\" required=\"required\" autocomplete=\"off\">";
-			if ( $no_select_name !== NULL ) {
-				$selected = selected( NULL, $selected_id, $echo = FALSE );
-				$html_name = esc_html( $no_select_name );
-				echo "<option data-fixer-station=\"\" value=\"$no_select_value\" $selected disabled=\"disabled\">$html_name</option>";
-			} // endif
-			foreach ( $options as $option ) {
-				$name = $option->get_name();
-				$id = $option->get_id();
-				$station = $option->get_fixer_station();
-				$station_id = isset( $station ) ? $station->get_id() : '-1';
-				$html_name = esc_html( $name );
-				$selected = selected( $id, $selected_id, $echo = FALSE );
-				echo "<option value=\"$id\" data-fixer-station=\"$station_id\" $selected>$html_name</option>";
-			} // endfor
-		echo '</select>';
 	} // function
 
 	private function render_radio_buttons( $selected_id ) {
@@ -326,24 +292,6 @@ class Item_Type_Admin_View {
 
 	public static function render_add_term_admin_fields( $taxonomy_slug ) {
 
-		// Fixer Station
-		$stations = Fixer_Station::get_all_fixer_stations();
-		if ( !empty( $stations ) ) {
-			$input_id = Fixer_Station_Admin_View::INPUT_ID;
-			$view = Fixer_Station_Admin_View::create();
-			$label = __( 'Default Fixer Station', 'reg-man-rc' );
-			$desc = __( 'The fixer station automatically assigned to items of this type.', 'reg-man-rc' );
-			echo '<div class="form-field">';
-				echo "<label for=\"$input_id\">";
-					echo $label;
-				echo '</label>';
-				$view->render_input_for_item_type( NULL );
-				echo '<p class="description">';
-					echo $desc;
-				echo '</p>';
-			echo '</div>';
-		} // endif
-
 		// Colour
 		$input_id = 'item-type-colour-input';
 		$input_name = 'item-type-colour';
@@ -363,31 +311,6 @@ class Item_Type_Admin_View {
 	public static function render_edit_term_admin_fields( $term, $taxonomy_slug ) {
 
 		$item_type = Item_Type::get_item_type_by_id( $term->term_id );
-
-		$stations = Fixer_Station::get_all_fixer_stations();
-
-		if ( ! empty( $stations ) ) {
-			$input_id = Fixer_Station_Admin_View::INPUT_ID;
-			$view = Fixer_Station_Admin_View::create();
-			$fixer_station = !empty( $item_type ) ? $item_type->get_fixer_station() : NULL;
-			$selected_id = !empty( $fixer_station ) ? $fixer_station->get_id() : NULL;
-			$label = __( 'Default Fixer Station', 'reg-man-rc' );
-			$desc = __( 'The fixer station automatically assigned to items of this type.', 'reg-man-rc' );
-			echo '<tr class="form-field term-group-wrap">';
-				echo '<th scope="row">';
-					echo "<label for=\"$input_id\">";
-						echo $label;
-					echo '</label>';
-				echo '</th>';
-				echo '<td>';
-					$view->render_input_for_item_type( $selected_id );
-					echo '<p class="description">';
-						echo $desc;
-					echo '</p>';
-				echo '</td>';
-			echo '</tr>';
-		} // endif
-
 		$input_id = 'item-type-colour-input';
 		$input_name = 'item-type-colour';
 		$label = __( 'Colour', 'reg-man-rc' );
@@ -438,7 +361,6 @@ class Item_Type_Admin_View {
 				'cb'						=> $columns['cb'],
 				'name'						=> $columns['name'],
 				'description'				=> $columns['description'],
-				'fixer_station'				=> __( 'Default Fixer Station', 'reg-man-rc' ),
 				'colour'					=> __( 'Colour', 'reg-man-rc' ),
 //				'order_index'				=> __( 'Custom Order', 'reg-man-rc' ),
 				'ext_names'					=> __( 'Alternate Names', 'reg-man-rc' ),
@@ -458,21 +380,6 @@ class Item_Type_Admin_View {
 		$item_type = Item_Type::get_item_type_by_id( $term_id );
 
 		switch ( $column_name ) {
-
-			case 'fixer_station':
-				if ( !empty( $item_type ) ) {
-					$fixer_station = $item_type->get_fixer_station();
-					if ( $fixer_station instanceof \Reg_Man_RC\Model\Fixer_Station ) {
-						$name = $fixer_station->get_name();
-						$val = "<span class=\"fixer_station_custom_col\">$name</span>";
-					} else {
-						$screen_reader_name = __( 'No Fixer Station', 'reg-man-rc' );
-						$val = '<span aria-hidden="true" class="fixer_station_custom_col">—</span>';
-						$val .= "<span class=\"screen-reader-text\">$screen_reader_name</span>";
-					} // endif
-					$content .= $val;
-				} // endif
-				break;
 
 			case 'colour':
 				if ( !empty( $item_type ) ) {
@@ -577,4 +484,65 @@ class Item_Type_Admin_View {
 		return $query;
 	} // function
 */
+	
+	/**
+	 * Get the set of tabs to be shown in the help for this taxonomy
+	 * @return array
+	 */
+	public static function get_help_tabs() {
+		$result = array(
+			array(
+				'id'		=> 'reg-man-rc-about',
+				'title'		=> __( 'About', 'reg-man-rc' ),
+				'content'	=> self::get_about_content(),
+			),
+		);
+		return $result;
+	} // function
+
+	/**
+	 * Get the html content shown to the administrator in the "About" help for this taxonomy
+	 * @return string
+	 */
+	private static function get_about_content() {
+		ob_start();
+			$heading = __( 'About item types', 'reg-man-rc' );
+			echo "<h2>$heading</h2>";
+			echo '<p>';
+				$msg = __(
+					'Item types provide an optional way to group items for statistical analysis.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'The default item types are based on whether the item is electrically powered or not.' .
+					'  This makes it easier to provide data for the Open Repair Data Standard which ' .
+					' collects data only for electrical and electronic equipment (EEE).',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'You may choose not to define any item types.' .
+					'  If you define item types then each item registered for an event must have its item type and fixer station assigned.' .
+					'  If you do not define any item types then each item must have only its fixer station assigned.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			echo '<p>';
+				$msg = __(
+					'Item types are colour coded for display in statistical charts.',
+					'reg-man-rc'
+				);
+				echo esc_html( $msg );
+			echo '</p>';
+			$result = ob_get_clean();
+		return $result;
+	} // function
+
+	
 } // class
