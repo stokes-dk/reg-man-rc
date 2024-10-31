@@ -24,6 +24,12 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 	private $is_fixer_apprentice;
 	private $assigned_volunteer_roles_array;
 
+	private static $VALID_VOLUNTEER_ROLE_IDS_LIST; // a string containing a list of valid volunteer roles (used in SQL queries)
+	private static $VALID_FIXER_STATION_IDS_LIST; // a string containing a list of valid fixer stations (used in SQL queries)
+	
+	private function __construct() {
+	} // function
+	
 	/**
 	 * Get all the supplemental volunteer registrations (fixers and non-fixer volunteers)
 	 *  for volunteers at any event in the specified event key array
@@ -41,19 +47,25 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 		$table = $wpdb->prefix . self::SUPPLEMENTAL_VOLUNTEERS_TABLE_NAME;
 		$cols = 'id, event_key, role_id, station_id, head_count, apprentice_count ';
 		
-//	Error_Log::var_dump( $event_keys_array );
+		// Only use valid role IDs and fixer station IDs
+		$role_ids_list = self::get_valid_volunteer_role_ids_list();
+		$stations_ids_list = self::get_valid_fixer_station_ids_list();
+
+		$where = "( role_id IS NULL OR role_id IN ( $role_ids_list ) ) AND ( station_id IS NULL OR station_id IN ( $stations_ids_list ) )";
+		
+		//	Error_Log::var_dump( $event_keys_array );
 		if ( is_array( $event_keys_array ) && count( $event_keys_array ) > 0 ) {
 
 			$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
 			$placehold_string = implode( ', ', $placeholder_array );
-			$where_clause = "( event_key IN ( $placehold_string ) )";
+			$where .= " AND ( event_key IN ( $placehold_string ) )";
 
-			$query = "SELECT $cols FROM $table WHERE $where_clause";
+			$query = "SELECT $cols FROM $table WHERE $where";
 			$query = $wpdb->prepare( $query, $event_keys_array );
 
 		} else {
 			
-			$query = "SELECT $cols FROM $table";
+			$query = "SELECT $cols FROM $table WHERE $where";
 			
 		} // endif
 
@@ -71,6 +83,29 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 
 	} // function
 
+	private static function get_valid_volunteer_role_ids_list() {
+		if ( ! isset( self::$VALID_VOLUNTEER_ROLE_IDS_LIST ) ) {
+
+			$role_ids = Volunteer_Role::get_all_term_taxonomy_ids();
+			$role_ids[] = Volunteer_Role::UNSPECIFIED_VOLUNTEER_ROLE_ID;
+			self::$VALID_VOLUNTEER_ROLE_IDS_LIST = implode( ',', $role_ids );
+		
+		} // endif
+		return self::$VALID_VOLUNTEER_ROLE_IDS_LIST;
+	} // function
+
+	private static function get_valid_fixer_station_ids_list() {
+		if ( ! isset( self::$VALID_FIXER_STATION_IDS_LIST ) ) {
+		
+			$station_ids = Fixer_Station::get_all_term_taxonomy_ids();
+			$station_ids[] = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
+			self::$VALID_FIXER_STATION_IDS_LIST = implode( ',', $station_ids );
+
+		} // endif
+		return self::$VALID_FIXER_STATION_IDS_LIST;
+	} // function
+
+	
 	/**
 	 * Instantiate this class using the data array provided.
 	 *
@@ -180,28 +215,34 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 				'SUM( head_count ) as head_count, ' .
 				'SUM( apprentice_count ) as apprentice_count ';
 		
+		// Only use valid role IDs and fixer station IDs
+		$role_ids_list = self::get_valid_volunteer_role_ids_list();
+		$stations_ids_list = self::get_valid_fixer_station_ids_list();
+
+		$where = "( role_id IS NULL OR role_id IN ( $role_ids_list ) ) AND ( station_id IS NULL OR station_id IN ( $stations_ids_list ) )";
+		
 		if ( is_array( $event_keys_array ) && ( count( $event_keys_array ) > 0 ) ) {
 
 			$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
 			$placehold_string = implode( ', ', $placeholder_array );
-			$where_clause = "( event_key IN ( $placehold_string ) )";
+			$where .= " AND ( event_key IN ( $placehold_string ) )";
 
 			// Get only records for fixers or non-fixers when grouping that way
 			if ( $group_by == Volunteer_Stats_Collection::GROUP_BY_FIXER_STATION ||
 				 $group_by == Volunteer_Stats_Collection::GROUP_BY_TOTAL_FIXERS ) {
-				$where_clause .= ' AND station_id IS NOT NULL';
+				$where .= ' AND station_id IS NOT NULL';
 			} elseif (  $group_by == Volunteer_Stats_Collection::GROUP_BY_VOLUNTEER_ROLE ||
 						$group_by == Volunteer_Stats_Collection::GROUP_BY_TOTAL_NON_FIXERS ) {
-				$where_clause .= ' AND role_id IS NOT NULL';
+				$where .= ' AND role_id IS NOT NULL';
 			} // endif
 
-			$query = "SELECT $cols FROM $table WHERE $where_clause GROUP BY name";
+			$query = "SELECT $cols FROM $table WHERE $where GROUP BY name";
 //	Error_Log::var_dump( $query );
 			$query = $wpdb->prepare( $query, $event_keys_array );
 			
 		} else {
 			
-			$query = "SELECT $cols FROM $table GROUP BY name";
+			$query = "SELECT $cols FROM $table WHERE $where GROUP BY name";
 			
 		} // endif
 			
@@ -340,30 +381,34 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 
 		$table = $wpdb->prefix . self::SUPPLEMENTAL_VOLUNTEERS_TABLE_NAME;
 		
-		$where_parts_array = array();
-		$where_args_array = array();
+		// Only use valid role IDs and fixer station IDs
+		$role_ids_list = self::get_valid_volunteer_role_ids_list();
+		$stations_ids_list = self::get_valid_fixer_station_ids_list();
+
+		$where = "( role_id IS NULL OR role_id IN ( $role_ids_list ) ) AND ( station_id IS NULL OR station_id IN ( $stations_ids_list ) )";
+
+		$event_where_parts_array = array();
+		$event_where_args_array = array();
 
 		if ( ! empty( $min_key_date_string ) ) {
-			$where_parts_array[] = ' ( event_key >= %s ) ';
-			$where_args_array[] = $min_key_date_string;
+			$event_where_parts_array[] = ' ( event_key >= %s ) ';
+			$event_where_args_array[] = $min_key_date_string;
 		} // endif
 		
 		if ( ! empty( $max_key_date_string ) ) {
-			$where_parts_array[] = ' ( event_key <= %s ) ';
-			$where_args_array[] = $max_key_date_string;
+			$event_where_parts_array[] = ' ( event_key <= %s ) ';
+			$event_where_args_array[] = $max_key_date_string;
 		} // endif
 		
-		if ( ! empty( $where_parts_array ) ) {
-			$where_clause = ' WHERE ( ' . implode( ' AND ', $where_parts_array ) . ' ) ';
-		} else {
-			$where_clause = '';
+		if ( ! empty( $event_where_parts_array ) ) {
+			$where .= ' AND ( ' . implode( ' AND ', $event_where_parts_array ) . ' ) ';
 		} // endif
 		
-		$query = "SELECT DISTINCT event_key FROM $table $where_clause";
-//	Error_Log::var_dump( $query, $where_args_array );
+		$query = "SELECT DISTINCT event_key FROM $table WHERE $where";
+//	Error_Log::var_dump( $query, $event_where_args_array );
 		
-		if ( count( $where_args_array ) > 0 )  {
-			$query = $wpdb->prepare( $query, $where_args_array );
+		if ( count( $event_where_args_array ) > 0 )  {
+			$query = $wpdb->prepare( $query, $event_where_args_array );
 		} // endif
 		$data_array = $wpdb->get_results( $query, OBJECT );
 
@@ -372,6 +417,143 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 		} // endif
 		
 //	Error_Log::var_dump( $result );
+		return $result;
+		
+	} // function
+	
+	/**
+	 * When a volunteer role is deleted we need to remove references to it from our table.
+	 * @param	int	$volunteer_role_id
+	 * @since	v0.9.9
+	 */
+	public static function handle_volunteer_role_deleted( $volunteer_role_id ) {
+		
+		self::handle_term_deleted( $volunteer_role_id, 'role_id' );
+
+	} // function
+	
+	/**
+	 * When a fixer station is deleted we need to remove references to it from our table.
+	 * @param	int	$fixer_station_id
+	 * @since	v0.9.9
+	 */
+	public static function handle_fixer_station_deleted( $fixer_station_id ) {
+		
+		self::handle_term_deleted( $fixer_station_id, 'station_id' );
+
+	} // function
+	
+	/**
+	 * When a volunteer role or fixer station is deleted we need to remove references to it from our table.
+	 * We need to find all the rows in the table using this deleted (now invalid) term ID
+	 *  and apply those totals to the UNSPECIFIED count for the event
+	 * @param	int		$invalid_term_id	The ID of the term (item_type or fixer_station) that has been deleted
+	 * @param	string	$invalid_column		The name of the table column containing the deleted ID, either 'role_id' or 'station_id'
+	 * @since	v0.9.9
+	 */
+	private static function handle_term_deleted( $invalid_term_id, $invalid_column ) {
+		global $wpdb;
+		
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_VOLUNTEERS_TABLE_NAME;
+		$cols = 'id, event_key, role_id, station_id, head_count, apprentice_count';
+
+		$is_invalid_role_id = $invalid_column === 'role_id'; // which column has the invalid value?
+		
+		// Find all the rows using this item type
+		$invalid_rows_query = "SELECT $cols FROM $table WHERE $invalid_column=%s";
+		$invalid_rows_stmt = $wpdb->prepare( $invalid_rows_query, $invalid_term_id );
+
+		$invalid_rows_array = $wpdb->get_results( $invalid_rows_stmt, OBJECT_K );
+//		Error_Log::var_dump( $invalid_rows_query, $invalid_rows_array );
+
+		if ( $is_invalid_role_id ) {
+			$existing_unspecified_row_query = "SELECT $cols FROM $table WHERE event_key=%s AND role_id=%s AND station_id IS NULL LIMIT 1";
+		} else {
+			$existing_unspecified_row_query = "SELECT $cols FROM $table WHERE event_key=%s AND role_id IS NULL AND station_id=%s LIMIT 1";
+		} // endif
+		
+		// In reality, this is '0' either way but let's assume it could change
+		$unspecified_value = $is_invalid_role_id ? Volunteer_Role::UNSPECIFIED_VOLUNTEER_ROLE_ID : Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
+		
+		// For each row using this invalid ID
+		//  look the row with the same event and valid volunteer role or fixer station but '0' for the invalid column
+		foreach( $invalid_rows_array as $invalid_row_id => $invalid_row ) {
+			
+			$event_key = $invalid_row->event_key;
+			$existing_unspecified_row_stmt = $wpdb->prepare( $existing_unspecified_row_query, $event_key, $unspecified_value );
+			$existing_unspecified_row_obj = $wpdb->get_row( $existing_unspecified_row_stmt, OBJECT );
+//			Error_Log::var_dump( $existing_unspecified_row_obj );
+
+			if ( empty( $existing_unspecified_row_obj ) ) {
+				
+				// There is NO existing row using UNSPECIFIED in the invalid column
+				//  so we can just change the invalid row's invalid column to UNSPECIFIED
+				$values_array = array( $invalid_column => $unspecified_value );
+				self::update_row_values( $invalid_row_id, $values_array );
+				
+			} else {
+				
+				// There is an existing row for UNSPECIFIED
+				//  so we have to add in the values from the invalid row then delete the invalid row
+				$existing_unspecified_row_id = $existing_unspecified_row_obj->id;
+				$head_count =		intval( $existing_unspecified_row_obj->head_count )			+ intval( $invalid_row->head_count );
+				$apprentice_count =	intval( $existing_unspecified_row_obj->apprentice_count )	+ intval( $invalid_row->apprentice_count );
+
+				$values_array = array(
+						'head_count'		=> $head_count,
+						'apprentice_count'	=> $apprentice_count,
+				);
+				self::update_row_values( $existing_unspecified_row_id, $values_array );
+				
+				self::delete_row( $invalid_row_id );
+				
+			} // endif
+			
+		} // endfor
+		
+	} // function
+	
+	private static function delete_row( $row_id ) {
+		global $wpdb;
+		
+//		Error_Log::var_dump( $row_id );
+		
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_VOLUNTEERS_TABLE_NAME;
+		$where = array( 'id' => $row_id );
+		
+		$result = $wpdb->delete( $table, $where );
+		
+		if ( $result === FALSE ) {
+			/* Translators: %1$s is a database table row ID, %2$s is an error message from the WordPress database ($wpdb) object */
+			$format = __( 'Unable to delete supplemental volunteer record for row ID %1$s.  Error message: %2$s', 'reg-man-rc' );
+			$msg = sprintf( $format, $row_id, $wpdb->last_error );
+			Error_Log::log_msg( $msg );
+		} // endif
+		
+		return $result;
+		
+	} // function
+	
+	private static function update_row_values( $row_id, $values_array ) {
+		global $wpdb;
+		
+//		Error_Log::var_dump( $row_id, $values_array );
+
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_VOLUNTEERS_TABLE_NAME;
+		
+		$types = array_fill( 0, count( $values_array ), '%s' );
+		$where = array( 'id' => $row_id );
+		$where_format = array( '%s' );
+		
+		$result = $wpdb->update( $table, $values_array, $where, $types, $where_format );
+		
+		if ( $result === FALSE ) {
+			/* Translators: %1$s is a database table row ID, %2$s is an error message from the WordPress database ($wpdb) object */
+			$format = __( 'Unable to update supplemental volunteer record for row ID: %1$s.  Error message: %2$s', 'reg-man-rc' );
+			$msg = sprintf( $format, $row_id, $wpdb->last_error );
+			Error_Log::log_msg( $msg );
+		} // endif
+		
 		return $result;
 		
 	} // function
@@ -422,54 +604,48 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 // The following methods provide the implementation for Volunteer_Registration_Descriptor
 
 	/**
-	 * Get the most descriptive name available to this user in the current context for display purposes.
-	 * If we're rendering the admin interface and the user can view the full name then
-	 *   it will be returned (if known), otherwise the public name is used
-	 * @return string
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_registration_id()
+	 */
+	public function get_volunteer_registration_id() {
+		return NULL;
+	} // function
+	
+	/**
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_display_name()
 	 */
 	public function get_volunteer_display_name() {
 		return '';
 	} // function
 
 	/**
-	 * Get the volunteer's name as a single string.
-	 * To protect the volunteer's privacy their full name is never shown in public.
-	 * The full name is used only if we are rendering the administrative interface.
-	 *
-	 * @return	string
-	 * @since	v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_full_name()
 	 */
 	public function get_volunteer_full_name() {
 		return '';
 	} // function
 
 	/**
-	 * Get the volunteer's public name.
-	 * To protect the volunteer's privacy this name is the one shown in public and should be something like
-	 * the volunteer's first name and last initial.
-	 * @return	string
-	 * @since	v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_public_name()
 	 */
 	public function get_volunteer_public_name() {
 		return '';
 	} // function
 
 	/**
-	 * Get the key for the event that the volunteer has registered for
-	 * @return	string|NULL		The key for the event for this volunteer registration
-	 * @since	v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_event_key_string()
 	 */
 	public function get_event_key_string() {
 		return $this->event_key_string;
 	} // function
 
 	/**
-	 * Get the volunteer's email, if supplied.
-	 * To protect the volunteer's privacy their email is never shown in public.
-	 * The email is used only to identify returning volunteers and show only if we are rendering the administrative interface.
-
-	 * @return	string|NULL		The visitor's email address if it is known, NULL otherwise
-	 * @since	v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_email()
 	 */
 	public function get_volunteer_email() {
 		return NULL;
@@ -490,89 +666,64 @@ class Supplemental_Volunteer_Registration implements Volunteer_Registration_Desc
 	} // function
 
 	/**
-	 * Get the name fixer station the volunteer has requested as her preferred station
-	 *
-	 * @return	string	The name of the fixer station the volunteer requested as her preferred station
-	 * 	or NULL if no fixer station was requested by the fixer
-	 *
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_preferred_fixer_station_name()
 	 */
 	public function get_preferred_fixer_station_name() {
 		return NULL;
 	} // function
 
 	/**
-	 * Get the name fixer station the volunteer has been assigned to for this event
-	 *
-	 * @return	string	The name of the fixer station the volunteer has been assigned to for this event
-	 * 	or NULL if no fixer station has been assigned
-	 *
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_assigned_fixer_station_name()
 	 */
 	public function get_assigned_fixer_station_name() {
 		return $this->assigned_fixer_station;
 	} // function
 
 	/**
-	 * Get a boolean indicating if the volunteer has asked to participate as an apprentice fixer at the event
-	 * @return	boolean|NULL	TRUE if the volunteer has asked to be an apprentice, FALSE if not, NULL if we don't know
-	 * @since	v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_is_fixer_apprentice()
 	 */
 	public function get_is_fixer_apprentice() {
 		return $this->is_fixer_apprentice;
 	} // function
 
 	/**
-	 * Get the array of names of volunteer roles the volunteer has offered to perform for this event
-	 *
-	 * @return	string	The array of strings representing the preferred volunteer roles for this event
-	 *	or NULL if no volunteer roles were requested by the volunteer
-	 *
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_preferred_volunteer_role_names_array()
 	 */
 	public function get_preferred_volunteer_role_names_array() {
 		return $this->NULL;
 	} // function
 
 	/**
-	 * Get the array of names of volunteer roles the volunteer has been assigned to perform for this event
-	 *
-	 * @return	string	The array of strings representing the roles assigned to this volunteer for this event
-	 *	or NULL if no volunteer roles were assigned to the volunteer
-	 *
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_assigned_volunteer_role_names_array()
 	 */
 	public function get_assigned_volunteer_role_names_array() {
 		return $this->assigned_volunteer_roles_array;
 	} // function
 
 	/**
-	 * Get the comments supplied by the fixer or volunteer for this registration.
-	 * @return	string		Any comments supplied by the volunteer during registration
-	 * @since	v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_registration_comments()
 	 */
 	public function get_volunteer_registration_comments() {
 		return NULL;
 	} // function
 
 	/**
-	 * Get a boolean indicating whether the volunteer attended the event
-	 *
-	 * @return	boolean		TRUE if the volunteer attended the event, FALSE if the volunteer DID NOT attend,
-	 * 	or NULL if it is not known whether the volunteer attended
-	 *
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_attendance()
 	 */
 	public function get_volunteer_attendance() {
 		return TRUE;
 	} // function
 
 	/**
-	 * Get a string indicating the source of this descriptor
-	 *
-	 * @return	string	A string indicating where this descriptor came from, e.g. 'registration', 'supplemental'
-	 *
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_registration_descriptor_source()
 	 */
 	public function get_volunteer_registration_descriptor_source() {
 		return __( 'supplemental', 'reg-man-rc' );

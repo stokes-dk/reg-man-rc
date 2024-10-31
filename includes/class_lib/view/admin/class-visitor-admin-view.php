@@ -34,7 +34,7 @@ class Visitor_Admin_View {
 		add_filter( 'enter_title_here', array(__CLASS__, 'rewrite_enter_title_here') );
 
 		// Change the messages that are shown when the post is updated
-		add_filter( 'post_updated_messages', array(__CLASS__, 'update_post_messages') );
+		add_filter( 'post_updated_messages', array(__CLASS__, 'handle_post_updated_messages') );
 
 		// Filter columns in the admin UI term list
 		add_filter( 'manage_' . Visitor::POST_TYPE . '_posts_columns', array( __CLASS__, 'filter_admin_UI_columns' ) );
@@ -120,14 +120,19 @@ class Visitor_Admin_View {
 
 			$label = __( 'Full name', 'reg-man-rc' );
 			$input_name = 'visitor_full_name';
-			$classes = 'required';
 			$val = isset( $visitor ) ? $visitor->get_full_name() : '';
-			$input_list->add_text_input( $label, $input_name, $val );
+			$hint = '';
+			$classes = '';
+			$is_required = TRUE;
+			$input_list->add_text_input( $label, $input_name, $val, $hint, $classes, $is_required );
 
 			$label = __( 'Email address', 'reg-man-rc' );
 			$input_name = 'visitor_email';
 			$val = isset( $visitor ) ? $visitor->get_email() : '';
-			$input_list->add_email_input( $label, $input_name, $val );
+			$hint = '';
+			$classes = '';
+			$is_required = FALSE;
+			$input_list->add_email_input( $label, $input_name, $val, $hint, $classes, $is_required );
 
 			$label = __( 'Join Mailing List?', 'reg-man-rc' );
 			$input_name = 'visitor_join_mail_list';
@@ -200,25 +205,25 @@ class Visitor_Admin_View {
 	 * @return	void
 	 * @since	v0.1.0
 	 */
-	public static function update_post_messages( $messages ) {
+	public static function handle_post_updated_messages( $messages ) {
 		global $post, $post_ID;
-		$permalink = get_permalink( $post_ID );
+//		$permalink = get_permalink( $post_ID );
 		/* translators: %1$s is a date, %2$s is a time. */
 		$date_time_format = sprintf( _x('%1$s at %2$s', 'Displaying a date and time', 'reg-man-rc' ),
 										get_option( 'date_format' ), get_option('time_format') );
 		$date = date_i18n( $date_time_format, strtotime( $post->post_date ) );
 		$messages[ Visitor::POST_TYPE ] = array(
 				0 => '',
-				1 => sprintf( __('Visitor updated. <a href="%s">View</a>'), esc_url( $permalink ) ),
-				2 => __('Custom field updated.'),
-				3 => __('Custom field deleted.'),
-				4 => __('Visitor updated.'),
-				5 => isset($_GET['revision']) ? sprintf( __('Visitor restored to revision from %s'), wp_post_revision_title( (int) $_GET['revision'], FALSE ) ) : FALSE,
-				6 => sprintf( __('Visitor published. <a href="%s">View</a>'), esc_url( $permalink ) ),
-				7 => __('Visitor saved.'),
-				8 => sprintf( __('Visitor submitted. <a target="_blank" href="%s">Preview</a>'), esc_url( add_query_arg( 'preview', 'true', $permalink ) ) ),
-				9 => sprintf( __('Visitor scheduled for: <strong>%1$s</strong>. <a target="_blank" href="%2$s">Preview</a>'), $date, esc_url( $permalink ) ),
-				10 => sprintf( __('Visitor draft updated. <a target="_blank" href="%s">Preview</a>'), esc_url( add_query_arg( 'preview', 'true', $permalink ) ) ),
+				1 => __( 'Visitor updated.', 'reg-man-rc' ),
+				2 => __( 'Custom field updated.', 'reg-man-rc' ),
+				3 => __( 'Custom field deleted.', 'reg-man-rc' ),
+				4 => __( 'Visitor updated.', 'reg-man-rc' ),
+				5 => isset($_GET['revision']) ? sprintf( __( 'Visitor restored to revision from %s', 'reg-man-rc' ), wp_post_revision_title( (int) $_GET['revision'], FALSE ) ) : FALSE,
+				6 => __( 'Visitor published.', 'reg-man-rc' ),
+				7 => __( 'Visitor saved.', 'reg-man-rc' ),
+				8 => __( 'Visitor submitted.', 'reg-man-rc' ),
+				9 => sprintf( __( 'Visitor scheduled for: <strong>%1$s</strong>', 'reg-man-rc' ) , $date ),
+				10 => __( 'Visitor draft updated.', 'reg-man-rc' ),
 		);
 		return $messages;
 	} // function

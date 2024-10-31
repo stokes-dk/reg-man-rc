@@ -563,9 +563,9 @@ class Event_Descriptor_Item_Provider implements List_item_Provider {
 		$event_descriptor = $this->get_event_descriptor();
 		$href = $event_descriptor->get_event_edit_url();
 		if ( ! empty( $href ) ) {
-			$link_text = __( 'Edit event details', 'reg-man-rc' );
+			$link_text = __( 'Edit event description', 'reg-man-rc' );
 			$icon = 'edit';
-			$icon_title = __( 'Edit the details of this event', 'reg-man-rc' );
+			$icon_title = __( 'Edit the description of this event', 'reg-man-rc' );
 			$result = Event_Item_Provider::create_admin_link_item( $href, $link_text, $icon, $icon_title );
 		} // endif
 		return $result;

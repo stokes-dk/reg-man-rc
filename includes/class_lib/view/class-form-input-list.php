@@ -358,38 +358,49 @@ class Form_Input_List {
 	 * @param	string	$addn_attrs	Additional attributes to be applied to the element
 	 * @return	void
 	 */
-	public function add_select_input( $label, $name, $options, $selected = NULL, $hint = '', $classes = '', $is_required = FALSE, $addn_attrs = '' ) {
+	public function add_select_input( $label, $name, $options, $selected = NULL, $hint = '', $classes = '', $is_required = FALSE, $addn_attrs = '', $is_include_please_select = FALSE ) {
 		$id = self::get_input_id( $name ); // gen an input id using the name
 		$req_attr = $is_required ? 'required="required"' : '';
-		$input_html = "<select name=\"$name\" id=\"$id\" autocomplete=\"off\" $req_attr $addn_attrs>";
-		foreach ( $options as $option_text => $option_value ) {
-			if ( is_array( $option_value ) ) {
-				$input_html .= "<optgroup label=\"$option_text\">";
-					foreach( $option_value as $sub_option_text => $sub_option_value ) {
+		ob_start();
+			echo "<select name=\"$name\" id=\"$id\" autocomplete=\"off\" $req_attr $addn_attrs>";
+				$option_format = '<option value="%2$s" %3$s %4$s>%1$s</option>';
+				if ( $is_include_please_select ) {
+					$text = __( '--Please select--', 'reg-man-rc' );
+					$val = '';
+					$sel = ( empty( $selected ) ) ? 'selected="selected"' : '';
+					$attrs = 'disabled="disabled"';
+					printf( $option_format, $text, $val, $sel, $attrs );
+				} // endif
+				$attrs = '';
+				foreach ( $options as $option_text => $option_value ) {
+					if ( is_array( $option_value ) ) {
+						echo "<optgroup label=\"$option_text\">";
+							foreach( $option_value as $sub_option_text => $sub_option_value ) {
+								// If this is "multiple" then selected is an array
+								if ( is_array( $selected ) ) {
+									$sel = in_array( $sub_option_value, $selected ) ? 'selected="selected"' : '';
+								} else {
+									$sel = ( $sub_option_value === $selected ) ? 'selected="selected"' : '';
+								} // endif
+								$text = esc_html( $sub_option_text );
+								$val = esc_attr( $sub_option_value );
+								printf( $option_format, $text, $val, $sel, $attrs );
+							} // endfor
+						echo'</optgroup>';
+					} else {
 						// If this is "multiple" then selected is an array
 						if ( is_array( $selected ) ) {
-							$sel = in_array( $sub_option_value, $selected ) ? 'selected="selected"' : '';
+							$sel = in_array( $option_value, $selected ) ? 'selected="selected"' : '';
 						} else {
-							$sel = ( $sub_option_value === $selected ) ? 'selected="selected"' : '';
+							$sel = ( $option_value === $selected ) ? 'selected="selected"' : '';
 						} // endif
-						$text = esc_html( $sub_option_text );
-						$val = esc_attr( $sub_option_value );
-						$input_html .= "<option value=\"$val\" $sel>$text</option>";
-					} // endfor
-				$input_html .= '</optgroup>';
-			} else {
-				// If this is "multiple" then selected is an array
-				if ( is_array( $selected ) ) {
-					$sel = in_array( $option_value, $selected ) ? 'selected="selected"' : '';
-				} else {
-					$sel = ( $option_value === $selected ) ? 'selected="selected"' : '';
-				} // endif
-				$text = esc_html( $option_text );
-				$val = esc_attr( $option_value );
-				$input_html .= "<option value=\"$val\" $sel>$text</option>";
-			} // endif
-		} // endfor
-		$input_html .= '</select>';
+						$text = esc_html( $option_text );
+						$val = esc_attr( $option_value );
+						printf( $option_format, $text, $val, $sel, $attrs );
+					} // endif
+				} // endfor
+			echo '</select>';
+		$input_html = ob_get_clean();
 		$this->add_custom_html_input( $label, $name, $input_html, $hint, $classes, $is_required, $id );
 	} // function
 

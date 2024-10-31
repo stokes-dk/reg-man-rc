@@ -24,7 +24,13 @@ class Supplemental_Item implements Item_Descriptor {
 	private $fixer_station_name;
 	private $item_status;
 	private $status_name;
-
+	
+	private static $VALID_ITEM_TYPE_IDS_LIST; // a string containing a list of valid item types (used in SQL queries)
+	private static $VALID_FIXER_STATION_IDS_LIST; // a string containing a list of valid fixer stations (used in SQL queries)
+	
+	private function __construct() {
+	} // function
+	
 	/**
 	 * Get all the item descriptors for supplemental items for any event in the specified event key array
 	 *
@@ -39,19 +45,25 @@ class Supplemental_Item implements Item_Descriptor {
 		global $wpdb;
 		$result = array();
 		$table = $wpdb->prefix . self::SUPPLEMENTAL_ITEMS_TABLE_NAME;
-		$cols = 'id, event_key, item_type_id, fixer_station_id, fixed_count, repairable_count, eol_count, unreported_count ';
+		$cols = 'id, event_key, fixed_count, repairable_count, eol_count, unreported_count, item_type_id, fixer_station_id';
 
+		// Only use valid type IDs and fixer station IDs
+		$type_ids_list = self::get_valid_item_type_ids_list();
+		$stations_ids_list = self::get_valid_fixer_station_ids_list();
+
+		$where = "item_type_id IN ( $type_ids_list ) AND fixer_station_id IN ( $stations_ids_list )";
+		
 		if ( is_array( $event_keys_array ) && count( $event_keys_array ) > 0 ) {
 
 			$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
 			$placehold_string = implode( ', ', $placeholder_array );
-			$where_clause = "( event_key IN ( $placehold_string ) )";
-			$query = "SELECT $cols FROM $table WHERE $where_clause";
+			$where .= " AND event_key IN ( $placehold_string ) ";
+			$query = "SELECT $cols FROM $table WHERE $where";
 			$query = $wpdb->prepare( $query, $event_keys_array );
 			
 		} else {
 			
-			$query = "SELECT $cols FROM $table";
+			$query = "SELECT $cols FROM $table WHERE $where";
 			
 		} // endif
 		
@@ -69,6 +81,28 @@ class Supplemental_Item implements Item_Descriptor {
 
 		return $result;
 		
+	} // function
+	
+	private static function get_valid_item_type_ids_list() {
+		if ( ! isset( self::$VALID_ITEM_TYPE_IDS_LIST ) ) {
+
+			$type_ids = Item_Type::get_all_term_taxonomy_ids();
+			$type_ids[] = Item_Type::UNSPECIFIED_ITEM_TYPE_ID;
+			self::$VALID_ITEM_TYPE_IDS_LIST = implode( ',', $type_ids );
+		
+		} // endif
+		return self::$VALID_ITEM_TYPE_IDS_LIST;
+	} // function
+
+	private static function get_valid_fixer_station_ids_list() {
+		if ( ! isset( self::$VALID_FIXER_STATION_IDS_LIST ) ) {
+		
+			$station_ids = Fixer_Station::get_all_term_taxonomy_ids();
+			$station_ids[] = Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
+			self::$VALID_FIXER_STATION_IDS_LIST = implode( ',', $station_ids );
+
+		} // endif
+		return self::$VALID_FIXER_STATION_IDS_LIST;
 	} // function
 
 	/**
@@ -110,7 +144,7 @@ class Supplemental_Item implements Item_Descriptor {
 //		Error_Log::var_dump( $event_key, $type_id, $station_id, $fixed_count, $repairable_count, $eol_count );
 
 		$type = isset( $type_id ) ? Item_Type::get_item_type_by_id( $type_id ) : NULL;
-		$type_name = isset( $type ) ? array( $type->get_name() ) : array();
+		$type_name = isset( $type ) ? $type->get_name() : NULL;
 		
 		$station = isset( $station_id ) ? Fixer_Station::get_fixer_station_by_id( $station_id ) : NULL;
 		$station_name = isset( $station ) ? $station->get_name() : NULL;
@@ -175,7 +209,7 @@ class Supplemental_Item implements Item_Descriptor {
 			} // endfor
 		} // endif
 
-	//		Error_Log::var_dump( $result );
+//		Error_Log::var_dump( $result );
 		return $result;
 	} // function
 
@@ -211,6 +245,7 @@ class Supplemental_Item implements Item_Descriptor {
 				break;
 
 			case Item_Stats_Collection::GROUP_BY_ITEM_DESC:
+				// Note that we have no item description in the supplemental items database table
 				$name_col = "''"; // must be a quoted string for SQL otherwise illegal column name
 				break;
 
@@ -227,17 +262,25 @@ class Supplemental_Item implements Item_Descriptor {
 				'SUM( eol_count ) as eol_count, ' .
 				'SUM( unreported_count ) as unreported_count, ' .
 				'SUM( fixed_count + repairable_count + eol_count + unreported_count ) as total_count ';
-			
+		
+		// Only use valid type IDs and fixer station IDs
+		$type_ids_list = self::get_valid_item_type_ids_list();
+		$stations_ids_list = self::get_valid_fixer_station_ids_list();
+
+		$where = "item_type_id IN ( $type_ids_list ) AND fixer_station_id IN ( $stations_ids_list )";
+//		Error_Log::var_dump( $where );
+		
 		if ( is_array( $event_keys_array ) && ( count( $event_keys_array ) > 0 ) ) {
 
 			$placeholder_array = array_fill( 0, count( $event_keys_array ), '%s' );
 			$placehold_string = implode( ', ', $placeholder_array );
-			$query = "SELECT $cols FROM $table WHERE event_key IN ( $placehold_string ) GROUP BY name";
+			$where .= " AND event_key IN ( $placehold_string )";
+			$query = "SELECT $cols FROM $table WHERE $where GROUP BY name";
 			$query = $wpdb->prepare( $query, $event_keys_array );
 
 		} else {
 			
-			$query = "SELECT $cols FROM $table GROUP BY name";
+			$query = "SELECT $cols FROM $table WHERE $where GROUP BY name";
 			
 		} // endif
 			
@@ -254,41 +297,7 @@ class Supplemental_Item implements Item_Descriptor {
 	} // function
 
 	/**
-	 * Get the supplemental item stats for the specified event
-	 * This is used to render the supplmental item data while editing an event
-	 * @return array[]	An array of arrays like the following:
-	 * 	array(
-	 * 		array(
-	 * 			'item_type_id'		=> 134
-	 * 			'fixer_station_id	=> 21
-	 * 			'fixed_count'		=> 3
-	 * 			'repairable_count'	=> 0
-	 * 			'eol_count'			=> 1
-	 * 			'unreported_count'	=> 2
-	 * 			'total_count'		=> 6
-	 * 		)
-	 *	)
-	 */
-	public static function get_supplemental_stats_for_event( $event_key ) {
-		global $wpdb;
-		$table = $wpdb->prefix . self::SUPPLEMENTAL_ITEMS_TABLE_NAME;
-		$group_by = 'item_type_id, fixer_station_id';
-
-		$cols = "item_type_id, fixer_station_id, " .
-				'SUM( fixed_count ) as fixed_count, ' .
-				'SUM( repairable_count ) as repairable_count, ' .
-				'SUM( eol_count ) as eol_count, ' .
-				'SUM( unreported_count ) as unreported_count, ' .
-				'SUM( fixed_count + repairable_count + eol_count + unreported_count ) as total_count ';
-		$query = "SELECT $cols FROM $table WHERE event_key = %s GROUP BY $group_by";
-		$stmt = $wpdb->prepare( $query, $event_key );
-		$data_array = $wpdb->get_results( $stmt, ARRAY_A );
-// Error_Log::var_dump( $query, $data_array );
-		return $data_array;
-	} // function
-
-	/**
-	 * Set the supplemental counts for items of the specified type for this event
+	 * Set the supplemental counts for items of the specified type, fixer station and event
 	 * @param	int|string	$event_key			The key for the event whose counts are to be assigned
 	 * @param	int|string	$item_type_id		The ID of the item type whose counts are to be assigned
 	 * @param	int|string	$station_id			The ID of the fixer station whose counts are to be assigned
@@ -302,7 +311,7 @@ class Supplemental_Item implements Item_Descriptor {
 		global $wpdb;
 
 		$table = $wpdb->prefix . self::SUPPLEMENTAL_ITEMS_TABLE_NAME;
-
+		
 		$fixed_count		= max( 0, intval( $fixed_count ) ); // It must be a positive integer,
 		$repairable_count	= max( 0, intval( $repairable_count ) );
 		$eol_count			= max( 0, intval( $eol_count ) );
@@ -353,7 +362,68 @@ class Supplemental_Item implements Item_Descriptor {
 		return $result;
 	} // function
 
+	/**
+	 * Add the specified supplemental counts for items of the specified type, fixer station, and event
+	 * If a record already exists for the specified type, station and event then add the item counts.
+	 * If no record exists then create one.
+	 * @param	int|string	$event_key			The key for the event whose counts are to be assigned
+	 * @param	int|string	$item_type_id		The ID of the item type whose counts are to be assigned
+	 * @param	int|string	$station_id			The ID of the fixer station whose counts are to be assigned
+	 * @param	int|string	$fixed_count		The count of fixed items of this type for the event
+	 * @param	int|string	$repairable_count	The count of fixed items of this type for the event
+	 * @param	int|string	$eol_count			The count of fixed items of this type for the event
+	 * @param	int|string	$unreported_count	The count of items of this type whose repair status is not known for the event
+	 * @since	v0.9.9
+	 */
+//	private static function add_supplemental_item_counts( $event_key, $item_type_id, $station_id, $fixed_count, $repairable_count, $eol_count, $unreported_count ) {
+	private static function add_supplemental_item_counts( $event_key, $item_type_id, $station_id, $fixed_count, $repairable_count, $eol_count, $unreported_count ) {
+		global $wpdb;
 
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_ITEMS_TABLE_NAME;
+		
+		$fixed_count		= max( 0, intval( $fixed_count ) ); // It must be a positive integer,
+		$repairable_count	= max( 0, intval( $repairable_count ) );
+		$eol_count			= max( 0, intval( $eol_count ) );
+		$unreported_count	= max( 0, intval( $unreported_count ) );
+
+		$query = "SELECT id FROM $table WHERE event_key=%s AND item_type_id=%s AND fixer_station_id = %s LIMIT 1";
+		$stmt = $wpdb->prepare( $query, $event_key, $item_type_id, $station_id );
+		$obj = $wpdb->get_row( $stmt, OBJECT );
+		$existing_id = ( isset( $obj ) && isset( $obj->id ) ) ? $obj->id : NULL;
+
+		if ( empty( $fixed_count ) && empty( $repairable_count ) && empty( $eol_count) && empty( $unreported_count ) ) {
+			// If all the values are 0 then there's nothing to do
+			$result = TRUE;
+		} else {
+			// Otherwise, we need to record the supplied data so either update an existing record or insert a new one
+			// 'id, event_key, item_type_id, fixed_count, repairable_count, eol_count, unreported_count';
+			$vals = array(
+				'fixed_count'		=> $fixed_count,
+				'repairable_count'	=> $repairable_count,
+				'eol_count'			=> $eol_count,
+				'unreported_count'	=> $unreported_count,
+			);
+			$types = array_fill( 0, count( $vals ), '%s');
+
+			if ( isset( $existing_id ) ) {
+				// We must update an existing record
+				$where = array( 'id' => $existing_id );
+				$where_format = array( '%s' );
+				$update_result = $wpdb->update( $table, $vals, $where, $types, $where_format );
+				$result = ( $update_result == 1 ) ? TRUE : FALSE;
+			} else {
+				// We must insert a new record
+				$vals[ 'event_key' ]		= $event_key;
+				$vals[ 'item_type_id' ]		= $item_type_id;
+				$vals[ 'fixer_station_id' ]	= $station_id;
+				$types[] = '%s';
+				$insert_result = $wpdb->insert( $table, $vals, $types );
+				$result = ( $insert_result == 1 ) ? TRUE : FALSE;
+			} // endif
+		} // endif
+		return $result;
+	} // function
+	
 	/**
 	 * Get an array of event key for supplemental items registered to events in the specified date range
 	 * @param string $min_key_date_string
@@ -368,29 +438,34 @@ class Supplemental_Item implements Item_Descriptor {
 
 		$table = $wpdb->prefix . self::SUPPLEMENTAL_ITEMS_TABLE_NAME;
 		
-		$where_parts_array = array();
-		$where_args_array = array();
+		// Only use valid type IDs and fixer station IDs
+		$type_ids_list = self::get_valid_item_type_ids_list();
+		$stations_ids_list = self::get_valid_fixer_station_ids_list();
 
+		$where = "item_type_id IN ( $type_ids_list ) AND fixer_station_id IN ( $stations_ids_list )";
+		
+		$event_where_parts_array = array();
+		$event_where_args_array = array();
+
+		// Note that the event key always starts with the date so we can compare using >= AND <=
 		if ( ! empty( $min_key_date_string ) ) {
-			$where_parts_array[] = ' ( event_key >= %s ) ';
-			$where_args_array[] = $min_key_date_string;
+			$event_where_parts_array[] = ' ( event_key >= %s ) ';
+			$event_where_args_array[] = $min_key_date_string;
 		} // endif
 		
 		if ( ! empty( $max_key_date_string ) ) {
-			$where_parts_array[] = ' ( event_key <= %s ) ';
-			$where_args_array[] = $max_key_date_string;
+			$event_where_parts_array[] = ' ( event_key <= %s ) ';
+			$event_where_args_array[] = $max_key_date_string;
 		} // endif
 		
-		if ( ! empty( $where_parts_array ) ) {
-			$where_clause = ' WHERE ( ' . implode( ' AND ', $where_parts_array ) . ' ) ';
-		} else {
-			$where_clause = '';
+		if ( ! empty( $event_where_parts_array ) ) {
+			$where .= ' AND ( ' . implode( ' AND ', $event_where_parts_array ) . ' ) ';
 		} // endif
 		
-		$query = "SELECT DISTINCT event_key FROM $table $where_clause";
+		$query = "SELECT DISTINCT event_key FROM $table WHERE $where";
 		
-		if ( count( $where_args_array ) > 0 )  {
-			$query = $wpdb->prepare( $query, $where_args_array );
+		if ( count( $event_where_args_array ) > 0 )  {
+			$query = $wpdb->prepare( $query, $event_where_args_array );
 		} // endif
 		$data_array = $wpdb->get_results( $query, OBJECT );
 
@@ -399,6 +474,149 @@ class Supplemental_Item implements Item_Descriptor {
 		} // endif
 		
 //	Error_Log::var_dump( $result );
+		return $result;
+		
+	} // function
+	
+	/**
+	 * When an item type is deleted we need to remove references to it from our table.
+	 * @param	int	$item_type_id
+	 * @since	v0.9.9
+	 */
+	public static function handle_item_type_deleted( $item_type_id ) {
+		
+		self::handle_term_deleted( $item_type_id, 'item_type_id' );
+
+	} // function
+	
+	/**
+	 * When a fixer station is deleted we need to remove references to it from our table.
+	 * @param	int	$fixer_station_id
+	 * @since	v0.9.9
+	 */
+	public static function handle_fixer_station_deleted( $fixer_station_id ) {
+		
+		self::handle_term_deleted( $fixer_station_id, 'fixer_station_id' );
+
+	} // function
+	
+	/**
+	 * When a fixer station or item type is deleted we need to remove references to it from our table.
+	 * We need to find all the rows in the table using this deleted (now invalid) term ID
+	 *  and apply those totals to the UNSPECIFIED count for the event
+	 * @param	int		$invalid_term_id	The ID of the term (item_type or fixer_station) that has been deleted
+	 * @param	string	$invalid_column		The name of the table column containing the deleted ID, either 'item_type_id' or 'fixer_station_id'
+	 * @since	v0.9.9
+	 */
+	private static function handle_term_deleted( $invalid_term_id, $invalid_column ) {
+		global $wpdb;
+		
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_ITEMS_TABLE_NAME;
+		$cols = 'id, event_key, fixed_count, repairable_count, eol_count, unreported_count, item_type_id, fixer_station_id';
+
+		$is_invalid_item_type = $invalid_column === 'item_type_id'; // which column has the invalid value?
+		
+		// Find all the rows using this item type
+		$invalid_rows_query = "SELECT $cols FROM $table WHERE $invalid_column=%s";
+		$invalid_rows_stmt = $wpdb->prepare( $invalid_rows_query, $invalid_term_id );
+
+		$invalid_rows_array = $wpdb->get_results( $invalid_rows_stmt, OBJECT_K );
+//		Error_Log::var_dump( $invalid_rows_query, $invalid_rows_array );
+
+		$existing_unspecified_row_query = "SELECT $cols FROM $table WHERE event_key=%s AND item_type_id=%s AND fixer_station_id = %s LIMIT 1";
+
+		// In reality, this is '0' either way but let's assume it could change
+		$unspecified_value = $is_invalid_item_type ? Item_Type::UNSPECIFIED_ITEM_TYPE_ID : Fixer_Station::UNSPECIFIED_FIXER_STATION_ID;
+		
+		// For each row using this invalid ID
+		//  look the row with the same event and valid item type or fixer station but '0' for the invalid column
+		foreach( $invalid_rows_array as $invalid_row_id => $invalid_row ) {
+			
+			$event_key = $invalid_row->event_key;
+			if ( $is_invalid_item_type ) {
+				$item_type_id = $unspecified_value;
+				$fixer_station_id = $invalid_row->fixer_station_id;
+			} else {
+				$item_type_id = $invalid_row->item_type_id;
+				$fixer_station_id = $unspecified_value;
+			} // endif
+			$existing_unspecified_row_stmt = $wpdb->prepare( $existing_unspecified_row_query, $event_key, $item_type_id, $fixer_station_id );
+			$existing_unspecified_row_obj = $wpdb->get_row( $existing_unspecified_row_stmt, OBJECT );
+//			Error_Log::var_dump( $existing_unspecified_row_obj );
+
+			if ( empty( $existing_unspecified_row_obj ) ) {
+				
+				// There is NO existing row using UNSPECIFIED in the invalid column
+				//  so we can just change the invalid row's invalid column to UNSPECIFIED
+				$values_array = array( $invalid_column => $unspecified_value );
+				self::update_row_values( $invalid_row_id, $values_array );
+				
+			} else {
+				
+				// There is an existing row for UNSPECIFIED
+				//  so we have to add in the values from the invalid row then delete the invalid row
+				$existing_unspecified_row_id = $existing_unspecified_row_obj->id;
+				$fixed_count =		intval( $existing_unspecified_row_obj->fixed_count )		+ intval( $invalid_row->fixed_count );
+				$repairable_count =	intval( $existing_unspecified_row_obj->repairable_count )	+ intval( $invalid_row->repairable_count );
+				$eol_count =		intval( $existing_unspecified_row_obj->eol_count )			+ intval( $invalid_row->eol_count );
+				$unreported_count =	intval( $existing_unspecified_row_obj->unreported_count )	+ intval( $invalid_row->unreported_count );
+
+				$values_array = array(
+						'fixed_count'		=> $fixed_count,
+						'repairable_count'	=> $repairable_count,
+						'eol_count'			=> $eol_count,
+						'unreported_count'	=> $unreported_count,
+				);
+				self::update_row_values( $existing_unspecified_row_id, $values_array );
+				
+				self::delete_row( $invalid_row_id );
+				
+			} // endif
+		} // endfor
+		
+	} // function
+	
+	private static function delete_row( $row_id ) {
+		global $wpdb;
+		
+//		Error_Log::var_dump( $row_id );
+		
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_ITEMS_TABLE_NAME;
+		$where = array( 'id' => $row_id );
+		
+		$result = $wpdb->delete( $table, $where );
+		
+		if ( $result === FALSE ) {
+			/* Translators: %1$s is a database table row ID, %2$s is an error message from the WordPress database ($wpdb) object */
+			$format = __( 'Unable to delete supplemental item record for row ID %1$s.  Error message: %2$s', 'reg-man-rc' );
+			$msg = sprintf( $format, $row_id, $wpdb->last_error );
+			Error_Log::log_msg( $msg );
+		} // endif
+		
+		return $result;
+		
+	} // function
+	
+	private static function update_row_values( $row_id, $values_array ) {
+		global $wpdb;
+		
+//		Error_Log::var_dump( $row_id, $values_array );
+
+		$table = $wpdb->prefix . self::SUPPLEMENTAL_ITEMS_TABLE_NAME;
+		
+		$types = array_fill( 0, count( $values_array ), '%s' );
+		$where = array( 'id' => $row_id );
+		$where_format = array( '%s' );
+		
+		$result = $wpdb->update( $table, $values_array, $where, $types, $where_format );
+		
+		if ( $result === FALSE ) {
+			/* Translators: %1$s is a database table row ID, %2$s is an error message from the WordPress database ($wpdb) object */
+			$format = __( 'Unable to update supplemental item record for row ID: %1$s.  Error message: %2$s', 'reg-man-rc' );
+			$msg = sprintf( $format, $row_id, $wpdb->last_error );
+			Error_Log::log_msg( $msg );
+		} // endif
+		
 		return $result;
 		
 	} // function

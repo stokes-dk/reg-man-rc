@@ -12,6 +12,12 @@ namespace Reg_Man_RC\Model\Stats;
 interface Volunteer_Registration_Descriptor {
 
 	/**
+	 * Get the ID of this volunteer registration record, or NULL if no ID exists for this record.
+	 * @return string|NULL
+	 */
+	public function get_volunteer_registration_id();
+	
+	/**
 	 * Get the most descriptive name available to this user in the current context for display purposes.
 	 * If we're rendering the admin interface and the user can view the full name then
 	 *   it will be returned (if known), otherwise the public name is used

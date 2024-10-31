@@ -8,6 +8,8 @@ use Reg_Man_RC\Model\Event;
 use Reg_Man_RC\Model\Volunteer;
 use Reg_Man_RC\Control\Term_Order_Controller;
 use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Model\Ajax_Form_Response;
+use Reg_Man_RC\View\Admin\Add_Volunteer_Registration_Form;
 
 /**
  * The volunteer controller
@@ -19,6 +21,13 @@ use Reg_Man_RC\Model\Error_Log;
  */
 class Volunteer_Registration_Admin_Controller {
 
+	const ADD_VOLUNTEER_REG_AJAX_ACTION			= 'reg_man_rc_add_volunteer_reg';
+	const ADD_VOLUNTEER_REG_REQUEST_GET_FORM	= 'get-form';
+	const ADD_VOLUNTEER_REG_REQUEST_ADD			= 'add';
+	
+	/**
+	 * Register this controller
+	 */
 	public static function register() {
 
 		// Add an action hook to upate our custom fields when a post is saved
@@ -30,8 +39,152 @@ class Volunteer_Registration_Admin_Controller {
 		// Filter the clauses for my custom post type to allow custom filtering on metadata
 		add_filter( 'posts_clauses', array( __CLASS__, 'filter_posts_clauses' ), 1000, 2 );
 
+		add_action( 'wp_ajax_' . self::ADD_VOLUNTEER_REG_AJAX_ACTION, array( __CLASS__, 'handle_add_volunteer_reg_request' ) );
+		
 	} // function
 
+	/**
+	 * Handle an AJAX request to get the remove form content for a specific record.
+	 *
+	 * @return	void
+	 */
+	public static function handle_add_volunteer_reg_request() {
+
+		$form_response = Ajax_Form_Response::create();
+		
+		// The form data is serialized and put into the formData post argument that Wordpress will pass to me
+		// I need to deserialze it into a regular associative array
+		$serialized_form_data = isset( $_REQUEST[ 'formData' ] ) ? $_REQUEST[ 'formData' ] : NULL;
+		$form_data = array();
+		parse_str( $serialized_form_data, $form_data );
+
+		// The referer page is where the request came from.  On successful removal we'll get the client to reload this page
+		$referer			= $_SERVER[ 'HTTP_REFERER' ];
+		
+		$nonce				= isset( $form_data[ '_wpnonce' ] )			? $form_data[ '_wpnonce' ]			: '';
+		$event_key			= isset( $form_data[ 'event-key' ] )		? $form_data[ 'event-key' ]			: NULL;
+		$volunteer_id		= isset( $form_data[ 'volunteer-id' ] )		? $form_data[ 'volunteer-id' ]		: NULL;
+		$request_type		= isset( $form_data[ 'request-type' ] )		? $form_data[ 'request-type' ]		: self::REMOVE_VOLUNTEER_ACTION_GET;
+
+//		Error_Log::var_dump( $form_data, $nonce, $referer, $event_key, $volunteer_id, $request_type );
+		$is_valid_nonce = wp_verify_nonce( $nonce, self::ADD_VOLUNTEER_REG_AJAX_ACTION );
+		$event = Event::get_event_by_key( $event_key );
+		$volunteer = Volunteer::get_volunteer_by_id( $volunteer_id );
+		$is_authorized = ! empty( $event ) ? $event->get_is_current_user_able_to_register_volunteers() : FALSE;
+		
+		// Volunteer is required when the request is not for "get form"
+		$is_invalid_volunteer = ( $request_type !== self::ADD_VOLUNTEER_REG_REQUEST_GET_FORM ) && empty( $volunteer );
+		
+		if ( ! $is_valid_nonce || empty( $event ) || ! $is_authorized || $is_invalid_volunteer ) {
+
+			if ( ! $is_valid_nonce ) {
+				$err_msg = __( 'Your security token has expired.  Please refresh the page and try again.', 'reg-man-rc' );
+				$form_response->add_error( '_wpnonce', '', $err_msg );
+			} // endif
+
+			if ( empty( $event ) ) {
+				if ( empty( $event_key ) ) {
+					$err_msg = __( 'No event key was specified.', 'reg-man-rc' );
+					$form_response->add_error( 'event-key', '', $err_msg );
+				} else {
+					/* Translators: %1$s is an event key */
+					$err_msg = sprintf( __( 'The event could not be found for event key %1$s.', 'reg-man-rc' ), $event_key );
+					$form_response->add_error( 'event-key', $event_key, $err_msg );
+				} // endif
+			} else {
+				if ( ! $is_authorized ) {
+					$err_msg = __( 'You are not authorized to register volunteers for this event.', 'reg-man-rc' );
+					$form_response->add_error( 'event-key', $event_key, $err_msg );
+				} // endif
+			} // endif
+
+			if ( $is_invalid_volunteer ) {
+				if ( empty( $volunteer_id ) ) {
+					$err_msg = __( 'No volunteer was selected.', 'reg-man-rc' );
+					$form_response->add_error( 'volunteer-d', '', $err_msg );
+				} else {
+					/* Translators: %1$s is a volunteer ID */
+					$err_msg = sprintf( __( 'The volunteer could not be found with ID %1$s.', 'reg-man-rc' ), $volunteer_id );
+					$form_response->add_error( 'volunteer-id', $volunteer_id, $err_msg );
+				} // endif
+			} // endif
+
+		} else {
+
+			switch( $request_type ) {
+				
+				case self::ADD_VOLUNTEER_REG_REQUEST_GET_FORM:
+				default:
+					$view = Add_Volunteer_Registration_Form::create( $event );
+					$content = $view->get_add_form_content();
+					
+					$form_response->set_html_data( $content );
+					break;
+					
+				case self::ADD_VOLUNTEER_REG_REQUEST_ADD:
+					$result = self::handle_add_volunteer_reg( $event, $volunteer, $form_response );
+					if ( $result === TRUE ) {
+//						$form_response->set_redirect_url( $referer ); // reload the page on success
+					} // endif
+					break;
+					
+			} // endswitch
+			
+		} // endif
+
+//		Error_Log::var_dump( $form_response );
+		echo json_encode( $form_response->jsonSerialize() );
+		wp_die(); // THIS IS REQUIRED!
+		
+	} // class
+	
+	/**
+	 * Handle request to add volunteer registration
+	 * @param Event					$event
+	 * @param Volunteer				$volunteer
+	 * @param Ajax_Form_Response	$form_response
+	 */
+	private static function handle_add_volunteer_reg( $event, $volunteer, $form_response ) {
+
+		// Make sure this volunteer is not already registered
+		$event_key = $event->get_key_string();
+		$volunteer_id = $volunteer->get_id();
+//		Error_Log::var_dump( $volunteer_id );
+		$vol_reg_array = Volunteer_Registration::get_all_registrations_for_event( $event_key );
+		$is_already_registered = FALSE; // unless we find it
+		foreach( $vol_reg_array as $vol_reg ) {
+			$curr_vol_id = $vol_reg->get_volunteer_id();
+//			Error_Log::var_dump( $curr_vol_id );
+			if ( $curr_vol_id == $volunteer_id ) {
+				$is_already_registered = TRUE;
+				break;
+			} // endif
+		} // endfor
+
+		if ( $is_already_registered ) {
+
+			$err_msg = __( 'The volunteer is already registered for this event.', 'reg-man-rc' );
+			$form_response->add_error( 'volunteer-id', $volunteer_id, $err_msg );
+
+		} else {
+
+			$roles = $volunteer->get_preferred_roles();
+			$fixer_station = $volunteer->get_preferred_fixer_station();
+			$is_apprentice = $volunteer->get_is_fixer_apprentice();
+			$vol_reg = Volunteer_Registration::create_new_registration( $volunteer, $event, $roles, $fixer_station, $is_apprentice );
+//			Error_Log::var_dump( $vol_reg );
+			if ( empty( $vol_reg ) ) {
+
+				$err_msg = __( 'ERROR: unable to create the volunteer registration record.', 'reg-man-rc' );
+				$form_response->add_error( '', '', $err_msg );
+				
+			} // endif
+
+		} // endif
+		
+	} // function
+	
+	
 	/**
 	 * Handle a post save event for my post type
 	 *
@@ -70,7 +223,11 @@ class Volunteer_Registration_Admin_Controller {
 						$public_name  = isset( $_POST[ 'volunteer_public_name' ] ) ? $_POST[ 'volunteer_public_name' ] : '';
 						$full_name  = isset( $_POST[ 'volunteer_full_name' ] ) ? $_POST[ 'volunteer_full_name' ] : NULL;
 						$email  = isset( $_POST[ 'volunteer_email' ] ) ? $_POST[ 'volunteer_email' ] : NULL;
-						$volunteer = Volunteer::create_new_volunteer( $public_name, $full_name, $email );
+						// Check if a volunteer with this email already exists!!!
+						$volunteer = Volunteer::get_volunteer_by_email( $email );
+						if ( empty( $volunteer ) ) {
+							$volunteer = Volunteer::create_new_volunteer( $public_name, $full_name, $email );
+						} // endif
 						
 					} else {
 						

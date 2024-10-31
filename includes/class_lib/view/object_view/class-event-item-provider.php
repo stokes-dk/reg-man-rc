@@ -321,8 +321,8 @@ class Event_Item_Provider implements List_Item_Provider {
 		if ( ! empty( $href ) ) {
 			$link_text = __( 'Public page', 'reg-man-rc' );
 			$icon = 'text-page';
-			$icon_title = __( 'Go to the public event page', 'reg-man-rc' );
-			$result = self::create_admin_link_item( $href, $link_text, $icon, $icon_title );
+			$title = __( 'Go to the public event page', 'reg-man-rc' );
+			$result = self::create_admin_link_item( $href, $link_text, $icon, $title );
 		} // endif
 		return $result;
 	} // function
@@ -633,8 +633,8 @@ class Event_Item_Provider implements List_Item_Provider {
 		if ( ! empty( $href ) ) {
 			$link_text = __( 'Volunteer area registration page' );
 			$icon = 'welcome-write-blog';
-			$icon_title = __( 'Volunteer area', 'reg-man-rc' );
-			$result = self::create_admin_link_item( $href, $link_text, $icon, $icon_title );
+			$title = __( 'Volunteer area', 'reg-man-rc' );
+			$result = self::create_admin_link_item( $href, $link_text, $icon, $title );
 		} // endif
 		return $result;
 	} // function
@@ -647,8 +647,8 @@ class Event_Item_Provider implements List_Item_Provider {
 		if ( ! empty( $href ) ) {
 			$link_text = __( 'More details' );
 			$icon = 'text-page';
-			$icon_title = __( 'More admin details', 'reg-man-rc' );
-			$result = self::create_admin_link_item( $href, $link_text, $icon, $icon_title );
+			$title = __( 'Go to the admin calendar event details page', 'reg-man-rc' );
+			$result = self::create_admin_link_item( $href, $link_text, $icon, $title );
 		} // endif
 		return $result;
 	} // function
@@ -658,16 +658,16 @@ class Event_Item_Provider implements List_Item_Provider {
 	 * @param	string	$href			The href attribute for the link
 	 * @param	string	$link_text		The text for the link.
 	 * @param	string	$icon			The name of the dashicons icon to be used for this item, e.g. 'location-alt'
-	 * @param	string	$icon_title		The rollover title for the icon, e.g. 'Location'
+	 * @param	string	$title		The rollover title for the link and the icon, e.g. 'Location'
 	 * @param	string	$classes		Optional classes to be applied to the item
 	 * @return	List_Item
 	 * @since	v0.1.0
 	 */
-	public static function create_admin_link_item( $href, $link_text, $icon, $icon_title, $classes = '' ) {
+	public static function create_admin_link_item( $href, $link_text, $icon, $title, $classes = '' ) {
 		if ( ! empty( $href ) ) {
-			$link = "<a class=\"object-view-admin-link\" href=\"$href\">$link_text</a>";
+			$link = "<a class=\"object-view-admin-link\" href=\"$href\" title=\"$title\">$link_text</a>";
 			$classes = "reg-man-rc-object-view-details-admin-link-item $classes";
-			$result = List_Item::create( $link, $icon, $icon_title, $classes );
+			$result = List_Item::create( $link, $icon, $title, $classes );
 		} else {
 			$result = NULL;
 		} // endif

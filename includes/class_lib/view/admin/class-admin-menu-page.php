@@ -112,6 +112,7 @@ class Admin_Menu_Page {
 			$result = FALSE;
 			
 		} // endif
+//		Error_Log::var_dump( $capability_type_plural, $capability, $result );
 		return $result;
 	} // function
 	
@@ -403,8 +404,7 @@ class Admin_Menu_Page {
 			$page_title = $labels->menu_name;
 			$menu_title = $labels->menu_name;
 			$capability = 'manage_categories';
-			$post_type = Internal_Event_Descriptor::POST_TYPE;
-			$curr_slug = "edit-tags.php?taxonomy=$tax_name&post_type=$post_type";
+			$curr_slug = "edit-tags.php?taxonomy=$tax_name";
 			$function = NULL; // use the default rendering provided by Wordpress
 			add_submenu_page( $parent_slug, $page_title, $menu_title, $capability, $curr_slug, $function, $tax_position );
 			
@@ -450,8 +450,11 @@ class Admin_Menu_Page {
 	 */
 	public static function assign_current_submenu( $parent_file ) {
 		global $current_screen;
-		// FIXME - submenu_file and pagenow are not necessary, I think
-//		global $submenu_file, $pagenow;
+		global $submenu_file;
+		// FIXME - pagenow is not necessary, I think
+//		global $pagenow;
+
+//		Error_Log::var_dump( $parent_file, $current_screen->base, $submenu_file );
 
 		if ( self::get_is_create_main_custom_menu_page() ) {
 			// Set the submenu as current (highlight it in the view) for the submenu items of this page
@@ -484,7 +487,7 @@ class Admin_Menu_Page {
 				// This is an editor page for one of my CPTs and their menu items are under the main menu slug
 				$parent_file = self::MENU_SLUG;
 				
-				// FIXME - submenu_file is not necessary, I think
+				// FIXME - submenu_file is not necessary here, I think
 //				$submenu_file = "edit.php?post_type={$current_screen->post_type}";
 
 			} elseif ( ( ( $base == 'edit-tags' ) || ( $base == 'term' ) ) && ( in_array( $current_screen->taxonomy, $taxonomy_array ) ) ) {
@@ -492,15 +495,14 @@ class Admin_Menu_Page {
 				// This is one of my taxonomies
 
 				$parent_file = self::MENU_SLUG; // All of the above are my taxonomies and their menu items are under the main menu slug
-/* FIXME I don't believe this is necessary
-				// Some taxonomy urls contain the default post type of 'post' because they belong to multiple custom post types, e.g. Fixer Stations
+//				Error_Log::var_dump( $parent_file, $submenu_file, $current_screen->post_type );
+				// Some taxonomy urls use the default post type of 'post' because they belong to multiple custom post types, e.g. Fixer Stations
 				// In any of those cases I will change the submenu file to remove the post_type portion and simply refer to the taxonomy
 				if ( $current_screen->post_type == 'post' ) {
 					$submenu_file = "edit-tags.php?taxonomy={$current_screen->taxonomy}";
 				} else {
 					$submenu_file = "edit-tags.php?taxonomy={$current_screen->taxonomy}&post_type={$current_screen->post_type}";
 				} // endif
-*/
 			} // endif
 
 		} // endif

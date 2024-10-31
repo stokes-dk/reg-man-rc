@@ -22,6 +22,7 @@ use Reg_Man_RC\Model\Stats\Items_Chart_Model;
 use Reg_Man_RC\Model\Stats\Volunteers_Chart_Model;
 use Reg_Man_RC\Model\Stats\Visitors_Chart_Model;
 use Reg_Man_RC\Control\User_Role_Controller;
+use Reg_Man_RC\Model\Internal_Event_Descriptor;
 
 /**
  * The administrative event calendar page showing ALL events known to the system
@@ -116,6 +117,7 @@ class Admin_Event_Calendar_Page {
 		echo '<div class="wrap">';
 		
 			$page_name = $this->get_page_name_from_request();
+			$heading_actions = '';
 			switch( $page_name ) {
 				
 				case self::PAGE_NAME_HOME:
@@ -124,6 +126,12 @@ class Admin_Event_Calendar_Page {
 					$head_format = __( 'Administrative Calendar for %1$s', 'reg-man-rc' );
 					$site_name = get_bloginfo();
 					$heading = sprintf( $head_format, $site_name );
+					$add_url = Internal_Event_Descriptor::get_add_event_url();
+					if ( ! empty( $add_url ) ) {
+						$add_new_title = __( 'Add New Event', 'reg-man-rc' );
+						$add_new_button = sprintf( '<a href="%1$s" class="page-title-action">%2$s</a>', $add_url, $add_new_title );
+						$heading_actions .= $add_new_button;
+					} // endif
 					break;
 					
 				case self::PAGE_NAME_EVENT:
@@ -141,7 +149,7 @@ class Admin_Event_Calendar_Page {
 			} // endswitch
 		
 			
-			echo "<h1 class=\"wp-heading-inline\">$heading</h1>";
+			echo "<h1 class=\"wp-heading-inline\">$heading</h1> $heading_actions";
 			echo '<hr class="wp-header-end">';
 
 			echo '<div class="reg-man-rc-admin-calendar-page-content">';

@@ -404,7 +404,8 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 		if ( ! empty( $post ) ) {
 			$post_status = $post->post_status;
 			if ( current_user_can( 'create_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
-				$visible_statuses = array( 'publish', 'private', 'future', 'draft', 'pending' );
+				// Note that when a user is creating a new event the initial status will be auto-draft and it must be found
+				$visible_statuses = array( 'publish', 'private', 'future', 'draft', 'pending', 'auto-draft' );
 			} else {
 				$visible_statuses = array( 'publish' );
 			} // endif
@@ -1133,7 +1134,7 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 
 	/**
 	 * Get the url to edit the event descriptor, if the page exists.
-	 * @return	string		The url for the page to edit this event descriptor if one exists, otherwise NULL or empty string.
+	 * @return	string	The url for the page to edit this event descriptor if one exists, otherwise NULL or empty string.
 	 * @since v0.1.0
 	 */
 	public function get_event_edit_url() {
@@ -1151,7 +1152,25 @@ class Internal_Event_Descriptor implements Event_Descriptor {
 		return $result;
 	} // function
 
+	/**
+	 * Get the url to add a new event descriptor
+	 * @return	string	The url for a link to add a new event descriptor
+	 * @since v0.9.9
+	 */
+	public static function get_add_event_url() {
+		if ( ! current_user_can( 'create_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
+			$result = NULL;
+		} else {
+			$base_url = admin_url( 'post-new.php' );
+			$query_args = array(
+					'post_type'		=> self::POST_TYPE,
+			);
+			$result = add_query_arg( $query_args, $base_url );
+		} // endif
+		return $result;
+	} // function
 
+	
 	/**
 	 * Get a boolean flag indicating whether the event is recurring.
 	 * @return	boolean	TRUE for a recurring event, FALSE otherwise.

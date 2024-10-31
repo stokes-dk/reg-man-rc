@@ -36,16 +36,18 @@ class Volunteer_Admin_View {
 
 		// Add filter for post row actions so I can replace "Trash"
 		// TODO: This is work in progress
-//		add_filter( 'post_row_actions', array( __CLASS__, 'handle_post_row_actions' ), 10, 2 );
+		// I want to intercept 'Trash' and present a dialog that allows the user to move registration records to
+		//  another volunteer before this one gets trashed
+		add_filter( 'post_row_actions', array( __CLASS__, 'handle_post_row_actions' ), 10, 2 );
 		
 		// Register hook to insert my remove dialog onto the page
 		// Note that the dialog contains a form so must be rendered outside the open <form> tag that encloses the entire
 		//  table including the tablenav sections, so I can't use the 'manage_posts_extra_tablenav' action here
 		// TODO: This is incomplete work in progress
-//		add_action( 'admin_notices', array( __CLASS__, 'add_remove_dialog' ) );
+		add_action( 'admin_notices', array( __CLASS__, 'handle_admin_notices' ) );
 
 		// Change the messages that are shown when the post is updated
-		add_filter( 'post_updated_messages', array(__CLASS__, 'update_post_messages') );
+		add_filter( 'post_updated_messages', array(__CLASS__, 'handle_post_updated_messages') );
 
 		// Filter columns in the admin UI term list
 		add_filter( 'manage_' . Volunteer::POST_TYPE . '_posts_columns', array( __CLASS__, 'filter_admin_UI_columns' ) );
@@ -76,17 +78,27 @@ class Volunteer_Admin_View {
 		
 		// To avoid orphaned registrations we will replace the usual 'Trash' option and add our own 'Remove'
 		
-		if ( ( $post->post_type === Volunteer::POST_TYPE ) && isset( $actions[ 'trash' ] ) ) {
-			
-			unset( $result[ 'trash' ] ); // Remove the usual trash operation
+		if ( $post->post_type === Volunteer::POST_TYPE ) { 
 
-			$label = __( 'Trash&hellip;', 'reg-man-rc' );
-			$title = __( 'Remove registration records and trash this record', 'reg-man-rc' );
+			if ( isset( $actions[ 'trash' ] ) ) {
 			
-			$format = '<button class="reg-man-rc-remove-cpt-button volunteer-remove-button button-link" type="button" data-record-id="%3$s" title="%2$s">%1$s</button>';
-			
-			$result[ 'remove' ] = sprintf( $format, $label, $title, $post->ID );
+				// Normal view containing 'Trash'
+				
+				unset( $result[ 'trash' ] ); // Remove the usual trash operation
+	
+				$label = __( 'Trash&hellip;', 'reg-man-rc' );
+				$title = __( 'Remove registration records and trash this volunteer record', 'reg-man-rc' );
+				
+				$format = '<button class="reg-man-rc-remove-cpt-button volunteer-remove-button button-link" type="button" data-record-id="%3$s" title="%2$s">%1$s</button>';
+				
+				$result[ 'reg-man-rc-trash' ] = sprintf( $format, $label, $title, $post->ID );
 
+			} elseif ( isset( $actions[ 'delete' ] ) ) {
+				
+				// Trash view containing 'Delete Permanently'
+				
+			} // endif
+	
 		} // endif
 		
 		return $result;
@@ -95,7 +107,14 @@ class Volunteer_Admin_View {
 	/**
 	 * Insert our remove dialog onto the page
 	 */
-	public static function add_remove_dialog( $which ) {
+	public static function handle_admin_notices() {
+		self::render_remove_dialog();
+	} // function
+
+	/**
+	 * Insert our remove dialog onto the page
+	 */
+	private static function render_remove_dialog() {
 
 		global $pagenow;
 		$post_type = isset( $_GET[ 'post_type' ] ) ? $_GET[ 'post_type' ] : '';
@@ -103,7 +122,7 @@ class Volunteer_Admin_View {
 
 		if ( ( $pagenow === 'edit.php' ) && ( $post_type === Volunteer::POST_TYPE ) ) {
 		
-			$title = __( 'Remove Volunteer', 'reg-man-rc' );
+			$title = __( 'Trash Volunteer', 'reg-man-rc' );
 			
 			echo "<div class=\"reg-man-rc-remove-cpt-dialog remove-volunteer-dialog dialog-container\" title=\"$title\">";
 	
@@ -216,19 +235,26 @@ class Volunteer_Admin_View {
 
 			$label = __( 'Full name', 'reg-man-rc' );
 			$input_name = 'volunteer_full_name';
-			$classes = 'required';
 			$val = isset( $volunteer ) ? $volunteer->get_full_name() : '';
-			$input_list->add_text_input( $label, $input_name, $val );
+			$hint = '';
+			$classes = '';
+			$is_required = TRUE;
+			$input_list->add_text_input( $label, $input_name, $val, $hint, $classes, $is_required );
 
 			$label = __( 'Email address', 'reg-man-rc' );
 			$input_name = 'volunteer_email';
 			$val = isset( $volunteer ) ? $volunteer->get_email() : '';
-			$input_list->add_email_input( $label, $input_name, $val );
+			$hint = '';
+			$classes = '';
+			$is_required = FALSE;
+			$input_list->add_email_input( $label, $input_name, $val, $hint, $classes, $is_required );
 
-			$label = __( 'WordPress User', 'reg-man-rc' );
-			$input_name = 'wp_user';
 			$wp_user_display_name = isset( $volunteer ) ? $volunteer->get_wp_user_display_name() : NULL;
-			$input_list->add_information( $label, $wp_user_display_name );
+			if ( ! empty( $wp_user_display_name ) ) {
+				$label = __( 'WordPress User', 'reg-man-rc' );
+				$input_name = 'wp_user';
+				$input_list->add_information( $label, $wp_user_display_name );
+			} // endif
 
 		$input_list->render();
 
@@ -305,7 +331,7 @@ class Volunteer_Admin_View {
 				( $screen->post_type == Volunteer::POST_TYPE ) &&
 				( empty( $screen->taxonomy ) ) ) {
 			Scripts_And_Styles::enqueue_base_admin_script_and_styles();
-//			Scripts_And_Styles::enqueue_remove_cpt_admin_scripts();
+			Scripts_And_Styles::enqueue_admin_cpt_scripts();
 		} // endif
 	} // function
 
@@ -327,25 +353,25 @@ class Volunteer_Admin_View {
 	 * @return	void
 	 * @since	v0.1.0
 	 */
-	public static function update_post_messages( $messages ) {
+	public static function handle_post_updated_messages( $messages ) {
 		global $post, $post_ID;
-		$permalink = get_permalink( $post_ID );
+//		$permalink = get_permalink( $post_ID );
 		/* translators: %1$s is a date, %2$s is a time. */
-		$date_time_format = sprintf( _x('%1$s at %2$s', 'Displaying a date and time', 'reg-man-rc' ),
+		$date_time_format = sprintf( _x( '%1$s at %2$s', 'Displaying a date and time', 'reg-man-rc' ),
 										get_option( 'date_format' ), get_option('time_format') );
 		$date = date_i18n( $date_time_format, strtotime( $post->post_date ) );
 		$messages[ Volunteer::POST_TYPE ] = array(
 				0 => '',
-				1 => sprintf( __('Volunteer updated. <a href="%s">View</a>'), esc_url( $permalink ) ),
-				2 => __('Custom field updated.'),
-				3 => __('Custom field deleted.'),
-				4 => __('Volunteer updated.'),
-				5 => isset($_GET['revision']) ? sprintf( __('Volunteer restored to revision from %s'), wp_post_revision_title( (int) $_GET['revision'], FALSE ) ) : FALSE,
-				6 => sprintf( __('Volunteer published. <a href="%s">View</a>'), esc_url( $permalink ) ),
-				7 => __('Volunteer saved.'),
-				8 => sprintf( __('Volunteer submitted. <a target="_blank" href="%s">Preview</a>'), esc_url( add_query_arg( 'preview', 'true', $permalink ) ) ),
-				9 => sprintf( __('Volunteer scheduled for: <strong>%1$s</strong>. <a target="_blank" href="%2$s">Preview</a>'), $date, esc_url( $permalink ) ),
-				10 => sprintf( __('Volunteer draft updated. <a target="_blank" href="%s">Preview</a>'), esc_url( add_query_arg( 'preview', 'true', $permalink ) ) ),
+				1 => __( 'Volunteer updated.', 'reg-man-rc' ),
+				2 => __( 'Custom field updated.', 'reg-man-rc' ),
+				3 => __( 'Custom field deleted.', 'reg-man-rc' ),
+				4 => __( 'Volunteer updated.', 'reg-man-rc' ),
+				5 => isset($_GET['revision']) ? sprintf( __( 'Volunteer restored to revision from %s', 'reg-man-rc' ), wp_post_revision_title( (int) $_GET['revision'], FALSE ) ) : FALSE,
+				6 => __( 'Volunteer published.', 'reg-man-rc' ),
+				7 => __( 'Volunteer saved.', 'reg-man-rc' ),
+				8 => __( 'Volunteer submitted.', 'reg-man-rc' ),
+				9 => sprintf( __( 'Volunteer scheduled for: <strong>%1$s</strong>', 'reg-man-rc' ) , $date ),
+				10 => __( 'Volunteer draft updated.', 'reg-man-rc' ),
 		);
 		return $messages;
 	} // function

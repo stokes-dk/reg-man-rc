@@ -602,6 +602,8 @@ class Fixer_Station {
 				'add_or_remove_items'			=> NULL,// __( 'Add or remove item types', 'reg-man-rc' ),
 				'choose_from_most_used'			=> NULL,// __( 'Choose from the most used item types', 'reg-man-rc' ),
 				'not_found'						=> NULL,// __( 'Fixer Station not found', 'reg-man-rc' ),
+				'name_field_description'		=> NULL, //__( 'The public name for the fixer station', 'reg-man-rc' ),
+				'desc_field_description'		=> __( 'A short description of the fixer station', 'reg-man-rc' ),
 		);
 
 		$args = array(
@@ -627,10 +629,10 @@ class Fixer_Station {
 		);
 
 		$post_types = array(
-				Item::POST_TYPE,
 				Internal_Event_Descriptor::POST_TYPE,
-				Volunteer_Registration::POST_TYPE,
+				Item::POST_TYPE,
 				Volunteer::POST_TYPE,
+				Volunteer_Registration::POST_TYPE,
 		);
 		$taxonomy = register_taxonomy( self::TAXONOMY_NAME, $post_types, $args );
 

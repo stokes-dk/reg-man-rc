@@ -8,6 +8,8 @@ use Reg_Man_RC\Model\Stats\Item_Stats_Collection;
 use Reg_Man_RC\Model\Stats\Volunteer_Stats_Collection;
 use Reg_Man_RC\Control\User_Role_Controller;
 use Reg_Man_RC\Model\Volunteer_Registration;
+use Reg_Man_RC\Model\Volunteer;
+use Reg_Man_RC\View\Form_Input_List;
 
 /**
  * The administrative view for an item stats table
@@ -31,7 +33,8 @@ class Volunteer_Registration_Admin_Table_View {
 		$result = new self();
 		if ( ! empty( $single_event ) && $single_event instanceof Event ) {
 			$result->single_event = $single_event;
-			$result->group_by = 'fixer-station';
+//			$result->group_by = 'fixer-station';
+			$result->group_by = ''; // Users tend to view this with no grouping
 		} else {
 			$result->group_by = '';
 		} // endif
@@ -86,18 +89,19 @@ class Volunteer_Registration_Admin_Table_View {
 	public function render() {
 		$single_event = $this->get_single_event();
 		$event_col_class = $this->get_is_event_column_hidden() ? 'col-hidden' : '';
-		// Name | email | Event | ISO 8601 Date | Fixer Station (apprentice) | Volunteer Roles | Comments | Attendance | Source
+		// Name | ID | email | Event | ISO 8601 Date | Fixer Station (apprentice) | Volunteer Roles | Comments | Attendance | Source
 		$rowFormat =
 			'<tr>' .
-				'<%1$s class="volunteer-display-name">%2$s</%1$s>' .
-				'<%1$s class="volunteer-email col-hidden">%3$s</%1$s>' .
-				'<%1$s class="event-date-text ' . $event_col_class . '">%4$s</%1$s>' . // This column will be sorted by the next col's data
-				'<%1$s class="event-date-iso-8601 col-hidden always-hidden not-searchable">%5$s</%1$s>' . // Must be after date
-				'<%1$s class="fixer-station">%6$s</%1$s>' .
-				'<%1$s class="volunteer-roles">%7$s</%1$s>' .
-				'<%1$s class="volunteer-comments">%8$s</%1$s>' .
-				'<%1$s class="volunteer-attendance col-hidden">%9$s</%1$s>' .
-				'<%1$s class="volunteer-source">%10$s</%1$s>' .
+				'<%1$s class="volunteer-display-name string-with-empty-placeholder">%2$s</%1$s>' .
+				'<%1$s class="record-id always-hidden col-hidden col-not-searchable num-with-empty-placeholder">%3$s</%1$s>' .
+				'<%1$s class="volunteer-email col-hidden">%4$s</%1$s>' .
+				'<%1$s class="event-date-text ' . $event_col_class . '">%5$s</%1$s>' . // This column will be sorted by the next col's data
+				'<%1$s class="event-date-iso-8601 col-hidden always-hidden col-not-searchable">%6$s</%1$s>' . // Must be after date
+				'<%1$s class="fixer-station string-with-empty-placeholder">%7$s</%1$s>' .
+				'<%1$s class="volunteer-roles string-with-empty-placeholder">%8$s</%1$s>' .
+				'<%1$s class="volunteer-comments string-with-empty-placeholder">%9$s</%1$s>' .
+				'<%1$s class="volunteer-attendance col-hidden string-with-empty-placeholder">%10$s</%1$s>' .
+				'<%1$s class="volunteer-source string-with-empty-placeholder">%11$s</%1$s>' .
 			'</tr>';
 		$ajax_url = esc_url( admin_url( 'admin-ajax.php' ) );
 		$ajax_action = Table_View_Admin_Controller::AJAX_GET_DATA_ACTION;
@@ -157,7 +161,7 @@ class Volunteer_Registration_Admin_Table_View {
 				
 			echo '</div>';
 
-			echo '<div class="datatable-container admin-stats-table-container">';
+			echo '<div class="datatable-container admin-stats-table-container admin-cpt-vol-reg-list-change-listener">';
 			
 				$data_array = array();
 				$data_array[] = "data-ajax-url=\"$ajax_url\"";
@@ -171,6 +175,9 @@ class Volunteer_Registration_Admin_Table_View {
 					// Add Emails button if the current user has the authority
 					if ( $single_event->get_is_current_user_able_to_view_registered_volunteer_emails() ) {
 						$data_array[] = 'data-email-list-button-class="volunteer-reg-email-list-button"';
+						$data_array[] = 'data-add-record-button-class="add-volunteer-reg-button"';
+//						$data_array[] = 'data-update-record-button-class="update-volunteer-reg-button"';
+//						$data_array[] = 'data-delete-record-button-class="delete-volunteer-reg-button"';
 					} // endif
 				} // endif
 				$data_array[] = "data-print-page-title=\"$print_page_title\"";
@@ -185,11 +192,12 @@ class Volunteer_Registration_Admin_Table_View {
 				echo "<table class=\"datatable admin-stats-table vol-reg-admin-table\" style=\"width:100%\" $data>";
 				echo '<thead>';
 
-		// Name | email | Event | ISO 8601 Date | Fixer Station (apprentice) | Volunteer Roles | Comments | Attendance | Source
+		// ID | Name | email | Event | ISO 8601 Date | Fixer Station (apprentice) | Volunteer Roles | Comments | Attendance | Source
 				
 				printf( $rowFormat,
 								'th',
 								esc_html__( 'Name',								'reg-man-rc' ),
+								esc_html__( 'ID',								'reg-man-rc' ),
 								esc_html__( 'Email',							'reg-man-rc' ),
 								esc_html__( 'Event',							'reg-man-rc' ),
 								esc_html__( 'Numeric Event Date & Time',		'reg-man-rc' ), // Will be hidden
@@ -206,12 +214,33 @@ class Volunteer_Registration_Admin_Table_View {
 			echo '</div>';
 		echo '</div>';
 		
+		// Render my add new dialog
+		$this->render_add_new_volunteer_reg_dialog();
+		
 		// Render my email list dialog
 		$this->render_volunteer_emails_dialog();
 		
 	} // function
 
+	/**
+	 * Render the dialog for adding a volunteer registration
+	 * @param Event $event
+	 */
+	private function render_add_new_volunteer_reg_dialog() {
+		$event = $this->get_single_event();
+		if ( ! empty( $event ) && $event->get_is_current_user_able_to_register_volunteers() ) {
+			$title = __( 'Add New Volunteer Event Registration', 'reg-man-rc' );
 	
+			echo "<div class=\"reg-man-rc-add-new-cpt-dialog add-new-volunteer-reg-dialog dialog-container\" title=\"$title\">";
+
+				$form = Add_Volunteer_Registration_Form::create( $event );
+				$form->render();
+				
+			echo '</div>';
+
+		} // endif
+	} // function
+
 	/**
 	 * Render the dialog for volunteer emails
 	 * @param Event $event
@@ -265,18 +294,19 @@ class Volunteer_Registration_Admin_Table_View {
 	public static function get_table_data_array_for_volunteer_registration_descriptors( $vol_reg_desc_array ) {
 		$result = array();
 		$em_dash = __( '—', 'reg-man-rc' ); // an em-dash is used by Wordpress for empty fields
+		/* Translators: %1$s is a key for an event that is not found in the system */
+		$missing_event_format = __( '[ Event not found: %1$s ]', 'reg-man-rc' );
 		$source_unknown_text = __( '[source not specified]', 'reg-man-rc' );
 		$events[] = array(); // There will be a huge amount of duplication in the events so just save the ones I find
 
 		foreach( $vol_reg_desc_array as $vol_reg_desc ) {
+			$id = $vol_reg_desc->get_volunteer_registration_id();
 			$name = $vol_reg_desc->get_volunteer_display_name();
 			$name_text = ! empty( $name ) ? $name : $em_dash;
 			$email = $vol_reg_desc->get_volunteer_email();
 			$email_text = ! empty( $email ) ? $email : $em_dash;
 
 			$event_key = $vol_reg_desc->get_event_key_string();
-			$event_text = $event_key; // As a last resort we'll just show the key
-			$event_date_iso_8601 = '';
 			if ( ! empty( $event_key ) ) {
 				if ( isset( $events[ $event_key ] ) ) {
 					$event = $events[ $event_key ];
@@ -290,6 +320,9 @@ class Volunteer_Registration_Admin_Table_View {
 					$event_text = $event->get_label();
 					$dt = $event->get_start_date_time_object();
 					$event_date_iso_8601 = isset( $dt ) ? $dt->format( \DateTime::ISO8601 ) : '';
+				} else {
+					$event_text = sprintf( $missing_event_format, $event_key );
+					$event_date_iso_8601 = '';
 				} // endif
 			} // endif
 
@@ -324,11 +357,12 @@ class Volunteer_Registration_Admin_Table_View {
 
 			$source = $vol_reg_desc->get_volunteer_registration_descriptor_source();
 			$source_text = isset( $source ) ? $source : $source_unknown_text;
-
-		// Name | email | Event | ISO 8601 Date | Fixer Station (apprentice) | Volunteer Roles | Comments | Attendance | Source
+			
+		// Name | ID | email | Event | ISO 8601 Date | Fixer Station (apprentice) | Volunteer Roles | Comments | Attendance | Source
 			
 			$row = array();
 			$row[] = $name_text;
+			$row[] = $id;
 			$row[] = $email_text;
 			$row[] = $event_text;
 			$row[] = $event_date_iso_8601;

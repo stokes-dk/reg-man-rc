@@ -156,11 +156,11 @@ class Event_Class {
 					break;
 					
 				case self::PRIVATE:
-					$this->marker_text = __( 'PRIVATE', 'reg-man-rc' );
+					$this->marker_text = __( 'DRAFT', 'reg-man-rc' );
 					break;
 					
 				case self::CONFIDENTIAL:
-					$this->marker_text = __( 'PRIVATE', 'reg-man-rc' );
+					$this->marker_text = __( 'DRAFT', 'reg-man-rc' );
 					break;
 			
 			} // endswitch

@@ -68,11 +68,18 @@ jQuery(document).ready(function($) {
 		$(this).trigger( 'ajax-submit' );
 	});
 
+	$( '.reg-man-rc-ajax-form' ).on( 'remove-all-errors', function( evt ) {
+		var form = $(this);
+		form.find('.ajax-form-message-container').remove(); // remove any error messages before we attempt the submit
+		form.find('.input-item.error').trigger('remove-error');
+	});
+
 	$( '.reg-man-rc-ajax-form' ).on( 'ajax-submit', function( evt ) {
 		var form = $(this);
 		evt.preventDefault(); // we will do the submit via ajax
-		form.find('.ajax-form-message-container').remove(); // remove any error messages before we attempt the submit
-		form.find('.input-item.error').trigger('remove-error');
+		form.trigger( 'remove-all-errors' );
+//		form.find('.ajax-form-message-container').remove(); // remove any error messages before we attempt the submit
+//		form.find('.input-item.error').trigger('remove-error');
 		var result = form.triggerHandler('reg-man-rc-validate-form');
 		if (result === false) {
 			// If there were form validation errors then don't do the ajax sumbit

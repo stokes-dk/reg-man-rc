@@ -40,7 +40,7 @@ class Scripts_And_Styles {
 
 	private static $ADMIN_CALENDAR_SCRIPT_HANDLE		= 'reg-man-rc-admin-calendar-script';
 
-	private static $ADMIN_REMOVE_CPT_SCRIPT_HANDLE		= 'reg-man-rc-remove-cpt-script';
+	private static $ADMIN_CPT_SCRIPT_HANDLE		= 'reg-man-rc-admin-cpt-script';
 	
 	private static $STATS_VIEW_STYLE_HANDLE				= 'reg-man-rc-stats-view-style';
 	private static $STATS_VIEW_SCRIPT_HANDLE			= 'reg-man-rc-stats-view-script';
@@ -55,23 +55,9 @@ class Scripts_And_Styles {
 
 	private static $DATATABLES_STYLE_HANDLE						= 'reg-man-rc-datatables-style';
 	private static $DATATABLES_SCRIPT_HANDLE					= 'reg-man-rc-datatables-script';
-	private static $DATATABLES_RESPONSIVE_STYLE_HANDLE			= 'reg-man-rc-datatables-responsive-style';
-	private static $DATATABLES_RESPONSIVE_SCRIPT_HANDLE			= 'reg-man-rc-datatables-responsive-script';
-	private static $DATATABLES_ROWGROUP_STYLE_HANDLE			= 'reg-man-rc-datatables-rowgroup-style';
-	private static $DATATABLES_ROWGROUP_SCRIPT_HANDLE			= 'reg-man-rc-datatables-rowgroup-script';
-	private static $DATATABLES_BUTTONS_STYLE_HANDLE				= 'reg-man-rc-datatables-buttons-style';
-	private static $DATATABLES_BUTTONS_SCRIPT_HANDLE 			= 'reg-man-rc-datatables-buttons-script';
-	private static $DATATABLES_BUTTONS_COL_VIS_SCRIPT_HANDLE	= 'reg-man-rc-datatables-buttons-col-vis-script';
-	private static $DATATABLES_BUTTONS_HTML5_SCRIPT_HANDLE		= 'reg-man-rc-datatables-buttons-html5-script';
-	private static $DATATABLES_BUTTONS_PRINT_SCRIPT_HANDLE		= 'reg-man-rc-datatables-buttons-print-script';
 	
-//	private static $CHARTJS_STYLE_HANDLE				= 'reg-man-rc-chartjs-style';
 	private static $CHARTJS_SCRIPT_HANDLE				= 'reg-man-rc-chartjs-script';
 
-//	private static $JSTREE_STYLE_HANDLE					= 'reg-man-rc-jstree-style';
-//	private static $JSTREE_SCRIPT_HANDLE				= 'reg-man-rc-jstree-script';
-
-//	private static $FULLCALENDAR_STYLE_HANDLE			= 'reg-man-rc-fullcalendar-style';
 	private static $FULLCALENDAR_SCRIPT_HANDLE			= 'reg-man-rc-fullcalendar-script';
 	private static $FULLCALENDAR_LOCALES_SCRIPT_HANDLE	= 'reg-man-rc-fullcalendar-locales-script';
 	private static $FULLCALENDAR_LIST_SCRIPT_HANDLE		= 'reg-man-rc-fullcalendar-list-script';
@@ -123,7 +109,7 @@ class Scripts_And_Styles {
 		self::register_admin_calendar_script();
 //		self::register_admin_rest_script();
 		self::register_term_order_admin_scripts_and_styles();
-		self::register_remove_cpt_admin_scripts();
+		self::register_admin_cpt_scripts();
 //		self::register_chartjs(); // Shared!
 //		self::register_jstree();
 	} // function
@@ -155,9 +141,6 @@ class Scripts_And_Styles {
 		self::register_shared_base_scripts_and_styles();
 		self::register_jquery_theme();
 		self::register_datatables();
-		self::register_datatables_responsive_extension();
-		self::register_datatables_rowgroup_extension();
-		self::register_datatables_buttons_extension();
 		self::register_ajax_forms();
 		self::register_google_maps();
 		self::register_tooltipster();
@@ -250,14 +233,10 @@ class Scripts_And_Styles {
 					'jquery-ui-tooltip',
 					'jquery-ui-dialog',
 					'jquery-ui-autocomplete',
-//					'jquery-ui-accordion',
-//					'jquery-effects-slide',
 					'jquery-ui-sortable',
 					self::$SHARED_BASE_SCRIPT_HANDLE,
 					self::$AJAX_FORMS_SCRIPT_HANDLE,
 					self::$DATATABLES_SCRIPT_HANDLE,
-					self::$DATATABLES_RESPONSIVE_SCRIPT_HANDLE,
-					self::$DATATABLES_ROWGROUP_SCRIPT_HANDLE,
 			),
 			$version,
 			$footer = FALSE
@@ -270,8 +249,6 @@ class Scripts_And_Styles {
 					self::$SHARED_BASE_STYLE_HANDLE,
 					self::$PUBLIC_BASE_STYLE_HANDLE,
 					self::$DATATABLES_STYLE_HANDLE,
-					self::$DATATABLES_RESPONSIVE_STYLE_HANDLE,
-					self::$DATATABLES_ROWGROUP_STYLE_HANDLE,
 					self::$JQUERY_STYLE_HANDLE,
 					'dashicons',
 			),
@@ -441,35 +418,12 @@ class Scripts_And_Styles {
 		self::enqueue_fullcalendar();
 		self::enqueue_google_maps();
 		self::enqueue_stats_view_script_and_styles();
+		self::enqueue_admin_cpt_scripts();
 		wp_enqueue_script( self::$ADMIN_CALENDAR_SCRIPT_HANDLE );
 		// This script contains I18 functions and will need translations
-//		wp_set_script_translations( self::$ADMIN_CALENDAR_SCRIPT_HANDLE, 'reg-man-rc' );
-//		wp_enqueue_style( self::$ADMIN_CALENDAR_STYLE_HANDLE ); // No such thing, yet
 	} // function
 
 	
-	/**
-	 * Internal method to register the admin REST javascript
-	 *
-	 * @return	void
-	 * @since	v0.1.0
-	 */
-/* FIXME - I'm not sure if this is needed
-	private static function register_admin_rest_script() {
-		$version = PLUGIN_VERSION;
-		$src = plugins_url( 'admin/admin-rest.js', PLUGIN_BOOTSTRAP_FILENAME );
-		wp_register_script(
-			self::$ADMIN_REST_SCRIPT_HANDLE,
-			$src,
-			$dependencies = array(
-					'wp-api', // The wordpress backbone javascript client for the REST api
-			),
-			$version,
-			$footer = FALSE
-		);
-	} // function
-*/
-
 	/**
 	 * Internal method to register the admin javascript and stylesheet for term ordering
 	 *
@@ -518,16 +472,16 @@ class Scripts_And_Styles {
 
 
 	/**
-	 * Internal method to register the admin javascript for remove CPT function
+	 * Internal method to register the admin javascript for our CPT function
 	 *
 	 * @return	void
 	 * @since	v0.5.8
 	 */
-	private static function register_remove_cpt_admin_scripts() {
+	private static function register_admin_cpt_scripts() {
 		$version = PLUGIN_VERSION;
-		$src = plugins_url( 'admin/admin-remove-cpt.js', PLUGIN_BOOTSTRAP_FILENAME );
+		$src = plugins_url( 'admin/admin-cpt.js', PLUGIN_BOOTSTRAP_FILENAME );
 		wp_register_script(
-			self::$ADMIN_REMOVE_CPT_SCRIPT_HANDLE,
+			self::$ADMIN_CPT_SCRIPT_HANDLE,
 			$src,
 			$dependencies = array(
 					'wp-i18n',
@@ -547,10 +501,10 @@ class Scripts_And_Styles {
 	 * @return	void
 	 * @since	0.5.8
 	 */
-	public static function enqueue_remove_cpt_admin_scripts() {
-		wp_enqueue_script( self::$ADMIN_REMOVE_CPT_SCRIPT_HANDLE );
+	public static function enqueue_admin_cpt_scripts() {
+		wp_enqueue_script( self::$ADMIN_CPT_SCRIPT_HANDLE );
 		// This script contains I18 functions and will need translations
-		wp_set_script_translations( self::$ADMIN_REMOVE_CPT_SCRIPT_HANDLE, 'reg-man-rc' );
+		wp_set_script_translations( self::$ADMIN_CPT_SCRIPT_HANDLE, 'reg-man-rc' );
 	} // function
 
 	
@@ -573,12 +527,6 @@ class Scripts_And_Styles {
 					self::$SELECT2_SCRIPT_HANDLE,
 					self::$CHARTJS_SCRIPT_HANDLE,
 					self::$DATATABLES_SCRIPT_HANDLE,
-					self::$DATATABLES_BUTTONS_SCRIPT_HANDLE,
-					self::$DATATABLES_BUTTONS_COL_VIS_SCRIPT_HANDLE,
-					self::$DATATABLES_BUTTONS_HTML5_SCRIPT_HANDLE,
-					self::$DATATABLES_BUTTONS_PRINT_SCRIPT_HANDLE,
-					self::$DATATABLES_RESPONSIVE_SCRIPT_HANDLE,
-					self::$DATATABLES_ROWGROUP_SCRIPT_HANDLE,
 					'jquery-ui-tabs',
 			),
 			$version,
@@ -590,12 +538,6 @@ class Scripts_And_Styles {
 			$src,
 			$dependencies = array(
 					self::$SHARED_BASE_STYLE_HANDLE,
-//					self::$CHARTJS_STYLE_HANDLE, // NOTE THAT there is no CHARTJS style
-					self::$DATATABLES_STYLE_HANDLE,
-					self::$DATATABLES_BUTTONS_STYLE_HANDLE,
-					self::$DATATABLES_ROWGROUP_STYLE_HANDLE,
-					self::$DATATABLES_RESPONSIVE_STYLE_HANDLE,
-					self::$JQUERY_STYLE_HANDLE,
 			),
 			$version,
 			$media = 'all'
@@ -743,8 +685,8 @@ class Scripts_And_Styles {
 	 * @since	v0.1.0
 	 */
 	private static function register_datatables() {
-		$version = '1.13.10';
-		$src = plugins_url("external_lib/datatables/$version/css/jquery.dataTables.min.css", PLUGIN_BOOTSTRAP_FILENAME);
+		$version = '2.1.8';
+		$src = plugins_url("external_lib/datatables/$version/datatables.min.css", PLUGIN_BOOTSTRAP_FILENAME);
 		wp_register_style(
 			self::$DATATABLES_STYLE_HANDLE,
 			$src,
@@ -752,7 +694,7 @@ class Scripts_And_Styles {
 			$version,
 			$media = 'all'
 		);
-		$src = plugins_url("external_lib/datatables/$version/js/jquery.dataTables.min.js", PLUGIN_BOOTSTRAP_FILENAME);
+		$src = plugins_url("external_lib/datatables/$version/datatables.min.js", PLUGIN_BOOTSTRAP_FILENAME);
 		wp_register_script(
 			self::$DATATABLES_SCRIPT_HANDLE,
 			$src,
@@ -762,125 +704,7 @@ class Scripts_And_Styles {
 		);
 	} // function
 
-	/**
-	 * Internal method to register the Datatables Responsive extension style and script
-	 *
-	 * @return	void
-	 * @since	v0.5.0
-	 */
-	private static function register_datatables_responsive_extension() {
-		$version = '2.5.0';
-		$src = plugins_url("external_lib/datatables/Responsive/$version/css/responsive.dataTables.min.css", PLUGIN_BOOTSTRAP_FILENAME);
-		wp_register_style(
-			self::$DATATABLES_RESPONSIVE_STYLE_HANDLE,
-			$src,
-			$dependencies = array( self::$DATATABLES_STYLE_HANDLE ),
-			$version,
-			$media = 'all'
-		);
-		$src = plugins_url("external_lib/datatables/Responsive/$version/js/dataTables.responsive.min.js", PLUGIN_BOOTSTRAP_FILENAME);
-		wp_register_script(
-			self::$DATATABLES_RESPONSIVE_SCRIPT_HANDLE,
-			$src,
-			$dependencies = array( self::$DATATABLES_SCRIPT_HANDLE ),
-			$version,
-			$footer = FALSE
-		);
-	} // function
 
-	/**
-	 * Internal method to register the Datatables RowGroup extension style and script
-	 *
-	 * @return	void
-	 * @since	v0.1.0
-	 */
-	private static function register_datatables_rowgroup_extension() {
-		$version = '1.4.1';
-		$src = plugins_url("external_lib/datatables/RowGroup/$version/css/rowGroup.dataTables.min.css", PLUGIN_BOOTSTRAP_FILENAME);
-		wp_register_style(
-			self::$DATATABLES_ROWGROUP_STYLE_HANDLE,
-			$src,
-			$dependencies = array( self::$DATATABLES_STYLE_HANDLE ),
-			$version,
-			$media = 'all'
-		);
-		$src = plugins_url("external_lib/datatables/RowGroup/$version/js/dataTables.rowGroup.min.js", PLUGIN_BOOTSTRAP_FILENAME);
-		wp_register_script(
-			self::$DATATABLES_ROWGROUP_SCRIPT_HANDLE,
-			$src,
-			$dependencies = array( self::$DATATABLES_SCRIPT_HANDLE ),
-			$version,
-			$footer = FALSE
-		);
-	} // function
-
-	/**
-	 * Internal method to register the Datatables Buttons extension style and script
-	 *
-	 * @return	void
-	 * @since	v0.3.0
-	 */
-	private static function register_datatables_buttons_extension() {
-		$version = '2.4.2';
-
-		$src = plugins_url("external_lib/datatables/Buttons/$version/css/buttons.dataTables.min.css", PLUGIN_BOOTSTRAP_FILENAME);
-		wp_register_style(
-				self::$DATATABLES_BUTTONS_STYLE_HANDLE,
-				$src,
-				$dependencies = array( self::$DATATABLES_STYLE_HANDLE ),
-				$version,
-				$media = 'all'
-				);
-
-		$src = plugins_url("external_lib/datatables/Buttons/$version/js/dataTables.buttons.min.js", PLUGIN_BOOTSTRAP_FILENAME);
-		wp_register_script(
-				self::$DATATABLES_BUTTONS_SCRIPT_HANDLE,
-				$src,
-				$dependencies = array( 
-						self::$DATATABLES_SCRIPT_HANDLE,
-				),
-				$version,
-				$footer = FALSE
-				);
-
-		$src = plugins_url("external_lib/datatables/Buttons/$version/js/buttons.colVis.min.js", PLUGIN_BOOTSTRAP_FILENAME);
-		wp_register_script(
-				self::$DATATABLES_BUTTONS_COL_VIS_SCRIPT_HANDLE,
-				$src,
-				$dependencies = array(
-						self::$DATATABLES_SCRIPT_HANDLE,
-						self::$DATATABLES_BUTTONS_SCRIPT_HANDLE
-				),
-				$version,
-				$footer = FALSE
-				);
-		
-		$src = plugins_url("external_lib/datatables/Buttons/$version/js/buttons.html5.min.js", PLUGIN_BOOTSTRAP_FILENAME);
-		wp_register_script(
-				self::$DATATABLES_BUTTONS_HTML5_SCRIPT_HANDLE,
-				$src,
-				$dependencies = array(
-						self::$DATATABLES_SCRIPT_HANDLE,
-						self::$DATATABLES_BUTTONS_SCRIPT_HANDLE
-				),
-				$version,
-				$footer = FALSE
-				);
-		
-		$src = plugins_url("external_lib/datatables/Buttons/$version/js/buttons.print.min.js", PLUGIN_BOOTSTRAP_FILENAME);
-		wp_register_script(
-				self::$DATATABLES_BUTTONS_PRINT_SCRIPT_HANDLE,
-				$src,
-				$dependencies = array(
-						self::$DATATABLES_SCRIPT_HANDLE,
-						self::$DATATABLES_BUTTONS_SCRIPT_HANDLE
-				),
-				$version,
-				$footer = FALSE
-				);
-		
-	} // function
-	
 	/**
 	 * Enqueue Datatables scripts and styles
 	 *
@@ -896,48 +720,6 @@ class Scripts_And_Styles {
 	} // function
 
 	/**
-	 * Enqueue Datatables Responsive extension scripts and styles
-	 *
-	 * This method can be called by any user interface that uses the Responsive extension for Datatables.
-	 * Calling this function will cause the correct styles and scripts to be enqueued.
-	 *
-	 * @return	void
-	 * @since	v0.5.0
-	 */
-	public static function enqueue_datatables_responsive_extension() {
-		wp_enqueue_script( self::$DATATABLES_RESPONSIVE_SCRIPT_HANDLE );
-		wp_enqueue_style( self::$DATATABLES_RESPONSIVE_STYLE_HANDLE );
-	} // function
-
-	/**
-	 * Enqueue Datatables RowGroup extension scripts and styles
-	 *
-	 * This method can be called by any user interface that uses the RowGroup extension for Datatables.
-	 * Calling this function will cause the correct styles and scripts to be enqueued.
-	 *
-	 * @return	void
-	 * @since	v0.1.0
-	 */
-	public static function enqueue_datatables_rowgroup_extension() {
-		wp_enqueue_script( self::$DATATABLES_ROWGROUP_SCRIPT_HANDLE );
-		wp_enqueue_style( self::$DATATABLES_ROWGROUP_STYLE_HANDLE );
-	} // function
-
-	/**
-	 * Enqueue Datatables Buttons extension scripts and styles
-	 *
-	 * This method can be called by any user interface that uses the Buttons extension for Datatables.
-	 * Calling this function will cause the correct styles and scripts to be enqueued.
-	 *
-	 * @return	void
-	 * @since	v0.1.0
-	 */
-	public static function enqueue_datatables_buttons_extension() {
-		wp_enqueue_script( self::$DATATABLES_BUTTONS_SCRIPT_HANDLE );
-		wp_enqueue_style( self::$DATATABLES_BUTTONS_STYLE_HANDLE );
-	} // function
-	
-	/**
 	 * Internal method to register the Chart.js style and script
 	 *
 	 * @return	void
@@ -945,16 +727,6 @@ class Scripts_And_Styles {
 	 */
 	private static function register_chartjs() {
 		$version = '3.5.0';
-/*
-		$src = plugins_url("external_lib/Chart.js/$version/Chart.min.css", PLUGIN_BOOTSTRAP_FILENAME);
-		wp_register_style(
-			self::$CHARTJS_STYLE_HANDLE,
-			$src,
-			$dependencies = array( ),
-			$version,
-			$media = 'all'
-		);
-*/
 		$src = plugins_url("external_lib/Chart.js/$version/chart.min.js", PLUGIN_BOOTSTRAP_FILENAME);
 		wp_register_script(
 			self::$CHARTJS_SCRIPT_HANDLE,
@@ -985,42 +757,6 @@ class Scripts_And_Styles {
 //		} // endif
 	} // function
 
-	/**
-	 * Internal method to register the jstree style and script
-	 *
-	 * @return	void
-	 * @since	v0.1.0
-	 */
-/* FIXME - not using JSTree
-	private static function register_jstree() {
-		$version = '3.3.9';
-		$src = plugins_url("external_lib/jstree/$version/themes/default/style.min.css", PLUGIN_BOOTSTRAP_FILENAME);
-		wp_register_style(
-			self::$JSTREE_STYLE_HANDLE,
-			$src,
-			$dependencies = array( ),
-			$version,
-			$media = 'all'
-		);
-		$src = plugins_url("external_lib/datatables/$version/jstree.min.js", PLUGIN_BOOTSTRAP_FILENAME);
-		wp_register_script(
-			self::$JSTREE_SCRIPT_HANDLE,
-			$src,
-			$dependencies = array( ),
-			$version,
-			$footer = FALSE
-		);
-	} // function
-	public static function enqueue_jstree() {
-		if ( is_admin() ) { // is_admin() ONLY checks if the admin UI is being rendered, not if user is admin
-			wp_enqueue_script( self::$JSTREE_SCRIPT_HANDLE );
-			wp_enqueue_style( self::$JSTREE_STYLE_HANDLE );
-		} else {
-			$msg = __('ERROR: Cannot enqueue jstree on public interface.', 'reg-man-rc' );
-			Error_Log::log_msg( $msg );
-		} // endif
-	} // function
-*/
 
 	/**
 	 * Internal method to register the ToolTipster style and scripts
@@ -1065,10 +801,8 @@ class Scripts_And_Styles {
 	 * @since	v0.1.0
 	 */
 	private static function register_fullcalendar() {
-//		$version = '5.5.0';
 		$version = '6.1.5';
 		
-//		$src = plugins_url( "external_lib/FullCalendar/$version/lib/main.min.js", PLUGIN_BOOTSTRAP_FILENAME );
 		$src = plugins_url( "external_lib/FullCalendar/$version/core/index.global.min.js", PLUGIN_BOOTSTRAP_FILENAME );
 		wp_register_script(
 			self::$FULLCALENDAR_SCRIPT_HANDLE,
@@ -1105,7 +839,6 @@ class Scripts_And_Styles {
 			$footer = FALSE
 		);
 		
-//		$src = plugins_url( "external_lib/FullCalendar/$version/lib/locales-all.min.js", PLUGIN_BOOTSTRAP_FILENAME );
 		$src = plugins_url( "external_lib/FullCalendar/$version/core/locales-all.global.min.js", PLUGIN_BOOTSTRAP_FILENAME );
 		wp_register_script(
 			self::$FULLCALENDAR_LOCALES_SCRIPT_HANDLE,
@@ -1114,16 +847,7 @@ class Scripts_And_Styles {
 			$version,
 			$footer = FALSE
 		);
-/*
-		$src = plugins_url( "external_lib/FullCalendar/$version/lib/main.min.css", PLUGIN_BOOTSTRAP_FILENAME );
-		wp_register_style(
-			self::$FULLCALENDAR_STYLE_HANDLE,
-			$src,
-			$dependencies = array( ),
-			$version,
-			$media = 'all'
-		);
-*/
+
 		$version = PLUGIN_VERSION;
 		$src = plugins_url( 'shared/fullcalendar.js', PLUGIN_BOOTSTRAP_FILENAME );
 		$dependencies = array(

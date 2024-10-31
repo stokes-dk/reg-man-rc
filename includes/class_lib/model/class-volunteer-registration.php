@@ -24,6 +24,7 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	private $post_id;
 	private $event_key_string;
 	private $event;
+	private $volunteer_id;
 	private $volunteer;
 	private $volunteer_display_name;
 	private $volunteer_email; // Community event leaders may have special access to the email for certain registrations
@@ -514,9 +515,16 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	} // function
 
 	/**
-	 * Get the event key string for this registration.
-	 * @return	string		The event key string for this registration
-	 * @since	v0.6.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_registration_id()
+	 */
+	public function get_volunteer_registration_id() {
+		return $this->post_id;
+	} // function
+	
+	/**
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_event_key_string()
 	 */
 	public function get_event_key_string() {
 		if ( ! isset( $this->event_key_string ) ) {
@@ -566,11 +574,26 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	 * @return	Volunteer		The Volunteer object for this registration
 	 * @since	v0.1.0
 	 */
-	public function get_volunteer() {
+	public function get_volunteer_id() {
 		if ( ! isset( $this->volunteer ) ) {
 			$id = get_post_meta( $this->get_post_id(), self::VOLUNTEER_META_KEY, $single = TRUE );
 			if ( ( $id !== FALSE ) && ( $id !== NULL ) && ( $id != '' ) ) {
-				$this->volunteer = Volunteer::get_volunteer_by_id( $id );
+				$this->volunteer_id = $id;
+			} // endif
+		} // endif
+		return $this->volunteer_id;
+	} // function
+
+	/**
+	 * Get the volunteer for this registration.
+	 * @return	Volunteer		The Volunteer object for this registration
+	 * @since	v0.1.0
+	 */
+	public function get_volunteer() {
+		if ( ! isset( $this->volunteer ) ) {
+			$vol_id = $this->get_volunteer_id();
+			if ( ! empty( $vol_id ) ) {
+				$this->volunteer = Volunteer::get_volunteer_by_id( $vol_id );
 			} // endif
 		} // endif
 		return $this->volunteer;
@@ -603,10 +626,8 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	} // function
 
 	/**
-	 * Get the comments supplied by the fixer or volunteer for this registration.
-	 * 	The comments are the post content.
-	 * @return	string		Any comments supplied by the volunteer during registration
-	 * @since	v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_registration_comments()
 	 */
 	public function get_volunteer_registration_comments() {
 		return $this->comments;
@@ -679,11 +700,8 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 
 
 	/**
-	 * Get the volunteer's public name.
-	 * To protect the volunteer's privacy this name is the one shown in public and should be something like
-	 * the volunteer's first name and last initial.
-	 * @return	string
-	 * @since	v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_public_name()
 	 */
 	public function get_volunteer_public_name() {
 		$volunteer = $this->get_volunteer();
@@ -692,10 +710,8 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	} // function
 
 	/**
-	 * Get the most descriptive name available to this user in the current context for display purposes.
-	 * If we're rendering the admin interface and the user can view the full name then
-	 *   it will be returned (if known), otherwise the public name is used
-	 * @return string
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_display_name()
 	 */
 	public function get_volunteer_display_name() {
 		
@@ -731,12 +747,8 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	} // function
 	
 	/**
-	 * Get the volunteer's full name as a single string.
-	 * To protect the volunteer's privacy their full name is never shown in public.
-	 * The full name is used only if we are rendering the administrative interface.
-	 *
-	 * @return	string
-	 * @since	v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_full_name()
 	 */
 	public function get_volunteer_full_name() {
 		$volunteer = $this->get_volunteer();
@@ -745,12 +757,8 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	} // function
 
 	/**
-	 * Get the volunteer's email, if supplied.
-	 * To protect the volunteer's privacy their email is never shown in public.
-	 * The email is used only to identify returning volunteers and show only if we are rendering the administrative interface.
-
-	 * @return	string|NULL		The volunteer's email address if it is known, NULL otherwise
-	 * @since	v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_email()
 	 */
 	public function get_volunteer_email() {
 		if ( ! isset( $this->volunteer_email ) ) {
@@ -767,14 +775,8 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	} // function
 
 	/**
-	 * Get the name of the volunteer's preferred fixer station.
-	 * Note that this is stored with the volunteer and not this registration object.
-	 * This method is implemented here as part of the Volunteer_Registration_Descriptor interface.
-	 *
-	 * @return	string	The name of the fixer station the volunteer has set as her preferred station
-	 * 	or NULL if this volunteer has no preferred fixer station, i.e. they are not a fixer
-	 *
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_preferred_fixer_station_name()
 	 */
 	public function get_preferred_fixer_station_name() {
 		$volunteer = $this->get_volunteer();
@@ -783,13 +785,8 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	} // function
 
 	/**
-	 * Get the name of the fixer station assigned to the volunteer for this event.
-	 * This method is implemented here as part of the Volunteer_Registration_Descriptor interface.
-	 *
-	 * @return	string	The name of the fixer station for this registration
-	 * 	or NULL if no fixer station has been assigned
-	 *
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_assigned_fixer_station_name()
 	 */
 	public function get_assigned_fixer_station_name() {
 		$station = $this->get_fixer_station();
@@ -797,11 +794,8 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	} // function
 
 	/**
-	 * Get a boolean indicating whether the volunteer has asked to act as an apprentice fixer for the event
-	 *
-	 * @return	boolean		TRUE if the volunteer has asked to act as an apprentice fixer, FALSE otherwise
-	 *
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_is_fixer_apprentice()
 	 */
 	public function get_is_fixer_apprentice() {
 		if ( ! isset( $this->is_apprentice ) ) {
@@ -834,14 +828,8 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	} // function
 
 	/**
-	 * Get the array of names of volunteer roles the volunteer prefers to perform at events.
-	 * Note that this is stored with the Volunteer and not this object.
-	 * This method is implemented here as part of the Volunteer_Registration_Descriptor interface.
-	 *
-	 * @return	string	The array of strings representing the preferred volunteer roles for this event
-	 *	or NULL if no volunteer roles were requested by the volunteer
-	 *
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_preferred_volunteer_role_names_array()
 	 */
 	public function get_preferred_volunteer_role_names_array() {
 		$result = array();
@@ -854,12 +842,8 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	} // function
 
 	/**
-	 * Get the array of names of volunteer roles the volunteer has been assigned to perform for this event
-	 *
-	 * @return	string	The array of strings representing the roles assigned to this volunteer for this event
-	 *	or NULL if no volunteer roles were assigned to the volunteer
-	 *
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_assigned_volunteer_role_names_array()
 	 */
 	public function get_assigned_volunteer_role_names_array() {
 		$result = array();
@@ -873,12 +857,8 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	} // function
 
 	/**
-	 * Get a boolean indicating whether the volunteer attended the event
-	 *
-	 * @return	boolean		TRUE if the volunteer attended the event, FALSE if the volunteer DID NOT attend,
-	 * 	or NULL if it is not known whether the volunteer attended
-	 *
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_attendance()
 	 */
 	public function get_volunteer_attendance() {
 		if ( ! isset( $this->attendance ) ) {
@@ -891,11 +871,8 @@ class Volunteer_Registration implements Volunteer_Registration_Descriptor {
 	} // function
 
 	/**
-	 * Get a string indicating the source of this descriptor
-	 *
-	 * @return	string	A string indicating where this descriptor came from, e.g. 'registration', 'supplemental'
-	 *
-	 * @since v0.1.0
+	 * {@inheritDoc}
+	 * @see \Reg_Man_RC\Model\Stats\Volunteer_Registration_Descriptor::get_volunteer_registration_descriptor_source()
 	 */
 	public function get_volunteer_registration_descriptor_source() {
 		return __( 'registered', 'reg-man-rc' );

@@ -218,14 +218,24 @@ jQuery(document).ready(function($) {
 		var import_button_class =  me.data( 'import-data-button-class' );
 		var is_include_import_button = ( typeof import_button_class !== 'undefined' );
 
-		var email_button_class =  me.data( 'email-list-button-class' );
-		var is_include_email_button = ( typeof email_button_class !== 'undefined' );
+		var emails_button_class =  me.data( 'email-list-button-class' );
+		var is_include_email_button = ( typeof emails_button_class !== 'undefined' );
 
 		var row_group_column_class_name = me.data( 'row-group-column-class-name' );
 		var is_allow_row_grouping = ( typeof row_group_column_class_name !== 'undefined' );
 
+		var add_record_button_class_name = me.data( 'add-record-button-class' );
+		var is_allow_add_record = ( typeof add_record_button_class_name !== 'undefined' );
+
+		var update_record_button_class_name = me.data( 'update-record-button-class' );
+		var is_allow_update_record = ( typeof update_record_button_class_name !== 'undefined' );
+
+		var delete_record_button_class_name = me.data( 'delete-record-button-class' );
+		var is_allow_delete_record = ( typeof delete_record_button_class_name !== 'undefined' );
+
+		var is_allow_single_select = ( is_allow_update_record || is_allow_delete_record);
+		
 		var datatable_args = { };
-// FIXME - testing responsive - not working, do we need to add a column?
 		datatable_args.responsive = true;
 		
 		var view_container = me.closest( '.reg-man-rc-stats-table-view' );
@@ -250,7 +260,6 @@ jQuery(document).ready(function($) {
 			};
 		} // endif
 		
-		datatable_args.dom = 'lBfrtip'; // Default 'lfrtip';
 		datatable_args.stateSave = true; // Save the user's state between visits
 		
 		datatable_args.columnDefs = [
@@ -268,6 +277,10 @@ jQuery(document).ready(function($) {
 				'type'		: 'num-with-empty-placeholder'
 			},
 			{
+				'targets'	: 'string-with-empty-placeholder',
+				'type'		: 'string-with-empty-placeholder'
+			},
+			{
 				'targets'	: 'col-hidden',
 				'visible'	: false,
 			},
@@ -277,7 +290,7 @@ jQuery(document).ready(function($) {
 			},
 			{
 				'targets'	: 'col-not-sortable',
-				'sortable'	: false,
+				'orderable'	: false,
 			},
 		];
 
@@ -298,7 +311,8 @@ jQuery(document).ready(function($) {
 				'<span class="text">%1$s</span>' + 
 			'</span>';
 
-		var column_vis_button_text = sprintf( icon_format, __( 'Columns', 'reg-man-rc' ), 'columns' );
+//		var column_vis_button_text = sprintf( icon_format, __( 'Columns', 'reg-man-rc' ), 'columns' );
+		var column_vis_button_text = __( 'Columns', 'reg-man-rc' );
 		var column_vis_button_title = __( 'Select which columns are visible in the table', 'reg-man-rc' );
 
 		var refresh_button_text = sprintf( icon_format, __( 'Refresh', 'reg-man-rc' ), 'update' );
@@ -306,11 +320,15 @@ jQuery(document).ready(function($) {
 
 		var print_button_text = sprintf( icon_format, __( 'Print', 'reg-man-rc' ), 'printer' );
 		var print_button_title = __( 'Print the table contents', 'reg-man-rc' );
+
+		var copy_button_text = sprintf( icon_format, __( 'Copy', 'reg-man-rc' ), 'admin-page' );
+		var copy_button_title = __( 'Copy the table contents to your clipboard', 'reg-man-rc' );
 		
-		var csv_button_text = sprintf( icon_format, __( 'Export', 'reg-man-rc' ), 'database-export' );
+		var csv_button_text = sprintf( icon_format, __( 'Export', 'reg-man-rc' ), 'download' );
 		var csv_button_title = __( 'Export the table contents to a CSV file', 'reg-man-rc' );
 
-		datatable_args.buttons = [
+		var table_buttons = [
+			'pageLength',
 			{
 				extend		: 'colvis',
 				text		: column_vis_button_text,
@@ -330,7 +348,16 @@ jQuery(document).ready(function($) {
 				titleAttr	: print_button_title,
 				title		: print_page_title,
 				exportOptions: {
-					columns: ':visible'
+					columns: ':visible',
+					modifier:	{ selected: null } // print all rows not just selected
+				},
+			},
+			{
+				extend		: 'copy',
+				text		: copy_button_text,
+				titleAttr	: copy_button_title,
+				exportOptions: {
+					modifier:	{ selected: null } // copy all rows not just selected
 				},
 			},
 			{
@@ -339,42 +366,90 @@ jQuery(document).ready(function($) {
 				titleAttr	: csv_button_title,
 				filename	: export_file_name,
 				exportOptions: {
-					columns: [ ':visible', '.always-export' ]
+					columns: [ ':visible', '.always-export' ],
+					modifier:	{ selected: null } // export all rows not just selected
 				},
 			},
 		];
 
-		// Import
-		if ( is_include_import_button ) {
-			var import_button_text = sprintf( icon_format, __( 'Import&hellip;', 'reg-man-rc' ), 'database-import' );
-			var import_button_title = __( 'Import data from a CSV file', 'reg-man-rc' );
-			datatable_args.buttons.push({
-					text		: import_button_text,
-					titleAttr	: import_button_title,
-					className	: import_button_class,
+		var data_buttons = [];
+
+		// Add New
+		if ( is_allow_add_record ) {
+			var add_new_button_text = sprintf( icon_format, __( 'Add New&hellip;', 'reg-man-rc' ), 'plus-alt' );
+			var add_new_button_title = __( 'Add a new record to this table', 'reg-man-rc' );
+			data_buttons.push({
+					text		: add_new_button_text,
+					titleAttr	: add_new_button_title,
+					className	: add_record_button_class_name,
 			});
 		} // endif
-
+		
 		// Supplemental Data
 		if ( is_include_suppl_data_button ) {
-			var supplemental_button_text = sprintf( icon_format, __( 'Supplemental&hellip;', 'reg-man-rc' ), 'database-add' );
+			var supplemental_button_text = sprintf( icon_format, __( 'Supplemental Data&hellip;', 'reg-man-rc' ), 'database-add' );
 			var supplemental_button_title = __( 'Change the supplemental data for this table', 'reg-man-rc' );
-			datatable_args.buttons.push({
+			data_buttons.push({
 					text		: supplemental_button_text,
 					titleAttr	: supplemental_button_title,
 					className	: supplemental_button_class,
 			});
 		} // endif
 		
+		// Import
+		if ( is_include_import_button ) {
+			var import_button_text = sprintf( icon_format, __( 'Import&hellip;', 'reg-man-rc' ), 'upload' );
+			var import_button_title = __( 'Import data from a CSV file', 'reg-man-rc' );
+			data_buttons.push({
+					text		: import_button_text,
+					titleAttr	: import_button_title,
+					className	: import_button_class,
+			});
+		} // endif
+
 		// Email button
 		if ( is_include_email_button ) {
-			var email_button_text = sprintf( icon_format, __( 'Emails&hellip;', 'reg-man-rc' ), 'email-alt' );
-			var email_button_title = __( 'Show the list of volunteer emails for this event', 'reg-man-rc' );
-			datatable_args.buttons.push({
-					text		: email_button_text,
-					titleAttr	: email_button_title,
-					className	: email_button_class,
+			var emails_button_text = sprintf( icon_format, __( 'Emails&hellip;', 'reg-man-rc' ), 'email-alt' );
+			var emails_button_title = __( 'Show the list of volunteer emails for this event', 'reg-man-rc' );
+			table_buttons.push({
+					text		: emails_button_text,
+					titleAttr	: emails_button_title,
+					className	: emails_button_class,
 			});
+		} // endif
+		
+		// Declare the layout:
+		var datatable_layout = {
+			top2Start:	{
+				'buttons':	data_buttons,
+			},
+			topStart:	{
+				'buttons':	table_buttons,
+			},
+			bottomStart:	{ 
+				info: {},
+			},
+			bottomEnd:		{
+				paging: {},
+			}
+		};
+
+		// Place the search box at the top with data buttons if they exist
+		if ( data_buttons.length != 0 ) {
+			datatable_layout.top2End =	{ search: { } };
+			datatable_layout.topEnd =	{ };
+		} else {
+			datatable_layout.top2End =	{ };
+			datatable_layout.topEnd =	{ search: { } };
+		} // endif
+		
+		// Assign the layout
+		datatable_args.layout = datatable_layout;
+		
+		if ( is_allow_single_select ) {
+			datatable_args.select = {
+				style: 'single',
+			}
 		} // endif
 		
 		// Create the datatable
@@ -419,12 +494,63 @@ jQuery(document).ready(function($) {
 			});
 		});
 		
+		if ( is_allow_single_select ) {
+			my_data_table.on( 'select', function ( evt, datatable, type, indexes ) {
+				my_data_table.trigger( 'selection-changed' );
+//				console.log( 'select event' );
+			});
+			my_data_table.on( 'deselect', function ( evt, datatable, type, indexes ) {
+				my_data_table.trigger( 'selection-changed' );
+//				console.log( 'deselect event' );
+			});
+			my_data_table.on( 'selection-changed', function() {
+				var rows = my_data_table.rows( { selected: true } );
+				var rows_data = rows.data();
+				if ( rows_data.length > 0 ) {
+					console.log( rows_data.length );
+					var row_data = rows_data[ 0 ];
+					console.log( row_data );
+				} // endif
+			});
+		} // endif
+		
 	});
 	$( '.admin-stats-table' ).trigger( 'init-datatable' );
 
+	$.fn.dataTableExt.oSort[ 'string-with-empty-placeholder-asc' ] = function( x, y ) {
+		// Make sure it's a string
+		var a = String( x );
+		var b = String( y );
+		var result;
+		if ( ( a === '' ) || ( a === '—' ) ) {
+			result = ( b === '' ) || ( b === '—' ) ? 0 : 1;
+		} else if ( ( b === '' ) || ( b === '—' ) ) {
+			result = -1;
+		} else if ( a == b) {
+			result = 0;
+		} else {
+			result = ( a < b ) ? -1 : 1;
+		} // endif
+		return result;
+	};
+	$.fn.dataTableExt.oSort[ 'string-with-empty-placeholder-desc' ] = function( x, y ) {
+		// Make sure it's a string
+		var a = String( x );
+		var b = String( y );
+		var result;
+		if ( ( a === '' ) || ( a === '—' ) ) {
+			result = ( ( b === '' ) || ( b === '—' ) ) ? 0 : 1;
+		} else if ( ( b === '' ) || ( b === '—' ) ) {
+			result = -1;
+		} else if ( a == b) {
+			result = 0;
+		} else {
+			result = ( a > b ) ? -1 : 1;
+		} // endif
+		return result;
+	};
 
 	$.fn.dataTableExt.oSort[ 'num-with-empty-placeholder-asc' ] = function( x, y ) {
-		var result;
 		// Convert everything to a string (like null) and remove commas in numbers like 1,432
 		var a = parseInt( String(x).replaceAll( ',', '' ) );
 		var b = parseInt( String(y).replaceAll( ',', '' ) );
@@ -474,15 +600,11 @@ jQuery(document).ready(function($) {
 		var datatable = table.data( 'my-datatable' );
 		
 		me.trigger( 'update-row-grouping', [ datatable, row_group_column_class_name ] );
-
 	});
 
-	$( '.reg-man-rc-admin-stats-view-container .reg-man-rc-stats-table-view.items-fixed-table .group-by-select' ).on( 'change', function( evt ) {
+	$( '.admin-stats-table-container.admin-cpt-vol-reg-list-change-listener' ).on( 'admin-cpt-vol-reg-list-changed', function( evt ) {
 		var me = $(this);
-		var container = me.closest( '.reg-man-rc-stats-table-view' ); // container for select + table
-		var table = container.find( '.admin-stats-table' ); // the actual table
-		table.data( 'group-by', me.val() );
+		var table = me.find( '.admin-stats-table' ); // the actual table
 		table.trigger( 'load_datatable' );
 	});
-
 });

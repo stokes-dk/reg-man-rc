@@ -287,6 +287,7 @@ class Supplemental_Event_Data_Admin_View {
 	 */
 	public static function render_supplemental_fixer_station_item_data_table( $station_id, $station_name, $reg_stats_array, $sup_stats_array ) {
 		
+//		Error_Log::var_dump( $sup_stats_array );
 		$repair_status_head_format = '<th class="reg-man-rc-sup-data-table-head-repair-status" title="%1$s">%1$s</th>';
 		$item_type_head_format = '<th class="reg-man-rc-sup-data-table-head-item-type" title="%1$s">%1$s</th>';
 		$head_format = '<th>%1$s</th>';

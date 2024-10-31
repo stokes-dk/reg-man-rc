@@ -116,3 +116,8 @@
 .datatable th.text-align-right {
   text-align: right;
 }
+.wp-core-ui .datatable-container .dt-input {
+	/* This is to fix a problem with the theme or WP changing the appearance of a select */
+	appearance: auto;
+	background: none;
+}

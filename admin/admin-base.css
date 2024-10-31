@@ -344,3 +344,14 @@
 	border: 1px solid #ccc;
 	max-width: 80em;
 }
+
+.row-actions .reg-man-rc-trash .reg-man-rc-remove-cpt-button {
+	color: #b32d2e;
+}
+.reg-man-rc-remove-cpt-form-radio-simple {
+  margin: 0 0.5em;
+}
+
+.reg-man-rc-remove-cpt-record-info label {
+  font-weight: bold;
+}

@@ -116,22 +116,18 @@ class Admin_Stats_View {
 			$tabs_array[] = 'map';
 		} // endif
 		
-//		if ( current_user_can( 'edit_others_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
 		if ( current_user_can( 'edit_' . User_Role_Controller::EVENT_CAPABILITY_TYPE_PLURAL ) ) {
 			$tabs_array[] = 'events';
 		} // endif
 		
-//		if ( current_user_can( 'edit_others_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL ) ) {
 		if ( current_user_can( 'edit_' . User_Role_Controller::ITEM_REG_CAPABILITY_TYPE_PLURAL ) ) {
 			$tabs_array[] = 'items';
 		} // endif
 		
-//		if ( current_user_can( 'edit_others_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ) {
 		if ( current_user_can( 'edit_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_PLURAL ) ) {
 			$tabs_array[] = 'visitors';
 		} // endif
 		
-//		if ( current_user_can( 'edit_others_' . User_Role_Controller::VOLUNTEER_REG_CAPABILITY_TYPE_PLURAL ) ) {
 		if ( current_user_can( 'edit_' . User_Role_Controller::VOLUNTEER_REG_CAPABILITY_TYPE_PLURAL ) ) {
 			$tabs_array[] = 'vol-reg';
 		} // endif

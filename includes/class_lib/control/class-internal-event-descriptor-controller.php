@@ -823,9 +823,10 @@ class Internal_Event_Descriptor_Controller {
 				
 //				Error_Log::var_dump( $is_visitor_reg_event, $has_fixer_stations );
 				
-//				$error_format =		'<div class="error below-h2"><p>%s</p></div>';
+//				$info_format =		'<div class="notice below-h2 is-dismissible"><p>%s</p></div>';
 				$warning_format =	'<div class="notice notice-warning below-h2 is-dismissible"><p>%s</p></div>';
-
+//				$error_format =		'<div class="error below-h2"><p>%s</p></div>';
+				
 				if ( $is_visitor_reg_event && ! $has_fixer_stations ) {
 
 					$msg = __( 'No fixer stations are assigned for this event', 'reg-man-rc' );

@@ -64,7 +64,6 @@ jQuery(document).ready(function($) {
 		var me = $( this );
 		var form = me.find( '.reg-man-rc-item-import-form' );
 		var reload_input = form.find( 'input[name="reload"]' );
-		console.log( reload_input.val() );
 		if ( reload_input.val() == 'TRUE' ) {
 			// The import is complete so we should reload the table
 			var items_table = $( '.admin-stats-table.items-admin-table' );

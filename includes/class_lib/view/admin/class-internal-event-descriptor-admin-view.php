@@ -45,7 +45,7 @@ class Internal_Event_Descriptor_Admin_View {
 		add_filter( 'enter_title_here', array( __CLASS__, 'rewrite_enter_title_here' ) );
 
 		// Change the messages that are shown when the post is updated
-		add_filter( 'post_updated_messages', array(__CLASS__, 'update_post_messages') );
+		add_filter( 'post_updated_messages', array(__CLASS__, 'handle_post_updated_messages') );
 
 		// Add columns to the admin UI
 		add_filter( 'manage_' . Internal_Event_Descriptor::POST_TYPE . '_posts_columns', array( __CLASS__, 'filter_admin_UI_columns' ) );
@@ -213,7 +213,7 @@ class Internal_Event_Descriptor_Admin_View {
 		//  versus the case where no inputs were shown at all like in quick edit mode
 		echo '<input type="hidden" name="volunteer_pre_reg_note_input_flag" value="TRUE">';
 		
-		$note = $curr_event_desc->get_volunteer_pre_reg_note();
+		$note = isset( $curr_event_desc ) ? $curr_event_desc->get_volunteer_pre_reg_note() : '';
 		
 		$input_name = 'vol_pre_reg_note';
 
@@ -274,9 +274,9 @@ class Internal_Event_Descriptor_Admin_View {
 		$event_descriptor = Internal_Event_Descriptor::get_internal_event_descriptor_by_id( $post->ID );
 //		Error_Log::var_dump( $event_descriptor );
 
-		$item_total = $event_descriptor->get_total_items_count();
-		$visitor_total = $event_descriptor->get_total_visitors_count();
-		$volunteer_total = $event_descriptor->get_total_volunteers_count();
+		$item_total = isset( $event_descriptor ) ? $event_descriptor->get_total_items_count() : 0;
+		$visitor_total = isset( $event_descriptor ) ? $event_descriptor->get_total_visitors_count() : 0;
+		$volunteer_total = isset( $event_descriptor ) ? $event_descriptor->get_total_volunteers_count() : 0;
 	
 //		Error_Log::var_dump( $item_total, $visitor_total, $volunteer_total );
 	
@@ -383,7 +383,7 @@ class Internal_Event_Descriptor_Admin_View {
 		if ( $is_allow_recurring ) {
 			$label = __( 'Repeat this event', 'reg-man-rc' );
 			$name = 'event_recur_flag';
-			$rrule = $event_descriptor->get_event_recurrence_rule();
+			$rrule = isset( $event_descriptor ) ? $event_descriptor->get_event_recurrence_rule() : NULL;
 			$val = '1';
 			$is_checked = ! empty( $rrule );
 			$hint = __( 'E.g. every month until the end of the year', 'reg-man-rc' );
@@ -426,7 +426,7 @@ class Internal_Event_Descriptor_Admin_View {
 	 */
 	private static function render_recurrence_inputs( $event_descriptor ) {
 		
-		$rrule = $event_descriptor->get_event_recurrence_rule();
+		$rrule = isset( $event_descriptor ) ? $event_descriptor->get_event_recurrence_rule() : NULL;
 		
 		$input_list = Form_Input_List::create();
 		$list_classes = 'recurring-event-input-list event-dates-times-input-list';
@@ -511,7 +511,7 @@ class Internal_Event_Descriptor_Admin_View {
 			$input_list->add_list_classes( $list_classes );
 		
 
-			$events_array = $event_descriptor->get_event_object_array();
+			$events_array = isset( $event_descriptor ) ? $event_descriptor->get_event_object_array() : array();
 			$options_array = array();
 		
 			foreach( $events_array as $event ) {
@@ -523,7 +523,7 @@ class Internal_Event_Descriptor_Admin_View {
 				} // endif
 			} // endfor
 
-			$cancel_dates = $event_descriptor->get_cancelled_event_dates();
+			$cancel_dates = isset( $event_descriptor ) ? $event_descriptor->get_cancelled_event_dates() : array();
 			$selected = array();
 			foreach( $cancel_dates as $cancel_date_time ) {
 				$date_str = $cancel_date_time->format( Event_Key::EVENT_DATE_FORMAT );
@@ -860,31 +860,35 @@ class Internal_Event_Descriptor_Admin_View {
 		return $input;
 	} // function
 
-	public static function update_post_messages( $messages ) {
+	public static function handle_post_updated_messages( $messages ) {
 		global $post, $post_ID;
 		$permalink = get_permalink( $post_ID );
 		/* translators: %1$s is a date, %2$s is a time. */
 		$date_time_format = sprintf( _x('%1$s at %2$s', 'Displaying a date and time', 'reg-man-rc' ),
 										get_option( 'date_format' ), get_option('time_format') );
 		$date = date_i18n( $date_time_format, strtotime( $post->post_date ) );
+		$admin_cal_url = esc_url( Admin_Event_Calendar_Page::get_href_for_main_page() );
+		$view_url = esc_url( $permalink );
+		$preview_link = esc_url( add_query_arg( 'preview', 'true', $permalink ) );
 		$messages[ Internal_Event_Descriptor::POST_TYPE ] = array(
 				0 => '',
-				1 => sprintf( __('Event updated. <a href="%s">View</a>'), esc_url( $permalink ) ),
+				1 => sprintf( __('Event updated.  <a href="%1$s">View public event page</a> or go to <a href="%2$s">admin calendar</a>.'), $view_url, $admin_cal_url ),
 				2 => __('Custom field updated.'),
 				3 => __('Custom field deleted.'),
 				4 => __('Event updated.'),
 				5 => isset($_GET['revision']) ? sprintf( __('Event restored to revision from %s'), wp_post_revision_title( (int) $_GET['revision'], FALSE ) ) : FALSE,
-				6 => sprintf( __('Event published. <a href="%s">View</a>'), esc_url( $permalink ) ),
+				6 => sprintf( __('Event published. <a href="%1$s">View public event page</a> or go to <a href="%2$s">admin calendar</a>.'), $view_url, $admin_cal_url ),
 				7 => __('Event saved.'),
-				8 => sprintf( __('Event submitted. <a target="_blank" href="%s">Preview</a>'), esc_url( add_query_arg( 'preview', 'true', $permalink ) ) ),
-				9 => sprintf( __('Event scheduled for: <strong>%1$s</strong>. <a target="_blank" href="%2$s">Preview</a>'), $date, esc_url( $permalink ) ),
-				10 => sprintf( __('Event draft updated. <a target="_blank" href="%s">Preview</a>'), esc_url( add_query_arg( 'preview', 'true', $permalink ) ) ),
+				8 => sprintf( __('Event submitted. <a target="_blank" href="%1$s">Preview</a> or go to <a href="%2$s">admin calendar</a>.'), $preview_link, $admin_cal_url ),
+				9 => sprintf( __('Event scheduled for: <strong>%1$s</strong>. <a target="_blank" href="%2$s">Preview</a> or go to <a href="%3$s">admin calendar</a>.'), $date, $preview_link, $admin_cal_url ),
+				10 => sprintf( __('Event draft updated. <a target="_blank" href="%1$s">Preview</a> or go to <a href="%2$s">admin calendar</a>.'), $preview_link, $admin_cal_url ),
 		);
 		return $messages;
 	} // function
 
 	public static function filter_admin_UI_columns( $columns ) {
 		$venue_key			= Venue::POST_TYPE;
+//		Error_Log::var_dump( $columns );
 //		$fixer_station_key	= 'taxonomy-' . Fixer_Station::TAXONOMY_NAME;
 		$event_category_key	= 'taxonomy-' . Event_Category::TAXONOMY_NAME;
 		$category_heading = Settings::get_is_allow_event_multiple_categories() ? __( 'Categories', 'reg-man-rc' ) : __( 'Category', 'reg-man-rc' );

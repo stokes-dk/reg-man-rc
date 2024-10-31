@@ -28,6 +28,9 @@ class Venue_Admin_View {
 		// Change the placeholder text for "Enter Title Here"
 		add_filter( 'enter_title_here', array( __CLASS__, 'rewrite_enter_title_here' ) );
 
+		// Change the messages that are shown when the post is updated
+		add_filter( 'post_updated_messages', array(__CLASS__, 'handle_post_updated_messages') );
+
 		// Filter columns shown in the post list
 		add_filter( 'manage_' . Venue::POST_TYPE . '_posts_columns', array( __CLASS__, 'filter_admin_UI_columns' ) );
 
@@ -35,20 +38,36 @@ class Venue_Admin_View {
 		add_action( 'manage_' . Venue::POST_TYPE . '_posts_custom_column', array( __CLASS__, 'render_admin_UI_column_values' ), 10, 2 );
 
 	} // function
-/* FIXME - Do I need this?
-	public static function add_form_top( $post ) {
-		$post_type = get_post_type( $post );
-		if ( Venue::POST_TYPE === $post_type ) {
-//			$input_list = Form_Input_List::create();
-//			$input_list->add_text_input( 'Search Google Places', 'google-places' );
-//			$input_list->render();
-//			echo '<input type="search" placeholder="Search for Venue in Google Places">';
-			echo '<label><input type="checkbox"/>';
-				echo __( 'Use autocomplete for venue name', 'reg-man-rc' );
-			echo '</label>';
-		} // endif
+
+	/**
+	 * Set up the messages for this post type
+	 * @return	void
+	 * @since	v0.1.0
+	 */
+	public static function handle_post_updated_messages( $messages ) {
+		global $post, $post_ID;
+//		$permalink = get_permalink( $post_ID );
+		/* translators: %1$s is a date, %2$s is a time. */
+		$date_time_format = sprintf( _x('%1$s at %2$s', 'Displaying a date and time', 'reg-man-rc' ),
+										get_option( 'date_format' ), get_option('time_format') );
+		$date = date_i18n( $date_time_format, strtotime( $post->post_date ) );
+		$messages[ Venue::POST_TYPE ] = array(
+				0 => '',
+				1 => __( 'Venue updated.', 'reg-man-rc' ),
+				2 => __( 'Custom field updated.', 'reg-man-rc' ),
+				3 => __( 'Custom field deleted.', 'reg-man-rc' ),
+				4 => __( 'Venue updated.', 'reg-man-rc' ),
+				5 => isset($_GET['revision']) ? sprintf( __( 'Item Suggestion restored to revision from %s', 'reg-man-rc' ), wp_post_revision_title( (int) $_GET['revision'], FALSE ) ) : FALSE,
+				6 => __( 'Venue published.', 'reg-man-rc' ),
+				7 => __( 'Venue saved.', 'reg-man-rc' ),
+				8 => __( 'Venue submitted.', 'reg-man-rc' ),
+				9 => sprintf( __( 'Venue scheduled for: <strong>%1$s</strong>', 'reg-man-rc' ) , $date ),
+				10 => __( 'Venue draft updated.', 'reg-man-rc' ),
+		);
+		return $messages;
 	} // function
-*/
+
+	
 	/**
 	 * Conditionally enqueue the correct scripts for this user interface if we're on the right page
 	 *

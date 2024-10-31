@@ -6,7 +6,6 @@ use Reg_Man_RC\Control\User_Role_Controller;
 use Reg_Man_RC\Model\Stats\Visitor_Registration_Descriptor;
 use Reg_Man_RC\Model\Stats\Visitor_Registration_Descriptor_Factory;
 use Reg_Man_RC\Model\Encryption\Encryption;
-use Reg_Man_RC\Model\Stats\Item_Stats;
 
 /**
  * An instance of this class represents a single person who may attend multiple events and register items for repair.
@@ -141,22 +140,24 @@ class Visitor {
 	 * Rather than decrypting every email in the database, we store a hashcode and find those records.
 	 * Note that it is possible (although extremely unlikely) for two visitors with different emails
 	 *   or different full names to have the same hashcode
-	 * @param	string	$meta_key	The key for the metadata to be searched
-	 * @param	string	$hashcode	The hashcode value for the metadata
+	 * @param	string		$meta_key	The key for the metadata to be searched
+	 * @param	string		$hashcode	The hashcode value for the metadata
+	 * @param	string|int	$exclude_id	An optional ID of the record to be ignored in the search
 	 * @return	Visitor[]	An array of instances of this class whose hahcode is the one specified 
 	 * @since	v0.5.0
 	 */
-	private static function get_visitors_by_hashcode( $meta_key, $hashcode ) {
+	private static function get_visitors_by_hashcode( $meta_key, $hashcode, $exclude_id = NULL ) {
 
 		$result = array();
 		
 		if ( ! empty ( $hashcode ) ) {
 
-			// N.B. We need to get any post, including private
-			// This may be necessary, for example, when we need to find the record for a visitor
-			//  using their email address during visitor registration by someone who does not
-			//  have
-			$post_status = 'any';
+			// N.B. All visitor records are private so we need to include private status explicitly
+			//  even for users who would not normal be able to see private posts
+			// This may be necessary, for example, when we need to get the volunteer record for
+			//  someone who is not logged in but is trying to access the Volunteer Area
+			// TODO: Is there any reason we should include 'draft' ??
+			$post_status = array( 'publish', 'private' );
 			
 			$args = array(
 					'post_type'			=> self::POST_TYPE,
@@ -171,6 +172,11 @@ class Visitor {
 								)
 					)
 			);
+
+			// Exclude the specified ID if one was supplied by the caller
+			if ( ! empty( $exclude_id ) ) {
+				$args[ 'post__not_in' ] = array( $exclude_id );
+			} // endif
 
 			$query = new \WP_Query( $args );
 			$post_array = $query->posts;
@@ -188,6 +194,8 @@ class Visitor {
 	
 	/**
 	 * Get a visitor record by their email address
+	 * Note that it is possible for the administrator to mistakenly create two records with the same email address.
+	 * If that is the case, this method will return the first one it finds
 	 * @param	string	$email	The email address of the visitor to be retrieved
 	 * @return	Visitor|NULL	The visitor with the specified email address, or NULL if the record is not found
 	 * @since 	v0.1.0
@@ -216,6 +224,37 @@ class Visitor {
 
 	} // function
 	
+	/**
+	 * Get an array of visitor records with the specified email address excluding the specified volunteer ID.
+	 * Note that it is possible for the administrator to mistakenly create two records with the same email address.
+	 * @param	string		$email		The email address of the records to be retrieved
+	 * @param	string|int	$exclude_id	An optional ID of the record to be ignored in the results.  This is used to find duplicates.
+	 * @return	Visitor[]	The array of visitors with the specified email address
+	 * @since 	v0.9.9
+	 */
+	public static function get_all_visitors_by_email( $email, $exclude_id = NULL ) {
+		
+		$result = array();
+		if ( ! empty( $email ) ) {
+			
+			// We must always search by lowercase email since that's what is stored
+			$email = strtolower( $email );
+			
+			$hashcode = Encryption::hash( $email );
+			$visitor_array = self::get_visitors_by_hashcode( self::EMAIL_HAHSCODE_META_KEY, $hashcode, $exclude_id );
+			foreach ( $visitor_array as $visotor ) {
+				$enc = $visotor->get_encrypted_email();
+				$dec = ! empty( $enc ) ? Encryption::decrypt( $enc ) : NULL;
+				if ( ! empty( $dec ) && ( $dec == $email ) ) {
+					$result[] = $visotor;
+				} // endif
+			} // endif
+		} // endif
+			
+		return $result;
+
+	} // function
+
 	/**
 	 * Get a visitor record by their full name
 	 * @param	string	$full_name	The full name of the visitor to be retrieved
@@ -955,6 +994,27 @@ class Visitor {
 		} // endif
 		
 	} // function
+	
+	/**
+	 * Get the url to edit this custom post.
+	 * @return	string|NULL		The url for the page to edit this custom post if the user is authorized, otherwise NULL.
+	 * @since v0.9.9
+	 */
+	public function get_edit_url() {
+		$post_id = $this->get_post_id();
+		if ( ! current_user_can( 'edit_' . User_Role_Controller::VISITOR_CAPABILITY_TYPE_SINGULAR, $post_id ) ) {
+			$result = NULL;
+		} else {
+			$base_url = admin_url( 'post.php' );
+			$query_args = array(
+					'post'		=> $post_id,
+					'action'	=> 'edit',
+			);
+			$result = add_query_arg( $query_args, $base_url );
+		} // endif
+		return $result;
+	} // function
+	
 	
 	/**
 	 *  Register the Visitor custom post type during plugin init.

@@ -56,6 +56,8 @@ class Volunteer {
 	private $full_name; // The volunteer's full name, e.g. "Dave Stokes", encrypted before stored in db
 	private $encrypted_full_name; // The encrypted version of the full name, read out of db
 	private $email; // Optional, the volunteer's email address, encrypted before stored in db
+	private $display_email; // A displayable version of the email for this volunteer which may be
+	// partially obscurred depending on the current user's authority and the current context
 	private $encrypted_email; // The encrypted version of the email address, read out of db
 	private $wp_user; // Optional, the registered user associated with this volunteer
 	private $is_authored_by_current_wp_user; // TRUE if this volunteer was authored by the current WP User
@@ -270,7 +272,9 @@ class Volunteer {
 	} // function
 
 	/**
-	 * Get a volunteer record by their email address
+	 * Get the volunteer record with the specified email address.
+	 * Note that it is possible for the administrator to mistakenly create two volunteer records with the same email address.
+	 * If that is the case, this method will return the first one it finds
 	 * @param	string	$email	The email address of the volunteer to be retrieved
 	 * @return	Volunteer|NULL	The volunteer with the specified email address, or NULL if the record is not found
 	 * @since 	v0.1.0
@@ -300,56 +304,36 @@ class Volunteer {
 	} // function
 
 	/**
-	 * Get the volunteers with the specified hashcode value for the specified meta key.
-	 * This is used to find a volunteer with a specific email or full name.
-	 * Rather than decrypting every email in the database, we store a hashcode and find those records.
-	 * Note that it is possible (although extremely unlikely) for two volunteers with different emails
-	 *   or different full names to have the same hashcode
-	 * @param	string	$meta_key	The key for the metadata to be searched
-	 * @param	string	$hashcode	The hashcode value for the metadata
-	 * @return	Volunteer[]	An array of instances of this class whose hahcode is the one specified 
-	 * @since	v0.5.0
+	 * Get an array of volunteer records with the specified email address excluding the specified volunteer ID.
+	 * Note that it is possible for the administrator to mistakenly create two volunteer records with the same email address.
+	 * @param	string		$email		The email address of the volunteer records to be retrieved
+	 * @param	string|int	$exclude_id	An optional ID of the record to be ignored in the results.  This is used to find duplicates.
+	 * @return	Volunteer[]	The array of volunteers with the specified email address
+	 * @since 	v0.9.9
 	 */
-	private static function get_volunteers_by_hashcode( $meta_key, $hashcode ) {
-
-		$result = array();
+	public static function get_all_volunteers_by_email( $email, $exclude_id = NULL ) {
 		
-		if ( ! empty ( $hashcode ) ) {
-
-			// N.B. We need to get any post, including private
-			// This may be necessary, for example, when we need to get the volunteer record for
-			//  someone who is not logged in but is trying to access the Volunteer Area
-			$post_status = 'any';
+		$result = array();
+		if ( ! empty( $email ) ) {
 			
-			$args = array(
-					'post_type'			=> self::POST_TYPE,
-					'posts_per_page'	=>	-1, // Get all posts
-					'post_status'		=> $post_status, 
-					'meta_key'			=> $meta_key,
-					'meta_query'		=> array(
-								array(
-										'key'		=> $meta_key,
-										'value'		=> $hashcode,
-										'compare'	=> '=',
-								)
-					)
-			);
-
-			$query = new \WP_Query( $args );
-			$post_array = $query->posts;
-
-			foreach ( $post_array as $post ) {
-				$result[] = self::instantiate_from_post( $post );
-			} // endfor
-
-//			wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
-
+			// We must always search by lowercase email since that's what is stored
+			$email = strtolower( $email );
+			
+			$hashcode = Encryption::hash( $email );
+			$volunteer_array = self::get_volunteers_by_hashcode( self::EMAIL_HAHSCODE_META_KEY, $hashcode, $exclude_id );
+			foreach ( $volunteer_array as $volunteer ) {
+				$enc = $volunteer->get_encrypted_email();
+				$dec = ! empty( $enc ) ? Encryption::decrypt( $enc ) : NULL;
+				if ( ! empty( $dec ) && ( $dec == $email ) ) {
+					$result[] = $volunteer;
+				} // endif
+			} // endif
 		} // endif
-
+			
 		return $result;
+
 	} // function
 
-	
 	/**
 	 * Get a volunteer record by their full name
 	 * @param	string	$full_name	The full name of the volunteer to be retrieved
@@ -378,7 +362,64 @@ class Volunteer {
 
 	} // function
 	
-	
+	/**
+	 * Get the volunteers with the specified hashcode value for the specified meta key.
+	 * This is used to find a volunteer with a specific email or full name.
+	 * Rather than decrypting every email in the database, we store a hashcode and find those records.
+	 * Note that it is possible (although extremely unlikely) for two volunteers with different emails
+	 *   or different full names to have the same hashcode
+	 * @param	string		$meta_key	The key for the metadata to be searched
+	 * @param	string		$hashcode	The hashcode value for the metadata
+	 * @param	string|int	$exclude_id	An optional ID of the record to be ignored in the search
+	 * @return	Volunteer[]	An array of instances of this class whose hahcode is the one specified 
+	 * @since	v0.5.0
+	 */
+	private static function get_volunteers_by_hashcode( $meta_key, $hashcode, $exclude_id = NULL ) {
+
+		$result = array();
+		
+		if ( ! empty ( $hashcode ) ) {
+
+			// N.B. All volunteer records are private so we need to include private status explicitly
+			//  even for users who would not normal be able to see private posts
+			// This may be necessary, for example, when we need to get the volunteer record for
+			//  someone who is not logged in but is trying to access the Volunteer Area
+			// TODO: Is there any reason we should include 'draft' ??
+			$post_status = array( 'publish', 'private' );
+
+			$args = array(
+					'post_type'			=> self::POST_TYPE,
+					'posts_per_page'	=>	-1, // Get all posts
+					'post_status'		=> $post_status, 
+					'meta_key'			=> $meta_key,
+					'meta_query'		=> array(
+								array(
+										'key'		=> $meta_key,
+										'value'		=> $hashcode,
+										'compare'	=> '=',
+								)
+					)
+			);
+
+			// Exclude the specified ID if one was supplied by the caller
+			if ( ! empty( $exclude_id ) ) {
+				$args[ 'post__not_in' ] = array( $exclude_id );
+			} // endif
+
+			$query = new \WP_Query( $args );
+			$post_array = $query->posts;
+
+			foreach ( $post_array as $post ) {
+				$result[] = self::instantiate_from_post( $post );
+			} // endfor
+
+//			wp_reset_postdata(); // Required after using WP_Query() ONLY if also using query->the_post() !
+
+		} // endif
+
+		return $result;
+	} // function
+
 	/**
 	 * Get the set of volunteers whose proxy is the one specified.
 	 *
@@ -587,6 +628,10 @@ class Volunteer {
 				$this->display_name = NULL;
 				
 			} // endif
+			
+			if ( empty( $this->display_name ) ) {
+				$this->display_name = '' . $this->get_id(); // as a last resort when nothing else is available
+			} // endif
 				
 		} // endif
 		
@@ -726,6 +771,45 @@ class Volunteer {
 		return $this->email;
 
 	} // function
+	
+	/**
+	 * Get the most descriptive version of the email available to this user in the current context for display purposes.
+	 * If we're rendering the admin interface and the user can view the full email then
+	 *   it will be returned (if known), otherwise the partially obscurred version is returned
+	 * @return string
+	 */
+	public function get_display_email() {
+
+		if ( ! isset( $this->display_email ) ) {
+			
+			$user_can_see_any_vol_email = current_user_can( 'edit_others_' . User_Role_Controller::VOLUNTEER_CAPABILITY_TYPE_PLURAL );
+
+			$user_can_see_this_vol_email = ( $this->get_is_authored_by_current_wp_user() || $this->get_is_instance_for_current_wp_user() );
+
+			if ( ! is_admin() ) {
+
+				$this->display_email = ''; // Nothing if we're not inside the admin back end
+
+			} else if ( $user_can_see_any_vol_email || $user_can_see_this_vol_email ) {
+			
+				$this->display_email = $this->get_email();
+				
+			} else {
+				
+				$enc = $this->get_encrypted_email();
+				$email = ! empty( $enc ) ? Encryption::decrypt( $enc ) : NULL;
+				
+				$this->display_email = Visitor::get_partially_obscured_form_of_email( $email );
+				
+			} // endif
+			
+		} // endif
+		
+		return $this->display_email;
+
+	} // function
+	
+	
 	
 	/**
 	 * Get the email address of a volunteer who has registered for an event
@@ -1108,6 +1192,9 @@ class Volunteer {
 		if ( ! is_admin() ) {
 
 			$result = $this->get_public_name();
+			if ( empty( $result ) ) {
+				$result = '' . $this->get_id(); // as a last resort when there is no public name
+			} // endif
 			
 		} else {
 			
@@ -1115,8 +1202,8 @@ class Volunteer {
 			$name = $this->get_display_name();
 			$fixer_station = $this->get_preferred_fixer_station();
 			$roles_array = $this->get_preferred_roles();
-			$email = $this->get_email();
-			
+//			$email = $this->get_email();
+			$email = $this->get_display_email();
 			
 			if ( ! empty( $fixer_station ) ) {
 				
@@ -1172,6 +1259,26 @@ class Volunteer {
 
 	} // function
 
+	/**
+	 * Get the url to edit this custom post.
+	 * @return	string|NULL		The url for the page to edit this custom post if the user is authorized, otherwise NULL.
+	 * @since v0.9.9
+	 */
+	public function get_edit_url() {
+		$post_id = $this->get_post_id();
+		if ( ! current_user_can( 'edit_' . User_Role_Controller::VOLUNTEER_CAPABILITY_TYPE_SINGULAR, $post_id ) ) {
+			$result = NULL;
+		} else {
+			$base_url = admin_url( 'post.php' );
+			$query_args = array(
+					'post'		=> $post_id,
+					'action'	=> 'edit',
+			);
+			$result = add_query_arg( $query_args, $base_url );
+		} // endif
+		return $result;
+	} // function
+	
 	/**
 	 *  Register the Volunteer custom post type during plugin init.
 	 *

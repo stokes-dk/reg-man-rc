@@ -85,7 +85,7 @@ class Items_Admin_Table_View {
 			'<tr>' .
 				'<%1$s class="item-desc always-export">%2$s</%1$s>' .
 				'<%1$s class="event-date-text ' . $event_col_class . '">%3$s</%1$s>' . // This column will be sorted by the next col's data
-				'<%1$s class="event-date-iso-8601 col-hidden always-hidden not-searchable">%4$s</%1$s>' . // Must be after date
+				'<%1$s class="event-date-iso-8601 col-hidden always-hidden col-not-searchable">%4$s</%1$s>' . // Must be after date
 				'<%1$s class="visitor-name always-export">%5$s</%1$s>' .
 				'<%1$s class="visitor-email col-hidden always-export">%6$s</%1$s>' .
 				'<%1$s class="visitor-is-first-event col-hidden always-export">%7$s</%1$s>' .
@@ -125,8 +125,10 @@ class Items_Admin_Table_View {
 					$single_event_key = $this->get_single_event_key();
 					$data_array[] = "data-event-key=\"$single_event_key\"";
 					$data_array[] = 'data-supplemental-data-button-class="supplemental-items-button"';
-					// TODO: This is a work in progress
 					$data_array[] = 'data-import-data-button-class="import-items-button"';
+//					$data_array[] = 'data-add-record-button-class="add-item-button"';
+//					$data_array[] = 'data-update-record-button-class="update-item-button"';
+//					$data_array[] = 'data-delete-record-button-class="delete-item-button"';
 				} // endif
 				$data_array[] = "data-print-page-title=\"$print_page_title\"";
 				$data_array[] = "data-export-file-name=\"$export_file_name\"";

@@ -37,6 +37,9 @@ class Calendar_Admin_View {
 		// Add the metaboxes for things that are not taxonomies and therefore don't already have metaboxes like the event date
 		add_action( 'add_meta_boxes', array( __CLASS__, 'add_calendar_meta_boxes' ), 10, 2 );
 
+		// Change the messages that are shown when the post is updated
+		add_filter( 'post_updated_messages', array(__CLASS__, 'handle_post_updated_messages') );
+
 		// Filter columns shown in the post list
 		add_filter( 'manage_' . Calendar::POST_TYPE . '_posts_columns', array( __CLASS__, 'filter_admin_UI_columns' ) );
 
@@ -379,6 +382,34 @@ class Calendar_Admin_View {
 			$checked = in_array( $id, $selected_id_array ) ? 'checked="checked"' : '';
 			printf( $format, $attr_desc, $id, $checked, $html_name );
 		} // endfor
+	} // function
+
+	/**
+	 * Set up the messages for this post type
+	 * @return	void
+	 * @since	v0.1.0
+	 */
+	public static function handle_post_updated_messages( $messages ) {
+		global $post, $post_ID;
+//		$permalink = get_permalink( $post_ID );
+		/* translators: %1$s is a date, %2$s is a time. */
+		$date_time_format = sprintf( _x('%1$s at %2$s', 'Displaying a date and time', 'reg-man-rc' ),
+										get_option( 'date_format' ), get_option('time_format') );
+		$date = date_i18n( $date_time_format, strtotime( $post->post_date ) );
+		$messages[ Calendar::POST_TYPE ] = array(
+				0 => '',
+				1 => __( 'Calendar updated.', 'reg-man-rc' ),
+				2 => __( 'Custom field updated.', 'reg-man-rc' ),
+				3 => __( 'Custom field deleted.', 'reg-man-rc' ),
+				4 => __( 'Calendar updated.', 'reg-man-rc' ),
+				5 => isset($_GET['revision']) ? sprintf( __( 'Calendar restored to revision from %s', 'reg-man-rc' ), wp_post_revision_title( (int) $_GET['revision'], FALSE ) ) : FALSE,
+				6 => __( 'Calendar published.', 'reg-man-rc' ),
+				7 => __( 'Calendar saved.', 'reg-man-rc' ),
+				8 => __( 'Calendar submitted.', 'reg-man-rc' ),
+				9 => sprintf( __( 'Calendar scheduled for: <strong>%1$s</strong>', 'reg-man-rc' ) , $date ),
+				10 => __( 'Calendar draft updated.', 'reg-man-rc' ),
+		);
+		return $messages;
 	} // function
 
 	/**

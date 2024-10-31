@@ -412,13 +412,17 @@ jQuery(document).ready(function($) {
 			recur_input_values[ 'recur_cancel_dates' ] = JSON.stringify( cancel_dates_array );
 
 			// Make sure all the required inputs have a value then trigger an update to my listeners
+// DKS Oct 28 2024 - Because event category is required, the event dates won't update until a category is selected
+// Rather than force validation on the client side, we'll let the server figure if anything is missing  
+/*
 			var is_valid;
 			var parent_form = me.closest( 'form' );
 			var parent_form_element = parent_form[ 0 ];
 			is_valid = parent_form_element.checkValidity();
 			if ( is_valid ) {
+*/
 				me.data( 'recur_input_values', recur_input_values );
-			} // endif
+//			} // endif
 			
 		} // endif
 	});

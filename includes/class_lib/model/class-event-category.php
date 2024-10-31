@@ -546,6 +546,8 @@ class Event_Category {
 				'add_or_remove_items'			=> NULL,// __( 'Add or remove event categories', 'reg-man-rc' ),
 				'choose_from_most_used'			=> NULL,// __( 'Choose from the most used event categories', 'reg-man-rc' ),
 				'not_found'						=> NULL,// __( 'Event Category not found', 'reg-man-rc' ),
+				'name_field_description'		=> NULL, //__( 'The public name for the event category', 'reg-man-rc' ),
+				'desc_field_description'		=> __( 'A short description of the event category', 'reg-man-rc' ),
 		);
 
 		$args = array(

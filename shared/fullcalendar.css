@@ -57,10 +57,12 @@
 }
 .reg-man-rc-calendar-view.fc .fc-toolbar {
 	flex-wrap: wrap;
-	margin-bottom: 0.5em;
+	gap: 0.5em;
 }
 .reg-man-rc-calendar-view.fc .fc-toolbar-chunk {
-	margin-bottom: 0.5em;
+	display: flex;
+	flex-wrap: wrap;
+  	row-gap: 0.5em;
 }
 /*
 .reg-man-rc-calendar-view.fc .fc-toolbar-title {
@@ -106,6 +108,7 @@
 	display: flex;
 	justify-content: space-between;
 	column-gap: 1em;
+	flex-wrap: wrap;
 }
 /*
 .reg-man-rc-calendar-legend .reg-man-rc-calendar-legend-item .legend-item-container {

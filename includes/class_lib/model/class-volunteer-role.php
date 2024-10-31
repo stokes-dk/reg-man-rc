@@ -438,6 +438,8 @@ class Volunteer_Role {
 				'add_or_remove_items'			=> NULL,// __( 'Add or remove roles', 'reg-man-rc' ),
 				'choose_from_most_used'			=> NULL,// __( 'Choose from the most used roles', 'reg-man-rc' ),
 				'not_found'						=> NULL,// __( 'Volunteer Role not found', 'reg-man-rc' ),
+				'name_field_description'		=> NULL, //__( 'The public name for the volunteer role', 'reg-man-rc' ),
+				'desc_field_description'		=> __( 'A short description of the volunteer role', 'reg-man-rc' ),
 		);
 
 		$args = array(

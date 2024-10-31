@@ -4,6 +4,7 @@ namespace Reg_Man_RC\Control\Admin;
 use Reg_Man_RC\Model\Volunteer_Role;
 use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\Control\Term_Order_Controller;
+use Reg_Man_RC\Model\Stats\Supplemental_Volunteer_Registration;
 
 /**
  * The volunteer controller
@@ -29,6 +30,21 @@ class Volunteer_Role_Admin_Controller {
 		// Save the field value when the term is updated using "edited_" hook
 		add_action( 'edited_' . Volunteer_Role::TAXONOMY_NAME, array(__CLASS__, 'update_term_admin_fields'), 10, 2 );
 
+		// Handle the event when a term is deleted using "delete_" hook
+		add_action( 'delete_' . Volunteer_Role::TAXONOMY_NAME, array(__CLASS__, 'handle_delete_term'), 10, 4 );
+
+	} // function
+
+	/**
+	 * Handle delete term event for my taxonomy
+	 * @param	int			$term_id
+	 * @param	int			$term_taxonomy_id
+	 * @param	\WP_Term	$deleted_term
+	 * @param	array		$object_ids
+	 */
+	public static function handle_delete_term( $term_id, $term_taxonomy_id, $deleted_term, $object_ids ) {
+//		Error_Log::var_dump( $term_id, $term_taxonomy_id, $deleted_term, $object_ids );
+		Supplemental_Volunteer_Registration::handle_volunteer_role_deleted( $term_id );
 	} // function
 
 	/**

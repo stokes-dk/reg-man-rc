@@ -84,7 +84,7 @@ class Visitor_Admin_Table_View {
 				'<%1$s class="visitor-display-name">%2$s</%1$s>' .
 				'<%1$s class="visitor-email col-hidden">%3$s</%1$s>' .
 				'<%1$s class="event-date-text ' . $event_col_class . '">%4$s</%1$s>' . // This column will be sorted by the next col's data
-				'<%1$s class="event-date-iso-8601 col-hidden always-hidden not-searchable">%5$s</%1$s>' . // Must be after date
+				'<%1$s class="event-date-iso-8601 col-hidden always-hidden col-not-searchable">%5$s</%1$s>' . // Must be after date
 				'<%1$s class="visitor-first-event">%6$s</%1$s>' .
 				'<%1$s class="visitor-is-join-mail-list">%7$s</%1$s>' .
 				'<%1$s class="visitor-source">%8$s</%1$s>' .
@@ -159,6 +159,8 @@ class Visitor_Admin_Table_View {
 		
 //		Error_Log::var_dump( $visitor_reg_desc_array ); 
 		$result = array();
+		/* Translators: %1$s is a key for an event that is not found in the system */
+		$missing_event_format = __( '[ Event not found: %1$s ]', 'reg-man-rc' );
 		$em_dash = __( '—', 'reg-man-rc' ); // an em-dash is used by Wordpress for empty fields
 		$source_unknown_text = __( '[source not specified]', 'reg-man-rc' );
 
@@ -167,8 +169,6 @@ class Visitor_Admin_Table_View {
 		foreach( $visitor_reg_desc_array as $visitor_desc ) {
 
 			$event_key = $visitor_desc->get_event_key_string();
-			$event_text = $event_key; // As a last resort we'll just show the key
-			$event_date_iso_8601 = '';
 			if ( ! empty( $event_key ) ) {
 				if ( isset( $events[ $event_key ] ) ) {
 					$event = $events[ $event_key ];
@@ -182,6 +182,9 @@ class Visitor_Admin_Table_View {
 					$event_text = $event->get_label();
 					$start_date = $event->get_start_date_time_object();
 					$event_date_iso_8601 = isset( $start_date ) ? $start_date->format( \DateTime::ISO8601 ) : '';
+				} else {
+					$event_text = sprintf( $missing_event_format, $event_key );
+					$event_date_iso_8601 = '';
 				} // endif
 			} // endif
 

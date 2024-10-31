@@ -35,7 +35,7 @@ class Volunteer_Registration_Admin_View {
 		add_action( 'add_meta_boxes', array( __CLASS__, 'add_meta_boxes' ), 10, 2 );
 
 		// Change the messages that are shown when the post is updated
-		add_filter( 'post_updated_messages', array(__CLASS__, 'update_post_messages') );
+		add_filter( 'post_updated_messages', array(__CLASS__, 'handle_post_updated_messages') );
 
 		// Add a column to the admin UI term list
 		add_filter( 'manage_' . Volunteer_Registration::POST_TYPE . '_posts_columns', array( __CLASS__, 'filter_admin_UI_columns' ) );
@@ -383,7 +383,7 @@ class Volunteer_Registration_Admin_View {
 	 * @return	void
 	 * @since	v0.1.0
 	 */
-	public static function update_post_messages( $messages ) {
+	public static function handle_post_updated_messages( $messages ) {
 		global $post, $post_ID;
 		$permalink = get_permalink( $post_ID );
 		/* translators: %1$s is a date, %2$s is a time. */
@@ -392,17 +392,17 @@ class Volunteer_Registration_Admin_View {
 		$date = date_i18n( $date_time_format, strtotime( $post->post_date ) );
 		$messages[ Volunteer_Registration::POST_TYPE ] = array(
 				0 => '',
-				1 => sprintf( __('Registration updated. <a href="%s">View</a>'), esc_url( $permalink ) ),
-				2 => __('Custom field updated.'),
-				3 => __('Custom field deleted.'),
-				4 => __('Registration updated.'),
-				5 => isset($_GET['revision']) ? sprintf( __('Registration restored to revision from %s'), wp_post_revision_title( (int) $_GET['revision'], FALSE ) ) : FALSE,
-				6 => sprintf( __('Registration published. <a href="%s">View</a>'), esc_url( $permalink ) ),
-				7 => __('Registration saved.'),
-				8 => sprintf( __('Registration submitted. <a target="_blank" href="%s">Preview</a>'), esc_url( add_query_arg( 'preview', 'true', $permalink ) ) ),
-				9 => sprintf( __('Registration scheduled for: <strong>%1$s</strong>. <a target="_blank" href="%2$s">Preview</a>'), $date, esc_url( $permalink ) ),
-				10 => sprintf( __('Registration draft updated. <a target="_blank" href="%s">Preview</a>'), esc_url( add_query_arg( 'preview', 'true', $permalink ) ) ),
-		);
+				1 => __( 'Volunteer Registration updated.', 'reg-man-rc' ),
+				2 => __( 'Custom field updated.', 'reg-man-rc' ),
+				3 => __( 'Custom field deleted.', 'reg-man-rc' ),
+				4 => __( 'Volunteer Registration updated.', 'reg-man-rc' ),
+				5 => isset($_GET['revision']) ? sprintf( __( 'Volunteer Registration restored to revision from %s', 'reg-man-rc' ), wp_post_revision_title( (int) $_GET['revision'], FALSE ) ) : FALSE,
+				6 => __( 'Volunteer Registration published.', 'reg-man-rc' ),
+				7 => __( 'Volunteer Registration saved.', 'reg-man-rc' ),
+				8 => __( 'Volunteer Registration submitted.', 'reg-man-rc' ),
+				9 => sprintf( __( 'Volunteer Registration scheduled for: <strong>%1$s</strong>', 'reg-man-rc' ) , $date ),
+				10 => __( 'Volunteer Registration draft updated.', 'reg-man-rc' ),
+				);
 		return $messages;
 	} // function
 

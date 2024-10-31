@@ -4,6 +4,8 @@ namespace Reg_Man_RC\Control\Admin;
 use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\Model\Fixer_Station;
 use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Model\Stats\Supplemental_Item;
+use Reg_Man_RC\Model\Stats\Supplemental_Volunteer_Registration;
 
 /**
  * The fixer station controller used in the admin backend
@@ -38,6 +40,22 @@ class Fixer_Station_Admin_Controller {
 		// Save the field value when the term is updated using "edited_" hook
 		add_action( 'edited_' . Fixer_Station::TAXONOMY_NAME, array(__CLASS__, 'update_term_admin_fields' ), 10, 2 );
 
+		// Handle the event when a term is deleted using "delete_" hook
+		add_action( 'delete_' . Fixer_Station::TAXONOMY_NAME, array(__CLASS__, 'handle_delete_term'), 10, 4 );
+
+	} // function
+
+	/**
+	 * Handle delete term event for my taxonomy
+	 * @param	int			$term_id
+	 * @param	int			$term_taxonomy_id
+	 * @param	\WP_Term	$deleted_term
+	 * @param	array		$object_ids
+	 */
+	public static function handle_delete_term( $term_id, $term_taxonomy_id, $deleted_term, $object_ids ) {
+//		Error_Log::var_dump( $term_id, $term_taxonomy_id, $deleted_term, $object_ids );
+		Supplemental_Item::handle_fixer_station_deleted( $term_id );
+		Supplemental_Volunteer_Registration::handle_fixer_station_deleted( $term_id );
 	} // function
 
 	/**

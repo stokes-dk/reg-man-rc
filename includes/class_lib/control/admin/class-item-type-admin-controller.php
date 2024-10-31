@@ -4,6 +4,8 @@ namespace Reg_Man_RC\Control\Admin;
 use Reg_Man_RC\Model\Item_Type;
 use Reg_Man_RC\Model\Settings;
 use Reg_Man_RC\Control\Term_Order_Controller;
+use Reg_Man_RC\Model\Error_Log;
+use Reg_Man_RC\Model\Stats\Supplemental_Item;
 
 /**
  * The item type controller
@@ -29,9 +31,22 @@ class Item_Type_Admin_Controller {
 		// Save the field value when the term is updated using "edited_" hook
 		add_action( 'edited_' . Item_Type::TAXONOMY_NAME, array(__CLASS__, 'update_term_admin_fields'), 10, 2 );
 
+		// Handle the event when a term is deleted using "delete_" hook
+		add_action( 'delete_' . Item_Type::TAXONOMY_NAME, array(__CLASS__, 'handle_delete_term'), 10, 4 );
+
 	} // function
 
-
+	/**
+	 * Handle delete term event for my taxonomy
+	 * @param	int			$term_id
+	 * @param	int			$term_taxonomy_id
+	 * @param	\WP_Term	$deleted_term
+	 * @param	array		$object_ids
+	 */
+	public static function handle_delete_term( $term_id, $term_taxonomy_id, $deleted_term, $object_ids ) {
+//		Error_Log::var_dump( $term_id, $term_taxonomy_id, $deleted_term, $object_ids );
+		Supplemental_Item::handle_item_type_deleted( $term_id );
+	} // function
 
 	/**
 	 * Handle non-logged-in user attempting to post.
@@ -102,9 +117,6 @@ class Item_Type_Admin_Controller {
 		$item_type = Item_Type::get_item_type_by_id( $term_id );
 		if ( ! empty( $item_type ) ) {
 
-			$fixer_station_id = isset( $_POST['fixer_station'] ) ? trim( $_POST['fixer_station'] ) : NULL;
-			$item_type->set_fixer_station_id( $fixer_station_id );
-
 			$colour = isset( $_POST['item-type-colour'] ) ? trim( $_POST['item-type-colour'] ) : NULL;
 			$item_type->set_colour( $colour );
 
@@ -114,12 +126,6 @@ class Item_Type_Admin_Controller {
 	public static function update_term_admin_fields( $term_id, $term_taxonomy_id ) {
 		$item_type = Item_Type::get_item_type_by_id( $term_id );
 		if ( ! empty( $item_type ) ) {
-
-			$fixer_station_id = isset( $_POST['fixer_station'] ) ? trim( $_POST['fixer_station'] ) : NULL;
-			if ( $fixer_station_id !== NULL ) {
-				// If no fixer station is selected then just leave it as-is
-				$item_type->set_fixer_station_id( $fixer_station_id );
-			} // endif
 
 			$colour = isset( $_POST['item-type-colour'] ) ? trim( $_POST['item-type-colour'] ) : NULL;
 			if ( isset( $colour ) ) {
